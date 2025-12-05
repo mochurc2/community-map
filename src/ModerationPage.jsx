@@ -1,8 +1,52 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "./supabaseClient";
+import {
+  addBubbleOption,
+  deleteBubbleOption,
+  fetchBubbleOptionsWithIds,
+  getDefaultBubbleOptions,
+  updateBubbleOption,
+} from "./bubbleOptions";
 
 const PASSCODE = import.meta.env.VITE_MODERATION_PASSCODE;
+
+function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
+  const [label, setLabel] = useState(option.label);
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!label.trim()) return;
+    setBusy(true);
+    await onSave(field, option, label.trim());
+    setBusy(false);
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    await onDelete(field, option);
+    setBusy(false);
+  };
+
+  return (
+    <div className="mod-bubble">
+      <input
+        className="input"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        aria-label={`${field} bubble`}
+      />
+      <div className="mod-bubble-actions">
+        <button type="button" onClick={save} disabled={busy}>
+          Save
+        </button>
+        <button type="button" className="ghost-button" onClick={remove} disabled={busy}>
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ModerationPage() {
   const [pendingPins, setPendingPins] = useState([]);
@@ -10,6 +54,67 @@ function ModerationPage() {
   const [error, setError] = useState(null);
   const [passcodeInput, setPasscodeInput] = useState("");
   const [authError, setAuthError] = useState(null);
+  const [bubbleOptions, setBubbleOptions] = useState({
+    gender_identity: [],
+    seeking: [],
+    interest_tags: [],
+  });
+  const [bubbleError, setBubbleError] = useState(null);
+  const [optionForm, setOptionForm] = useState({ field: "gender_identity", label: "" });
+  const [savingOption, setSavingOption] = useState(false);
+  const defaultBubbleSet = useMemo(() => getDefaultBubbleOptions(), []);
+
+  const buildDefaultModerationOptions = useCallback(
+    () =>
+      Object.fromEntries(
+        Object.entries(defaultBubbleSet).map(([field, labels]) => [
+          field,
+          labels.map((label, idx) => ({
+            id: `default-${field}-${idx}`,
+            label,
+          })),
+        ])
+      ),
+    [defaultBubbleSet]
+  );
+
+  const mapRowsToBubbles = useCallback(
+    (rows) => {
+      if (!rows || rows.length === 0) return buildDefaultModerationOptions();
+      const grouped = {
+        gender_identity: [],
+        seeking: [],
+        interest_tags: [],
+      };
+
+      rows.forEach((row) => {
+        if (grouped[row.field]) {
+          grouped[row.field].push({ id: row.id, label: row.label });
+        }
+      });
+
+      Object.keys(grouped).forEach((field) => {
+        if (grouped[field].length === 0) {
+          grouped[field] = buildDefaultModerationOptions()[field];
+        }
+      });
+
+      return grouped;
+    },
+    [buildDefaultModerationOptions]
+  );
+
+  const refreshBubbleOptions = useCallback(async () => {
+    setBubbleError(null);
+    try {
+      const rows = await fetchBubbleOptionsWithIds();
+      setBubbleOptions(mapRowsToBubbles(rows));
+    } catch (err) {
+      console.error(err);
+      setBubbleError(err.message);
+      setBubbleOptions(buildDefaultModerationOptions());
+    }
+  }, [mapRowsToBubbles]);
 
   const hasPasscode = useMemo(() => Boolean(PASSCODE), []);
   const [hasAccess, setHasAccess] = useState(!hasPasscode);
@@ -44,7 +149,8 @@ function ModerationPage() {
     }
 
     fetchPending();
-  }, [hasAccess]);
+    refreshBubbleOptions();
+  }, [hasAccess, refreshBubbleOptions]);
 
   const updateStatus = async (id, status) => {
     const approved = status === "approved";
@@ -80,6 +186,57 @@ function ModerationPage() {
       setAuthError(null);
     } else {
       setAuthError("Incorrect passcode. Please try again.");
+    }
+  };
+
+  const handleAddOption = async (e) => {
+    e.preventDefault();
+    if (!optionForm.label.trim()) return;
+    setSavingOption(true);
+    setBubbleError(null);
+    try {
+      await addBubbleOption(optionForm.field, optionForm.label.trim());
+      await refreshBubbleOptions();
+      setOptionForm({ field: "gender_identity", label: "" });
+    } catch (err) {
+      console.error(err);
+      setBubbleError(err.message);
+    } finally {
+      setSavingOption(false);
+    }
+  };
+
+  const handleSaveBubble = async (field, option, label) => {
+    setBubbleError(null);
+    try {
+      if (String(option.id).startsWith("default-")) {
+        await addBubbleOption(field, label);
+      } else {
+        await updateBubbleOption(option.id, label);
+      }
+      await refreshBubbleOptions();
+    } catch (err) {
+      console.error(err);
+      setBubbleError(err.message);
+    }
+  };
+
+  const handleDeleteBubble = async (field, option) => {
+    setBubbleError(null);
+    if (String(option.id).startsWith("default-")) {
+      setBubbleOptions((current) => ({
+        ...current,
+        [field]: current[field].filter((opt) => opt.id !== option.id),
+      }));
+      return;
+    }
+
+    try {
+      await deleteBubbleOption(option.id);
+      await refreshBubbleOptions();
+    } catch (err) {
+      console.error(err);
+      setBubbleError(err.message);
     }
   };
 
@@ -224,6 +381,92 @@ function ModerationPage() {
             </div>
           ))}
         </div>
+
+        <section
+          style={{
+            marginTop: "1.5rem",
+            padding: "1.25rem 1.1rem",
+            borderRadius: 16,
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+            display: "grid",
+            gap: "0.85rem",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center" }}>
+            <div>
+              <p style={{ margin: 0, color: "#6366f1", fontWeight: 700 }}>Bubble library</p>
+              <h2 style={{ margin: "0.25rem 0 0" }}>Manage selectable options</h2>
+              <p style={{ margin: "0.35rem 0 0", color: "#4b5563" }}>
+                These chips power the gender, interested-in, and interests fields on the
+                public form.
+              </p>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleAddOption}
+            style={{ display: "grid", gridTemplateColumns: "220px 1fr 140px", gap: "0.75rem", alignItems: "center" }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontWeight: 600 }}>
+              Field
+              <select
+                className="input"
+                value={optionForm.field}
+                onChange={(e) => setOptionForm((f) => ({ ...f, field: e.target.value }))}
+              >
+                <option value="gender_identity">Gender</option>
+                <option value="seeking">Interested in</option>
+                <option value="interest_tags">Interests</option>
+              </select>
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontWeight: 600 }}>
+              New bubble
+              <input
+                className="input"
+                placeholder="Add a new option"
+                value={optionForm.label}
+                onChange={(e) => setOptionForm((f) => ({ ...f, label: e.target.value }))}
+              />
+            </label>
+
+            <button type="submit" disabled={savingOption}>
+              {savingOption ? "Saving…" : "Add bubble"}
+            </button>
+          </form>
+
+          {bubbleError && (
+            <p style={{ margin: 0, color: "#b91c1c" }}>Bubble error: {bubbleError}</p>
+          )}
+
+          <div className="bubble-moderation-grid">
+            {[
+              ["gender_identity", "Gender identities"],
+              ["seeking", "Interested in"],
+              ["interest_tags", "Interests"],
+            ].map(([field, title]) => (
+              <div key={field} className="bubble-moderation-column">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                  <h3 style={{ margin: 0 }}>{title}</h3>
+                  <span className="small-chip">{bubbleOptions[field]?.length || 0} bubbles</span>
+                </div>
+                <div className="bubble-editor-list">
+                  {bubbleOptions[field]?.map((option) => (
+                    <ModerationBubbleEditor
+                      key={option.id}
+                      option={option}
+                      field={field}
+                      onSave={handleSaveBubble}
+                      onDelete={handleDeleteBubble}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
