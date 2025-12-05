@@ -30,7 +30,6 @@ function App() {
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Load approved pins for the map
   useEffect(() => {
     async function fetchPins() {
       setLoadingPins(true);
@@ -53,7 +52,6 @@ function App() {
     fetchPins();
   }, []);
 
-  // Called when user clicks the map
   const handleMapClick = (lngLat) => {
     setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
     setSubmitMsg(null);
@@ -99,7 +97,6 @@ function App() {
       setSubmitError(error.message);
     } else {
       setSubmitMsg("Thanks! Your pin has been submitted for review.");
-      // reset form but keep location so they can tweak message
       setForm({
         gender_identity: "",
         seeking: "",
@@ -117,85 +114,71 @@ function App() {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      {/* Sidebar */}
-      <aside
-        style={{
-          width: "320px",
-          borderRight: "1px solid #ddd",
-          padding: "1rem",
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-        }}
-      >
-        <header>
-          <h1 style={{ margin: 0, fontSize: "1.4rem" }}>Community Map</h1>
-          <p
-            style={{
-              marginTop: "0.25rem",
-              fontSize: "0.9rem",
-              color: "#555",
-            }}
-          >
-            {loadingPins
-              ? "Loading pins..."
-              : `Currently ${pins.length} approved pins.`}
-          </p>
-          {pinsError && (
-            <p style={{ color: "red", fontSize: "0.8rem" }}>
-              Error loading pins: {pinsError}
-            </p>
-          )}
-          <p style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-            <Link to="/moderate">Moderator view</Link>
-          </p>
-        </header>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="panel" style={{ background: "rgba(255,255,255,0.04)" }}>
+          <div className="meta" style={{ justifyContent: "space-between" }}>
+            <div>
+              <p className="badge">Community Map</p>
+              <h1 style={{ color: "#fff", marginTop: "0.25rem" }}>
+                Find friends near you
+              </h1>
+              <p className="muted" style={{ marginTop: "0.35rem" }}>
+                Drop a pin to share who you are and what you enjoy. Approved pins
+                appear on the public map.
+              </p>
+            </div>
+            <Link to="/moderate" className="link">
+              Moderator view ↗
+            </Link>
+          </div>
+          <div className="meta" style={{ marginTop: "0.75rem" }}>
+            <span className="badge">
+              {loadingPins
+                ? "Loading pins…"
+                : `${pins.length} approved pins live`}
+            </span>
+            {pinsError && (
+              <span className="badge" style={{ background: "rgba(248,113,113,0.2)", color: "#fecdd3" }}>
+                Error loading pins
+              </span>
+            )}
+          </div>
+        </div>
 
-        <section style={{ fontSize: "0.85rem" }}>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Add a pin</h2>
-          <p style={{ marginTop: 0 }}>
-            1) Click on the map to choose a location.  
-            2) Fill out the details below.  
-            3) Your pin will be reviewed before appearing.
+        <div className="panel">
+          <div className="section-title">
+            <span role="img" aria-label="pin">
+              📍
+            </span>
+            <h2>Add your pin</h2>
+          </div>
+          <p className="muted" style={{ margin: "0.35rem 0 0.75rem" }}>
+            Tap anywhere on the map, then share a short intro. Contact details are
+            optional and stay hidden until a moderator approves.
           </p>
-          <p style={{ fontSize: "0.8rem", color: "#555" }}>
-            Selected location:{" "}
+
+          <div className="status" style={{ color: "#e5e7eb" }}>
+            Selected location: {" "}
             {selectedLocation
-              ? `${selectedLocation.lat.toFixed(
-                  4
-                )}, ${selectedLocation.lng.toFixed(4)}`
-              : "None yet"}
-          </p>
+              ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
+              : "none yet"}
+          </div>
 
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
-            <label>
+          <form onSubmit={handleSubmit} className="form-grid" style={{ marginTop: "0.75rem" }}>
+            <label className="label">
               Gender identity
               <input
                 type="text"
                 name="gender_identity"
                 value={form.gender_identity}
                 onChange={handleChange}
-                placeholder="e.g. man, woman, nonbinary"
-                style={{ width: "100%" }}
+                placeholder="e.g. woman, man, nonbinary"
+                className="input"
               />
             </label>
 
-            <label>
+            <label className="label">
               Interested in (comma-separated)
               <input
                 type="text"
@@ -203,11 +186,11 @@ function App() {
                 value={form.seeking}
                 onChange={handleChange}
                 placeholder="e.g. men, women, nonbinary people"
-                style={{ width: "100%" }}
+                className="input"
               />
             </label>
 
-            <label>
+            <label className="label">
               Interest tags (comma-separated)
               <input
                 type="text"
@@ -215,11 +198,11 @@ function App() {
                 value={form.interest_tags}
                 onChange={handleChange}
                 placeholder="e.g. rope, impact, DS"
-                style={{ width: "100%" }}
+                className="input"
               />
             </label>
 
-            <label>
+            <label className="label">
               City / region (optional)
               <input
                 type="text"
@@ -227,11 +210,11 @@ function App() {
                 value={form.city}
                 onChange={handleChange}
                 placeholder="e.g. Chicago"
-                style={{ width: "100%" }}
+                className="input"
               />
             </label>
 
-            <label>
+            <label className="label">
               Country (optional)
               <input
                 type="text"
@@ -239,11 +222,11 @@ function App() {
                 value={form.country}
                 onChange={handleChange}
                 placeholder="e.g. USA"
-                style={{ width: "100%" }}
+                className="input"
               />
             </label>
 
-            <label>
+            <label className="label">
               Short note
               <textarea
                 name="note"
@@ -251,62 +234,59 @@ function App() {
                 onChange={handleChange}
                 rows={3}
                 placeholder="Anything you want others to know."
-                style={{ width: "100%", resize: "vertical" }}
+                className="input"
               />
             </label>
 
-            <label>
-              Discord handle (optional)
+            <p className="helper">Contact handles are optional</p>
+
+            <label className="label">
+              Discord handle
               <input
                 type="text"
                 name="contact_discord"
                 value={form.contact_discord}
                 onChange={handleChange}
                 placeholder="e.g. name#1234"
-                style={{ width: "100%" }}
+                className="input"
               />
             </label>
 
-            <label>
-              Reddit username (optional)
+            <label className="label">
+              Reddit username
               <input
                 type="text"
                 name="contact_reddit"
                 value={form.contact_reddit}
                 onChange={handleChange}
                 placeholder="e.g. u/username"
-                style={{ width: "100%" }}
+                className="input"
               />
             </label>
 
-            <label>
-              Instagram handle (optional)
+            <label className="label">
+              Instagram handle
               <input
                 type="text"
                 name="contact_instagram"
                 value={form.contact_instagram}
                 onChange={handleChange}
                 placeholder="e.g. @username"
-                style={{ width: "100%" }}
+                className="input"
               />
             </label>
 
-            {submitError && (
-              <p style={{ color: "red", fontSize: "0.8rem" }}>{submitError}</p>
-            )}
-            {submitMsg && (
-              <p style={{ color: "green", fontSize: "0.8rem" }}>{submitMsg}</p>
-            )}
+            {submitError && <p className="status error">{submitError}</p>}
+            {submitMsg && <p className="status success">{submitMsg}</p>}
 
             <button type="submit" disabled={submitting}>
-              {submitting ? "Submitting..." : "Submit pin for review"}
+              {submitting ? "Submitting…" : "Submit pin for review"}
             </button>
           </form>
-        </section>
+        </div>
       </aside>
 
-      {/* Map area */}
-      <main style={{ flex: 1 }}>
+      <main className="map-region">
         <MapView pins={pins} onMapClick={handleMapClick} />
       </main>
     </div>
