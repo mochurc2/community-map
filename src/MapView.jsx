@@ -7,8 +7,13 @@ const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 function MapView({ pins, onMapClick }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+  const onMapClickRef = useRef(onMapClick);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
@@ -52,8 +57,8 @@ function MapView({ pins, onMapClick }) {
     });
 
     map.on("click", (e) => {
-      if (onMapClick) {
-        onMapClick(e.lngLat);
+      if (onMapClickRef.current) {
+        onMapClickRef.current(e.lngLat);
       }
     });
 
@@ -62,7 +67,7 @@ function MapView({ pins, onMapClick }) {
       mapRef.current = null;
       setMapLoaded(false);
     };
-  }, [onMapClick]);
+  }, [styleUrl]);
 
   useEffect(() => {
     if (!mapLoaded) return;

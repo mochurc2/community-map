@@ -159,6 +159,68 @@ textarea {
   color: #e5e7eb;
 }
 
+.label-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #e5e7eb;
+}
+
+.helper-text {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.bubble-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.bubble {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease, border 120ms ease;
+}
+
+.bubble:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.bubble.selected {
+  background: #4f46e5;
+  border-color: #6366f1;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25);
+}
+
+.bubble.ghost {
+  background: transparent;
+  border-style: dashed;
+  color: #c7d2fe;
+}
+
+.bubble.add {
+  min-width: 48px;
+  justify-content: center;
+}
+
+.custom-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
 .helper {
   color: #9ca3af;
   font-size: 0.9rem;
@@ -242,6 +304,59 @@ textarea {
   align-items: center;
   gap: 0.5rem;
   color: #e5e7eb;
+}
+
+.bubble-moderation-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.bubble-moderation-column {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.85rem 0.95rem;
+  background: #f9fafb;
+}
+
+.small-chip {
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.bubble-editor-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.mod-bubble {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mod-bubble .input {
+  flex: 1;
+  background: #fff;
+}
+
+.mod-bubble-actions {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.ghost-button {
+  background: #e5e7eb;
+  color: #111827;
+  box-shadow: none;
+}
+
+.ghost-button:hover {
+  background: #d1d5db;
 }
 
 @media (max-width: 1080px) {

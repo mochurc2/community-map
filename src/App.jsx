@@ -1,13 +1,103 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
+import { fetchBubbleOptions, getDefaultBubbleOptions } from "./bubbleOptions";
 
-const toArray = (value) =>
-  value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+const MAX_VISIBLE_BUBBLES = 6;
+
+function BubbleSelector({
+  label,
+  helper,
+  options,
+  multiple = false,
+  value,
+  onChange,
+  allowCustom = false,
+  onAddOption = () => {},
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [customInput, setCustomInput] = useState("");
+
+  const displayOptions = useMemo(
+    () => (showAll ? options : options.slice(0, MAX_VISIBLE_BUBBLES)),
+    [options, showAll]
+  );
+
+  const toggleOption = (option) => {
+    if (multiple) {
+      if (value.includes(option)) {
+        onChange(value.filter((v) => v !== option));
+      } else {
+        onChange([...value, option]);
+      }
+    } else {
+      onChange(value === option ? "" : option);
+    }
+  };
+
+  const handleAddCustom = (e) => {
+    e?.preventDefault?.();
+    const normalized = customInput.trim();
+    if (!normalized) return;
+    if (multiple) {
+      onChange(value.includes(normalized) ? value : [...value, normalized]);
+    } else {
+      onChange(normalized);
+    }
+    if (!options.includes(normalized)) {
+      onAddOption(normalized);
+    }
+    setCustomInput("");
+  };
+
+  return (
+    <label className="label">
+      <div className="label-heading">
+        <span>{label}</span>
+        {helper && <span className="helper-text">{helper}</span>}
+      </div>
+      <div className="bubble-grid">
+        {displayOptions.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={`bubble ${
+              multiple ? value.includes(option) : value === option
+                ? "selected"
+                : ""
+            }`}
+            onClick={() => toggleOption(option)}
+          >
+            {option}
+          </button>
+        ))}
+        {options.length > MAX_VISIBLE_BUBBLES && (
+          <button
+            type="button"
+            className="bubble ghost"
+            onClick={() => setShowAll((v) => !v)}
+          >
+            {showAll ? "Show less" : "+ more"}
+          </button>
+        )}
+      </div>
+      {allowCustom && (
+        <div className="custom-row">
+          <input
+            type="text"
+            className="input"
+            placeholder="Add your own"
+            value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+          />
+          <button type="button" className="bubble add" onClick={handleAddCustom}>
+            +
+          </button>
+        </div>
+      )}
+    </label>
+  );
+}
 
 function App() {
   const [pins, setPins] = useState([]);
@@ -15,10 +105,11 @@ function App() {
   const [loadingPins, setLoadingPins] = useState(true);
 
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [bubbleOptions, setBubbleOptions] = useState(getDefaultBubbleOptions);
   const [form, setForm] = useState({
     gender_identity: "",
-    seeking: "",
-    interest_tags: "",
+    seeking: [],
+    interest_tags: [],
     note: "",
     contact_discord: "",
     contact_reddit: "",
@@ -50,18 +141,65 @@ function App() {
     }
 
     fetchPins();
+    fetchBubbleOptions()
+      .then((options) => setBubbleOptions(options))
+      .catch(() => setBubbleOptions(getDefaultBubbleOptions()));
   }, []);
 
-  const handleMapClick = (lngLat) => {
-    setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
-    setSubmitMsg(null);
-    setSubmitError(null);
-  };
+  const autofillLocation = useCallback(async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
+        {
+          headers: {
+            "Accept-Language": "en",
+            "User-Agent": "community-map/1.0",
+          },
+        }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const cityCandidate =
+        data?.address?.city ||
+        data?.address?.town ||
+        data?.address?.village ||
+        data?.address?.hamlet ||
+        data?.address?.county ||
+        "";
+      const countryCandidate = data?.address?.country || "";
+
+      setForm((prev) => ({
+        ...prev,
+        city: cityCandidate || prev.city,
+        country: countryCandidate || prev.country,
+      }));
+    } catch (err) {
+      console.error("Error reverse geocoding", err);
+    }
+  }, []);
+
+  const handleMapClick = useCallback(
+    (lngLat) => {
+      setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
+      setSubmitMsg(null);
+      setSubmitError(null);
+      autofillLocation(lngLat.lat, lngLat.lng);
+    },
+    [autofillLocation]
+  );
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
   };
+
+  const handleCustomOption = useCallback((field, option) => {
+    setBubbleOptions((prev) => {
+      const current = prev[field] || [];
+      if (current.includes(option)) return prev;
+      return { ...prev, [field]: [...current, option] };
+    });
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,8 +220,8 @@ function App() {
       city: form.city || null,
       country: form.country || null,
       gender_identity: form.gender_identity || "unspecified",
-      seeking: toArray(form.seeking),
-      interest_tags: toArray(form.interest_tags),
+      seeking: form.seeking,
+      interest_tags: form.interest_tags,
       note: form.note || null,
       contact_discord: form.contact_discord || null,
       contact_reddit: form.contact_reddit || null,
@@ -99,8 +237,8 @@ function App() {
       setSubmitMsg("Thanks! Your pin has been submitted for review.");
       setForm({
         gender_identity: "",
-        seeking: "",
-        interest_tags: "",
+        seeking: [],
+        interest_tags: [],
         note: "",
         contact_discord: "",
         contact_reddit: "",
@@ -128,9 +266,6 @@ function App() {
                 appear on the public map.
               </p>
             </div>
-            <Link to="/moderate" className="link">
-              Moderator view ↗
-            </Link>
           </div>
           <div className="meta" style={{ marginTop: "0.75rem" }}>
             <span className="badge">
@@ -166,41 +301,37 @@ function App() {
           </div>
 
           <form onSubmit={handleSubmit} className="form-grid" style={{ marginTop: "0.75rem" }}>
-            <label className="label">
-              Gender identity
-              <input
-                type="text"
-                name="gender_identity"
-                value={form.gender_identity}
-                onChange={handleChange}
-                placeholder="e.g. woman, man, nonbinary"
-                className="input"
-              />
-            </label>
+            <BubbleSelector
+              label="Gender identity"
+              helper="Choose one"
+              options={bubbleOptions.gender_identity}
+              value={form.gender_identity}
+              onChange={(value) => setForm((f) => ({ ...f, gender_identity: value }))}
+              onAddOption={(option) => handleCustomOption("gender_identity", option)}
+              allowCustom
+            />
 
-            <label className="label">
-              Interested in (comma-separated)
-              <input
-                type="text"
-                name="seeking"
-                value={form.seeking}
-                onChange={handleChange}
-                placeholder="e.g. men, women, nonbinary people"
-                className="input"
-              />
-            </label>
+            <BubbleSelector
+              label="Interested in"
+              helper="Select all that apply"
+              options={bubbleOptions.seeking}
+              multiple
+              value={form.seeking}
+              onChange={(value) => setForm((f) => ({ ...f, seeking: value }))}
+              onAddOption={(option) => handleCustomOption("seeking", option)}
+              allowCustom
+            />
 
-            <label className="label">
-              Interest tags (comma-separated)
-              <input
-                type="text"
-                name="interest_tags"
-                value={form.interest_tags}
-                onChange={handleChange}
-                placeholder="e.g. rope, impact, DS"
-                className="input"
-              />
-            </label>
+            <BubbleSelector
+              label="Interests"
+              helper="Select all that apply"
+              options={bubbleOptions.interest_tags}
+              multiple
+              value={form.interest_tags}
+              onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
+              onAddOption={(option) => handleCustomOption("interest_tags", option)}
+              allowCustom
+            />
 
             <label className="label">
               City / region (optional)
