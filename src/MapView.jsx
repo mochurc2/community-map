@@ -8,10 +8,10 @@ function MapView({ pins, onMapClick }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState(null);
 
-  // 1. Create the map once
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -23,7 +23,6 @@ function MapView({ pins, onMapClick }) {
     mapRef.current = map;
 
     map.on("load", () => {
-      // base source for pins
       map.addSource("pins", {
         type: "geojson",
         data: {
@@ -38,16 +37,20 @@ function MapView({ pins, onMapClick }) {
         source: "pins",
         paint: {
           "circle-radius": 6,
-          "circle-color": "#e11d48",
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "#ffffff",
+          "circle-color": "#ef4444",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#f8fafc",
         },
       });
 
       setMapLoaded(true);
     });
 
-    // click handler for selecting location
+    map.on("error", (evt) => {
+      const message = evt?.error?.message || "Map could not load";
+      setMapError(message);
+    });
+
     map.on("click", (e) => {
       if (onMapClick) {
         onMapClick(e.lngLat);
@@ -61,7 +64,6 @@ function MapView({ pins, onMapClick }) {
     };
   }, [onMapClick]);
 
-  // 2. Update pins when data changes AND map is ready
   useEffect(() => {
     if (!mapLoaded) return;
     const map = mapRef.current;
@@ -90,17 +92,33 @@ function MapView({ pins, onMapClick }) {
     });
   }, [pins, mapLoaded]);
 
+  if (!styleUrl) {
+    return (
+      <div className="map-placeholder">
+        <div>
+          <h2>Map style missing</h2>
+          <p style={{ marginTop: "0.5rem", maxWidth: 480 }}>
+            Set <code>VITE_MAPTILER_STYLE_URL</code> in your <code>.env</code> file to
+            load the basemap. You can copy a style URL from your MapTiler account.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      ref={mapContainerRef}
-      style={{
-        width: "100%",
-        height: "100vh",
-        borderRadius: 0,
-        overflow: "hidden",
-        borderLeft: "1px solid #ddd",
-      }}
-    />
+    <div className="map-wrapper">
+      {!mapLoaded && !mapError && (
+        <div className="map-banner">Loading map tiles…</div>
+      )}
+      {mapError && (
+        <div className="map-banner error">
+          <span>{mapError}</span>
+          <span style={{ fontWeight: 500 }}>Check your style URL or network.</span>
+        </div>
+      )}
+      <div ref={mapContainerRef} className="map-container" />
+    </div>
   );
 }
 
