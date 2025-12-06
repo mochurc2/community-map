@@ -1,10 +1,78 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Filter, Info, MapPin, Plus, Scissors, X } from "lucide-react";
+import { CalendarClock, Filter, Info, MapPin, Plus, Scissors, X } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
 import { fetchBubbleOptions, getDefaultBubbleOptions } from "./bubbleOptions";
 
 const MAX_VISIBLE_BUBBLES = 6;
+const EMOJI_CHOICES = [
+  "😀",
+  "😁",
+  "😂",
+  "😊",
+  "😉",
+  "😍",
+  "😎",
+  "😇",
+  "🤠",
+  "😺",
+  "🐱",
+  "🐶",
+  "🐰",
+  "🐻",
+  "🐸",
+  "🦊",
+  "🐯",
+  "🌟",
+  "🔥",
+  "❤️",
+  "💛",
+  "💚",
+  "💙",
+  "💜",
+  "💖",
+  "💈",
+  "✂️",
+  "🪒",
+  "🎨",
+  "🎉",
+  "🎈",
+  "🎀",
+  "⭐",
+  "☀️",
+  "🌙",
+  "🌈",
+];
+
+const contactPlaceholders = {
+  Email: "name@example.com",
+  Discord: "name#1234",
+  Reddit: "u/username",
+  Instagram: "@username",
+  Tumblr: "username",
+  "X/Twitter": "@username",
+  Youtube: "channel link",
+  Website: "https://example.com",
+  OnlyFans: "@username",
+};
+
+const buildInitialFormState = () => ({
+  icon: "💈",
+  nickname: "",
+  age: "",
+  genders: [],
+  seeking: [],
+  interest_tags: [],
+  note: "",
+  contact_methods: {},
+  contact_channels: [],
+  city: "",
+  state_province: "",
+  country: "",
+  country_code: "",
+  expires_at: "",
+  never_delete: true,
+});
 
 function BubbleSelector({
   label,
@@ -87,7 +155,7 @@ function BubbleSelector({
           <input
             type="text"
             className="input"
-            placeholder="Add your own"
+            placeholder="Add interest"
             value={customInput}
             onChange={(e) => setCustomInput(e.target.value)}
           />
@@ -107,17 +175,7 @@ function App() {
 
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [bubbleOptions, setBubbleOptions] = useState(getDefaultBubbleOptions);
-  const [form, setForm] = useState({
-    gender_identity: "",
-    seeking: [],
-    interest_tags: [],
-    note: "",
-    contact_discord: "",
-    contact_reddit: "",
-    contact_instagram: "",
-    city: "",
-    country: "",
-  });
+  const [form, setForm] = useState(buildInitialFormState);
   const [submitMsg, setSubmitMsg] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -138,7 +196,7 @@ function App() {
       const { data, error } = await supabase
         .from("pins")
         .select(
-          "id, lat, lng, city, state_province, country, gender_identity, seeking, interest_tags, note"
+          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at"
         )
         .eq("status", "approved");
 
@@ -178,11 +236,30 @@ function App() {
         data?.address?.county ||
         "";
       const countryCandidate = data?.address?.country || "";
+      const countryCode = data?.address?.country_code
+        ? data.address.country_code.toUpperCase()
+        : "";
+
+      const regionIso =
+        data?.address?.state_code ||
+        data?.address?.["ISO3166-2-lvl4"] ||
+        data?.address?.["ISO3166-2-lvl6"] ||
+        "";
+      const regionName =
+        data?.address?.state ||
+        data?.address?.region ||
+        data?.address?.province ||
+        data?.address?.county ||
+        "";
+      const regionAbbr = regionIso ? regionIso.split("-").pop() : "";
+      const region = regionAbbr || regionName;
 
       setForm((prev) => ({
         ...prev,
         city: cityCandidate || prev.city,
-        country: countryCandidate || prev.country,
+        state_province: region || prev.state_province,
+        country: countryCode || countryCandidate || prev.country,
+        country_code: countryCode || prev.country_code,
       }));
     } catch (err) {
       console.error("Error reverse geocoding", err);
@@ -202,6 +279,30 @@ function App() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const handleContactChannels = (channels) => {
+    setForm((prev) => {
+      const nextMethods = { ...prev.contact_methods };
+      Object.keys(nextMethods).forEach((key) => {
+        if (!channels.includes(key)) {
+          delete nextMethods[key];
+        }
+      });
+      channels.forEach((channel) => {
+        if (!nextMethods[channel]) {
+          nextMethods[channel] = "";
+        }
+      });
+      return { ...prev, contact_channels: channels, contact_methods: nextMethods };
+    });
+  };
+
+  const handleContactInput = (channel, value) => {
+    setForm((prev) => ({
+      ...prev,
+      contact_methods: { ...prev.contact_methods, [channel]: value },
+    }));
   };
 
   const handleCustomOption = useCallback((field, option) => {
@@ -224,19 +325,37 @@ function App() {
     setSubmitMsg(null);
 
     const { lng, lat } = selectedLocation;
+    const contactPayload = {};
+    form.contact_channels.forEach((channel) => {
+      const value = form.contact_methods[channel];
+      if (value && value.trim()) {
+        contactPayload[channel] = value.trim();
+      }
+    });
+
+    const expiresAt = form.never_delete || !form.expires_at
+      ? null
+      : new Date(`${form.expires_at}T23:59:00`);
+
+    const isoCountry = (form.country || form.country_code || "").trim().toUpperCase();
 
     const { error } = await supabase.from("pins").insert({
       lat,
       lng,
       city: form.city || null,
-      country: form.country || null,
-      gender_identity: form.gender_identity || "unspecified",
+      state_province: form.state_province || null,
+      country: isoCountry || null,
+      country_code: isoCountry || null,
+      icon: form.icon || "📍",
+      nickname: form.nickname || null,
+      age: form.age ? Number(form.age) : null,
+      genders: form.genders,
+      gender_identity: form.genders[0] || "unspecified",
       seeking: form.seeking,
       interest_tags: form.interest_tags,
       note: form.note || null,
-      contact_discord: form.contact_discord || null,
-      contact_reddit: form.contact_reddit || null,
-      contact_instagram: form.contact_instagram || null,
+      contact_methods: contactPayload,
+      expires_at: expiresAt ? expiresAt.toISOString() : null,
       status: "pending",
       approved: false,
     });
@@ -246,17 +365,7 @@ function App() {
       setSubmitError(error.message);
     } else {
       setSubmitMsg("Thanks! Your pin has been submitted for review.");
-      setForm({
-        gender_identity: "",
-        seeking: [],
-        interest_tags: [],
-        note: "",
-        contact_discord: "",
-        contact_reddit: "",
-        contact_instagram: "",
-        city: "",
-        country: "",
-      });
+      setForm(buildInitialFormState());
     }
 
     setSubmitting(false);
@@ -297,7 +406,9 @@ function App() {
   const filteredPins = useMemo(() => {
     return pins.filter((pin) => {
       const matchesGender =
-        !filters.gender_identity || pin.gender_identity === filters.gender_identity;
+        !filters.gender_identity ||
+        (pin.genders || []).includes(filters.gender_identity) ||
+        pin.gender_identity === filters.gender_identity;
       const matchesSeeking =
         filters.seeking.length === 0 ||
         filters.seeking.some((opt) => (pin.seeking || []).includes(opt));
@@ -336,14 +447,23 @@ function App() {
   const locationLabel = selectedLocation
     ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
     : "None yet";
+  const locationDetails = selectedLocation
+    ? `${form.city || "Unknown city"}${form.state_province ? `, ${form.state_province}` : ""}${
+        form.country || form.country_code ? `, ${form.country || form.country_code}` : ""
+      }`
+    : "Tap the map to pick a spot and fill in the details.";
 
   const addPanelIntro = (
     <div className="panel-section">
       <div className="status-row">
         <MapPin size={18} />
-        <span>Selected location: {locationLabel}</span>
+        <div className="location-stack">
+          <span className="eyebrow">Location</span>
+          <span className="location-strong">{locationLabel}</span>
+          <span className="muted small">{locationDetails}</span>
+        </div>
       </div>
-      {panelPlacement === "bottom" && (
+      {panelPlacement === "bottom" && !showFullAddForm && (
         <button
           type="button"
           className="primary"
@@ -393,14 +513,98 @@ function App() {
 
       {showFullAddForm && (
         <form onSubmit={handleSubmit} className="form-grid compact">
+          <div className="label">
+            <div className="label-heading">
+              <span>Icon</span>
+              <span className="helper-text">Pick an emoji for your pin</span>
+            </div>
+            <div className="emoji-scroll" role="listbox" aria-label="Pick an emoji">
+              <div className="emoji-grid">
+                {EMOJI_CHOICES.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className={`emoji-chip ${form.icon === emoji ? "selected" : ""}`}
+                    aria-pressed={form.icon === emoji}
+                    onClick={() => setForm((f) => ({ ...f, icon: emoji }))}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="location-edit-grid">
+            <label className="label">
+              City
+              <input
+                type="text"
+                name="city"
+                value={form.city}
+                onChange={handleChange}
+                placeholder="Auto-filled"
+                className="input"
+              />
+            </label>
+            <label className="label">
+              Region
+              <input
+                type="text"
+                name="state_province"
+                value={form.state_province}
+                onChange={handleChange}
+                placeholder="State / province"
+                className="input"
+              />
+            </label>
+            <label className="label">
+              Country code
+              <input
+                type="text"
+                name="country"
+                value={form.country}
+                onChange={handleChange}
+                placeholder="e.g. US"
+                className="input"
+                maxLength={3}
+              />
+            </label>
+          </div>
+
+          <label className="label">
+            Nickname
+            <input
+              type="text"
+              name="nickname"
+              value={form.nickname}
+              onChange={handleChange}
+              placeholder="Up to 12 characters"
+              className="input"
+              maxLength={12}
+            />
+          </label>
+
+          <label className="label">
+            Age
+            <input
+              type="number"
+              name="age"
+              value={form.age}
+              onChange={handleChange}
+              className="input"
+              min={0}
+              max={120}
+            />
+          </label>
+
           <BubbleSelector
-            label="Gender identity"
-            helper="Choose one"
+            label="Gender"
+            helper="Select all that apply"
             options={bubbleOptions.gender_identity}
-            value={form.gender_identity}
-            onChange={(value) => setForm((f) => ({ ...f, gender_identity: value }))}
-            onAddOption={(option) => handleCustomOption("gender_identity", option)}
-            allowCustom
+            multiple
+            value={form.genders}
+            onChange={(value) => setForm((f) => ({ ...f, genders: value }))}
           />
 
           <BubbleSelector
@@ -410,8 +614,6 @@ function App() {
             multiple
             value={form.seeking}
             onChange={(value) => setForm((f) => ({ ...f, seeking: value }))}
-            onAddOption={(option) => handleCustomOption("seeking", option)}
-            allowCustom
           />
 
           <BubbleSelector
@@ -426,78 +628,86 @@ function App() {
           />
 
           <label className="label">
-            City / region (optional)
-            <input
-              type="text"
-              name="city"
-              value={form.city}
-              onChange={handleChange}
-              placeholder="e.g. Chicago"
-              className="input"
-            />
-          </label>
-
-          <label className="label">
-            Country (optional)
-            <input
-              type="text"
-              name="country"
-              value={form.country}
-              onChange={handleChange}
-              placeholder="e.g. USA"
-              className="input"
-            />
-          </label>
-
-          <label className="label">
             Short note
             <textarea
               name="note"
               value={form.note}
               onChange={handleChange}
               rows={3}
+              maxLength={250}
               placeholder="Anything you want others to know."
               className="input"
             />
+            <span className="helper-text">{form.note.length}/250</span>
           </label>
 
-          <p className="helper">Contact handles are optional</p>
-
-          <label className="label">
-            Discord handle
-            <input
-              type="text"
-              name="contact_discord"
-              value={form.contact_discord}
-              onChange={handleChange}
-              placeholder="e.g. name#1234"
-              className="input"
+          <div className="contact-section">
+            <BubbleSelector
+              label="Contact info"
+              helper="Select services to show and add your handle or link"
+              options={bubbleOptions.contact_methods}
+              multiple
+              value={form.contact_channels}
+              onChange={handleContactChannels}
             />
-          </label>
 
-          <label className="label">
-            Reddit username
-            <input
-              type="text"
-              name="contact_reddit"
-              value={form.contact_reddit}
-              onChange={handleChange}
-              placeholder="e.g. u/username"
-              className="input"
-            />
-          </label>
+            {form.contact_channels.length > 0 && (
+              <div className="contact-grid">
+                {form.contact_channels.map((channel) => (
+                  <label key={channel} className="label">
+                    {channel}
+                    <input
+                      type="text"
+                      className="input"
+                      value={form.contact_methods[channel] || ""}
+                      onChange={(e) => handleContactInput(channel, e.target.value)}
+                      placeholder={contactPlaceholders[channel] || "Add handle or link"}
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
 
-          <label className="label">
-            Instagram handle
-            <input
-              type="text"
-              name="contact_instagram"
-              value={form.contact_instagram}
-              onChange={handleChange}
-              placeholder="e.g. @username"
-              className="input"
-            />
-          </label>
+          <div className="delete-row">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.never_delete}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    never_delete: e.target.checked,
+                    expires_at: e.target.checked ? "" : prev.expires_at,
+                  }))
+                }
+              />
+              <span>Never delete</span>
+            </label>
+
+            {!form.never_delete && (
+              <label className="label">
+                <div className="label-heading">
+                  <span>Delete pin after</span>
+                  <span className="helper-text">We will remove at 11:59 PM on that date</span>
+                </div>
+                <div className="input-with-icon">
+                  <CalendarClock size={18} />
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.expires_at}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        expires_at: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </label>
+            )}
+          </div>
 
           {submitError && <p className="status error">{submitError}</p>}
           {submitMsg && <p className="status success">{submitMsg}</p>}

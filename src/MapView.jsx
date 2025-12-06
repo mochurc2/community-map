@@ -48,6 +48,23 @@ function MapView({ pins, onMapClick, pendingLocation }) {
         },
       });
 
+      map.addLayer({
+        id: "pins-emoji",
+        type: "symbol",
+        source: "pins",
+        layout: {
+          "text-field": ["coalesce", ["get", "icon"], "📍"],
+          "text-size": 18,
+          "text-offset": [0, -0.8],
+          "text-anchor": "bottom",
+        },
+        paint: {
+          "text-color": "#0f172a",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1,
+        },
+      });
+
       map.addSource("pending-pin", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -105,6 +122,8 @@ function MapView({ pins, onMapClick, pendingLocation }) {
         city: p.city,
         gender_identity: p.gender_identity,
         note: p.note,
+        icon: p.icon,
+        nickname: p.nickname,
       },
     }));
 

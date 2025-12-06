@@ -90,6 +90,15 @@ button.ghost {
   box-shadow: none;
 }
 
+.ghost-button {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.55rem 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -303,6 +312,10 @@ textarea {
   width: 100%;
 }
 
+.floating-panel.side .panel-body-wrapper {
+  max-height: 70vh;
+}
+
 .floating-panel.bottom {
   left: 50%;
   transform: translateX(-50%);
@@ -315,6 +328,10 @@ textarea {
   top: 120px;
   bottom: 18px;
   max-height: none;
+}
+
+.floating-panel.bottom .panel-body-wrapper {
+  max-height: calc(100vh - 220px);
 }
 
 .panel-top {
@@ -348,6 +365,7 @@ textarea {
 .panel-body-wrapper {
   flex: 1;
   display: flex;
+  overflow-y: auto;
 }
 
 .panel-body-wrapper.compact {
@@ -495,6 +513,89 @@ textarea {
   margin-top: -0.15rem;
 }
 
+.helper-text.small,
+.muted.small {
+  font-size: 0.85rem;
+}
+
+.location-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.location-strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.emoji-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, 1fr);
+  grid-auto-columns: 56px;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.emoji-chip {
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  padding: 0.55rem;
+  font-size: 1.25rem;
+  background: #ffffff;
+}
+
+.emoji-chip.selected {
+  border-color: #2563eb;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.16);
+}
+
+.location-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.contact-section {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.contact-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.delete-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-weight: 600;
+}
+
+.input-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.input-with-icon .input {
+  flex: 1;
+}
+
 .status {
   font-size: 0.9rem;
   padding: 0.75rem 0.9rem;
@@ -525,6 +626,107 @@ textarea {
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #0f172a;
+}
+
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tab-button {
+  border-radius: 14px;
+  padding: 0.55rem 0.9rem;
+  background: #e5e7eb;
+  border-color: #d1d5db;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tab-button.active {
+  background: #1d4ed8;
+  border-color: #1e3a8a;
+  color: #fff;
+}
+
+.mod-bubble {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.mod-bubble-edit {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.mod-bubble-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.bubble.mod-chip {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chip-delete {
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stats-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.stat-card {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #f8fafc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.small-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.45rem;
+  background: #e5e7eb;
+  color: #0f172a;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.bubble-moderation-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.bubble-moderation-column {
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #f8fafc;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.bubble-editor-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 @media (max-width: 900px) {
