@@ -102,6 +102,20 @@ button.ghost {
   color: #2563eb;
 }
 
+.close-button {
+  border: none;
+  background: transparent;
+  padding: 0.25rem;
+  color: #0f172a;
+  box-shadow: none;
+}
+
+.close-button:hover {
+  transform: none;
+  background: #f1f5f9;
+  box-shadow: none;
+}
+
 .input,
 textarea {
   width: 100%;
@@ -186,7 +200,7 @@ textarea {
   border-radius: 18px;
   padding: 1rem 1.1rem;
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.14);
-  max-width: 460px;
+  width: min(480px, calc(100% - 36px));
   z-index: 5;
 }
 
@@ -198,9 +212,12 @@ textarea {
 
 .title-icon {
   color: #2563eb;
-  background: #e8f1ff;
-  padding: 0.6rem;
-  border-radius: 12px;
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.title-text h1 {
+  font-size: 1.6rem;
 }
 
 .title-meta {
@@ -264,12 +281,14 @@ textarea {
   width: min(440px, calc(100% - 32px));
   z-index: 6;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .floating-panel.side {
-  top: 150px;
-  left: 18px;
-  max-height: calc(100vh - 170px);
+  top: 18px;
+  right: 18px;
+  max-height: calc(100vh - 36px);
 }
 
 .floating-panel.bottom {
@@ -280,37 +299,59 @@ textarea {
   max-height: 70vh;
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f8fafc;
+.floating-panel.bottom.expanded {
+  top: 120px;
+  bottom: 18px;
+  max-height: none;
 }
 
-.panel-heading {
+.panel-top {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-weight: 700;
-  color: #0f172a;
+  justify-content: space-between;
+  padding: 0.85rem 1rem 0.25rem;
 }
 
 .panel-icon {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  background: #e8f1ff;
   color: #2563eb;
 }
 
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .panel-body {
-  padding: 1rem;
+  padding: 0.25rem 1rem 1rem;
   overflow-y: auto;
-  max-height: calc(100% - 56px);
+  flex: 1;
+}
+
+.panel-body-wrapper {
+  flex: 1;
+  display: flex;
+}
+
+.panel-body-wrapper.compact {
+  max-height: 240px;
+  overflow: hidden;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.panel-lead {
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .card {
@@ -485,8 +526,9 @@ textarea {
   }
 
   .title-card {
-    max-width: calc(100% - 32px);
+    width: calc(100% - 32px);
     left: 50%;
     transform: translateX(-50%);
+    right: 16px;
   }
 }

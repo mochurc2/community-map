@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 
-function MapView({ pins, onMapClick }) {
+function MapView({ pins, onMapClick, pendingLocation }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
@@ -45,6 +45,23 @@ function MapView({ pins, onMapClick }) {
           "circle-color": "#ef4444",
           "circle-stroke-width": 2,
           "circle-stroke-color": "#f8fafc",
+        },
+      });
+
+      map.addSource("pending-pin", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+
+      map.addLayer({
+        id: "pending-pin-layer",
+        type: "circle",
+        source: "pending-pin",
+        paint: {
+          "circle-radius": 8,
+          "circle-color": "#111827",
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#22d3ee",
         },
       });
 
@@ -96,6 +113,33 @@ function MapView({ pins, onMapClick }) {
       features,
     });
   }, [pins, mapLoaded]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const pendingSource = map.getSource("pending-pin");
+    if (!pendingSource) return;
+
+    if (!pendingLocation) {
+      pendingSource.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+
+    pendingSource.setData({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: {
+            type: "Point",
+            coordinates: [pendingLocation.lng, pendingLocation.lat],
+          },
+        },
+      ],
+    });
+  }, [pendingLocation, mapLoaded]);
 
   if (!styleUrl) {
     return (
