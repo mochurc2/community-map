@@ -1,4 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Filter,
+  Info,
+  MapPin,
+  Plus,
+  Scissors,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
 import { fetchBubbleOptions, getDefaultBubbleOptions } from "./bubbleOptions";
@@ -120,6 +129,14 @@ function App() {
   const [submitMsg, setSubmitMsg] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [activePanel, setActivePanel] = useState(null);
+  const [panelPlacement, setPanelPlacement] = useState("side");
+  const [showFullAddForm, setShowFullAddForm] = useState(false);
+  const [filters, setFilters] = useState({
+    gender_identity: "",
+    seeking: [],
+    interest_tags: [],
+  });
 
   useEffect(() => {
     async function fetchPins() {
@@ -251,175 +268,330 @@ function App() {
     setSubmitting(false);
   };
 
+  useEffect(() => {
+    const handlePlacement = () => {
+      const isWideEnough = window.innerWidth >= 960;
+      setPanelPlacement(isWideEnough ? "side" : "bottom");
+    };
+
+    handlePlacement();
+    window.addEventListener("resize", handlePlacement);
+    return () => window.removeEventListener("resize", handlePlacement);
+  }, []);
+
+  const filteredPins = useMemo(() => {
+    return pins.filter((pin) => {
+      const matchesGender =
+        !filters.gender_identity || pin.gender_identity === filters.gender_identity;
+      const matchesSeeking =
+        filters.seeking.length === 0 ||
+        filters.seeking.some((opt) => (pin.seeking || []).includes(opt));
+      const matchesInterests =
+        filters.interest_tags.length === 0 ||
+        filters.interest_tags.some((opt) => (pin.interest_tags || []).includes(opt));
+
+      return matchesGender && matchesSeeking && matchesInterests;
+    });
+  }, [filters.gender_identity, filters.interest_tags, filters.seeking, pins]);
+
+  const togglePanel = (panel) => {
+    setActivePanel((prev) => (prev === panel ? null : panel));
+    if (panel === "add") {
+      setShowFullAddForm(Boolean(selectedLocation));
+    }
+  };
+
+  const closePanel = () => setActivePanel(null);
+
+  const handleFilterChange = (field, value) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const clearFilters = () =>
+    setFilters({ gender_identity: "", seeking: [], interest_tags: [] });
+
+  const approvedPinsCount = pins.length;
+  const locationLabel = selectedLocation
+    ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
+    : "None yet";
+
+  const addPanelIntro = (
+    <div className="card muted-block">
+      <p>
+        Select location for your pin and fill out the form. All pins are subject to
+        moderation before appearing on the map.
+      </p>
+      <div className="status-row">
+        <MapPin size={18} />
+        <span>Selected location: {locationLabel}</span>
+      </div>
+      <button
+        type="button"
+        className="primary"
+        onClick={() => setShowFullAddForm(true)}
+        disabled={!selectedLocation}
+      >
+        Continue to form
+      </button>
+    </div>
+  );
+
+  const infoPanel = (
+    <div className="panel-body">
+      <div className="card">
+        <div className="card-header">
+          <Sparkles size={20} />
+          <div>
+            <p className="eyebrow">Welcome</p>
+            <h3>The Hair Fetish Map</h3>
+          </div>
+        </div>
+        <p className="muted">
+          Drop a pin to share who you are, what you enjoy, and where you are based.
+          Moderators approve submissions before they appear on the public map so
+          everyone can browse safely.
+        </p>
+        <ul className="list">
+          <li>Use the icons on the title card to toggle info, add pins, or filter.</li>
+          <li>Tap on the map to pick your spot, then submit a short intro.</li>
+          <li>Contact handles stay hidden until your pin is approved.</li>
+        </ul>
+      </div>
+    </div>
+  );
+
+  const addPanel = (
+    <div className="panel-body">
+      {addPanelIntro}
+      {showFullAddForm && (
+        <form onSubmit={handleSubmit} className="form-grid compact">
+          <BubbleSelector
+            label="Gender identity"
+            helper="Choose one"
+            options={bubbleOptions.gender_identity}
+            value={form.gender_identity}
+            onChange={(value) => setForm((f) => ({ ...f, gender_identity: value }))}
+            onAddOption={(option) => handleCustomOption("gender_identity", option)}
+            allowCustom
+          />
+
+          <BubbleSelector
+            label="Interested in"
+            helper="Select all that apply"
+            options={bubbleOptions.seeking}
+            multiple
+            value={form.seeking}
+            onChange={(value) => setForm((f) => ({ ...f, seeking: value }))}
+            onAddOption={(option) => handleCustomOption("seeking", option)}
+            allowCustom
+          />
+
+          <BubbleSelector
+            label="Interests"
+            helper="Select all that apply"
+            options={bubbleOptions.interest_tags}
+            multiple
+            value={form.interest_tags}
+            onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
+            onAddOption={(option) => handleCustomOption("interest_tags", option)}
+            allowCustom
+          />
+
+          <label className="label">
+            City / region (optional)
+            <input
+              type="text"
+              name="city"
+              value={form.city}
+              onChange={handleChange}
+              placeholder="e.g. Chicago"
+              className="input"
+            />
+          </label>
+
+          <label className="label">
+            Country (optional)
+            <input
+              type="text"
+              name="country"
+              value={form.country}
+              onChange={handleChange}
+              placeholder="e.g. USA"
+              className="input"
+            />
+          </label>
+
+          <label className="label">
+            Short note
+            <textarea
+              name="note"
+              value={form.note}
+              onChange={handleChange}
+              rows={3}
+              placeholder="Anything you want others to know."
+              className="input"
+            />
+          </label>
+
+          <p className="helper">Contact handles are optional</p>
+
+          <label className="label">
+            Discord handle
+            <input
+              type="text"
+              name="contact_discord"
+              value={form.contact_discord}
+              onChange={handleChange}
+              placeholder="e.g. name#1234"
+              className="input"
+            />
+          </label>
+
+          <label className="label">
+            Reddit username
+            <input
+              type="text"
+              name="contact_reddit"
+              value={form.contact_reddit}
+              onChange={handleChange}
+              placeholder="e.g. u/username"
+              className="input"
+            />
+          </label>
+
+          <label className="label">
+            Instagram handle
+            <input
+              type="text"
+              name="contact_instagram"
+              value={form.contact_instagram}
+              onChange={handleChange}
+              placeholder="e.g. @username"
+              className="input"
+            />
+          </label>
+
+          {submitError && <p className="status error">{submitError}</p>}
+          {submitMsg && <p className="status success">{submitMsg}</p>}
+
+          <button type="submit" disabled={submitting} className="primary">
+            {submitting ? "Submitting…" : "Submit pin for review"}
+          </button>
+        </form>
+      )}
+    </div>
+  );
+
+  const filterPanel = (
+    <div className="panel-body">
+      <div className="card muted-block">
+        <p className="eyebrow">Filter pins on the map</p>
+        <p className="muted">Narrow down visible pins by selecting the traits below.</p>
+      </div>
+      <div className="form-grid compact">
+        <BubbleSelector
+          label="Gender identity"
+          helper="Show one"
+          options={bubbleOptions.gender_identity}
+          value={filters.gender_identity}
+          onChange={(value) => handleFilterChange("gender_identity", value)}
+        />
+        <BubbleSelector
+          label="Interested in"
+          helper="Show any"
+          options={bubbleOptions.seeking}
+          multiple
+          value={filters.seeking}
+          onChange={(value) => handleFilterChange("seeking", value)}
+        />
+        <BubbleSelector
+          label="Interests"
+          helper="Show any"
+          options={bubbleOptions.interest_tags}
+          multiple
+          value={filters.interest_tags}
+          onChange={(value) => handleFilterChange("interest_tags", value)}
+        />
+        <div className="filter-actions">
+          <button type="button" className="ghost" onClick={clearFilters}>
+            Reset filters
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const panelTitle =
+    activePanel === "info"
+      ? { icon: <Info size={18} />, label: "About this map" }
+      : activePanel === "add"
+        ? { icon: <Plus size={18} />, label: "Add your pin" }
+        : { icon: <Filter size={18} />, label: "Filter pins" };
+
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="panel" style={{ background: "rgba(255,255,255,0.04)" }}>
-          <div className="meta" style={{ justifyContent: "space-between" }}>
-            <div>
-              <p className="badge">Community Map</p>
-              <h1 style={{ color: "#fff", marginTop: "0.25rem" }}>
-                Find friends near you
-              </h1>
-              <p className="muted" style={{ marginTop: "0.35rem" }}>
-                Drop a pin to share who you are and what you enjoy. Approved pins
-                appear on the public map.
-              </p>
+      <MapView pins={filteredPins} onMapClick={handleMapClick} />
+
+      <div className="title-card">
+        <div className="title-row">
+          <Scissors className="title-icon" aria-hidden />
+          <div>
+            <p className="eyebrow">The Hair Fetish Map</p>
+            <h1>Find friends near you</h1>
+            <div className="title-meta">
+              <span className="pill">
+                {loadingPins ? "Loading pins…" : `${approvedPinsCount} pins`}
+              </span>
+              {pinsError && <span className="pill error">Error loading pins</span>}
             </div>
           </div>
-          <div className="meta" style={{ marginTop: "0.75rem" }}>
-            <span className="badge">
-              {loadingPins
-                ? "Loading pins…"
-                : `${pins.length} approved pins live`}
-            </span>
-            {pinsError && (
-              <span className="badge" style={{ background: "rgba(248,113,113,0.2)", color: "#fecdd3" }}>
-                Error loading pins
-              </span>
-            )}
-          </div>
         </div>
 
-        <div className="panel">
-          <div className="section-title">
-            <span role="img" aria-label="pin">
-              📍
-            </span>
-            <h2>Add your pin</h2>
-          </div>
-          <p className="muted" style={{ margin: "0.35rem 0 0.75rem" }}>
-            Tap anywhere on the map, then share a short intro. Contact details are
-            optional and stay hidden until a moderator approves.
-          </p>
+        <div className="title-actions">
+          <button
+            type="button"
+            className={`icon-pill ${activePanel === "info" ? "active" : ""}`}
+            onClick={() => togglePanel("info")}
+          >
+            <Info size={18} />
+            <span>Info</span>
+          </button>
+          <button
+            type="button"
+            className={`icon-pill ${activePanel === "add" ? "active" : ""}`}
+            onClick={() => togglePanel("add")}
+          >
+            <Plus size={18} />
+            <span>Add pin</span>
+          </button>
+          <button
+            type="button"
+            className={`icon-pill ${activePanel === "filter" ? "active" : ""}`}
+            onClick={() => togglePanel("filter")}
+          >
+            <Filter size={18} />
+            <span>Filter</span>
+          </button>
+        </div>
+      </div>
 
-          <div className="status" style={{ color: "#e5e7eb" }}>
-            Selected location: {" "}
-            {selectedLocation
-              ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
-              : "none yet"}
-          </div>
-
-          <form onSubmit={handleSubmit} className="form-grid" style={{ marginTop: "0.75rem" }}>
-            <BubbleSelector
-              label="Gender identity"
-              helper="Choose one"
-              options={bubbleOptions.gender_identity}
-              value={form.gender_identity}
-              onChange={(value) => setForm((f) => ({ ...f, gender_identity: value }))}
-              onAddOption={(option) => handleCustomOption("gender_identity", option)}
-              allowCustom
-            />
-
-            <BubbleSelector
-              label="Interested in"
-              helper="Select all that apply"
-              options={bubbleOptions.seeking}
-              multiple
-              value={form.seeking}
-              onChange={(value) => setForm((f) => ({ ...f, seeking: value }))}
-              onAddOption={(option) => handleCustomOption("seeking", option)}
-              allowCustom
-            />
-
-            <BubbleSelector
-              label="Interests"
-              helper="Select all that apply"
-              options={bubbleOptions.interest_tags}
-              multiple
-              value={form.interest_tags}
-              onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
-              onAddOption={(option) => handleCustomOption("interest_tags", option)}
-              allowCustom
-            />
-
-            <label className="label">
-              City / region (optional)
-              <input
-                type="text"
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                placeholder="e.g. Chicago"
-                className="input"
-              />
-            </label>
-
-            <label className="label">
-              Country (optional)
-              <input
-                type="text"
-                name="country"
-                value={form.country}
-                onChange={handleChange}
-                placeholder="e.g. USA"
-                className="input"
-              />
-            </label>
-
-            <label className="label">
-              Short note
-              <textarea
-                name="note"
-                value={form.note}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Anything you want others to know."
-                className="input"
-              />
-            </label>
-
-            <p className="helper">Contact handles are optional</p>
-
-            <label className="label">
-              Discord handle
-              <input
-                type="text"
-                name="contact_discord"
-                value={form.contact_discord}
-                onChange={handleChange}
-                placeholder="e.g. name#1234"
-                className="input"
-              />
-            </label>
-
-            <label className="label">
-              Reddit username
-              <input
-                type="text"
-                name="contact_reddit"
-                value={form.contact_reddit}
-                onChange={handleChange}
-                placeholder="e.g. u/username"
-                className="input"
-              />
-            </label>
-
-            <label className="label">
-              Instagram handle
-              <input
-                type="text"
-                name="contact_instagram"
-                value={form.contact_instagram}
-                onChange={handleChange}
-                placeholder="e.g. @username"
-                className="input"
-              />
-            </label>
-
-            {submitError && <p className="status error">{submitError}</p>}
-            {submitMsg && <p className="status success">{submitMsg}</p>}
-
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Submitting…" : "Submit pin for review"}
+      {activePanel && (
+        <div className={`floating-panel ${panelPlacement}`}>
+          <div className="panel-header">
+            <div className="panel-heading">
+              <div className="panel-icon">{panelTitle.icon}</div>
+              <p className="eyebrow">{panelTitle.label}</p>
+            </div>
+            <button type="button" className="icon-button" onClick={closePanel}>
+              <X size={18} />
             </button>
-          </form>
-        </div>
-      </aside>
+          </div>
 
-      <main className="map-region">
-        <MapView pins={pins} onMapClick={handleMapClick} />
-      </main>
+          {activePanel === "info" && infoPanel}
+          {activePanel === "add" && addPanel}
+          {activePanel === "filter" && filterPanel}
+        </div>
+      )}
     </div>
   );
 }
