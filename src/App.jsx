@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Filter,
-  Info,
-  MapPin,
-  Plus,
-  Scissors,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Filter, Info, MapPin, Plus, Scissors, X } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
 import { fetchBubbleOptions, getDefaultBubbleOptions } from "./bubbleOptions";
@@ -271,13 +263,22 @@ function App() {
   useEffect(() => {
     const handlePlacement = () => {
       const isWideEnough = window.innerWidth >= 960;
-      setPanelPlacement(isWideEnough ? "side" : "bottom");
+      const placement = isWideEnough ? "side" : "bottom";
+      setPanelPlacement(placement);
+
+      if (activePanel === "add") {
+        if (placement === "bottom") {
+          setShowFullAddForm(false);
+        } else if (selectedLocation) {
+          setShowFullAddForm(true);
+        }
+      }
     };
 
     handlePlacement();
     window.addEventListener("resize", handlePlacement);
     return () => window.removeEventListener("resize", handlePlacement);
-  }, []);
+  }, [activePanel, selectedLocation]);
 
   const filteredPins = useMemo(() => {
     return pins.filter((pin) => {
@@ -297,9 +298,16 @@ function App() {
   const togglePanel = (panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
     if (panel === "add") {
-      setShowFullAddForm(Boolean(selectedLocation));
+      const shouldExpand = panelPlacement !== "bottom" && Boolean(selectedLocation);
+      setShowFullAddForm(shouldExpand);
     }
   };
+
+  useEffect(() => {
+    if (activePanel === "add" && panelPlacement !== "bottom" && selectedLocation) {
+      setShowFullAddForm(true);
+    }
+  }, [activePanel, panelPlacement, selectedLocation]);
 
   const closePanel = () => setActivePanel(null);
 
@@ -316,11 +324,7 @@ function App() {
     : "None yet";
 
   const addPanelIntro = (
-    <div className="card muted-block">
-      <p>
-        Select location for your pin and fill out the form. All pins are subject to
-        moderation before appearing on the map.
-      </p>
+    <div className="panel-section">
       <div className="status-row">
         <MapPin size={18} />
         <span>Selected location: {locationLabel}</span>
@@ -338,14 +342,8 @@ function App() {
 
   const infoPanel = (
     <div className="panel-body">
-      <div className="card">
-        <div className="card-header">
-          <Sparkles size={20} />
-          <div>
-            <p className="eyebrow">Welcome</p>
-            <h3>The Hair Fetish Map</h3>
-          </div>
-        </div>
+      <div className="panel-section">
+        <p className="panel-lead">About this map</p>
         <p className="muted">
           Drop a pin to share who you are, what you enjoy, and where you are based.
           Moderators approve submissions before they appear on the public map so
@@ -362,7 +360,16 @@ function App() {
 
   const addPanel = (
     <div className="panel-body">
-      {addPanelIntro}
+      <div className="panel-section">
+        {panelPlacement !== "bottom" && (
+          <p className="muted">
+            Select location for your pin and fill out the form. All pins are subject to
+            moderation before appearing on the map.
+          </p>
+        )}
+        {addPanelIntro}
+      </div>
+
       {showFullAddForm && (
         <form onSubmit={handleSubmit} className="form-grid compact">
           <BubbleSelector
@@ -484,8 +491,8 @@ function App() {
 
   const filterPanel = (
     <div className="panel-body">
-      <div className="card muted-block">
-        <p className="eyebrow">Filter pins on the map</p>
+      <div className="panel-section">
+        <p className="panel-lead">Filter pins</p>
         <p className="muted">Narrow down visible pins by selecting the traits below.</p>
       </div>
       <div className="form-grid compact">
@@ -523,28 +530,33 @@ function App() {
 
   const panelTitle =
     activePanel === "info"
-      ? { icon: <Info size={18} />, label: "About this map" }
+      ? { icon: <Info />, label: "About this map" }
       : activePanel === "add"
-        ? { icon: <Plus size={18} />, label: "Add your pin" }
-        : { icon: <Filter size={18} />, label: "Filter pins" };
+        ? { icon: <Plus />, label: "Add your pin" }
+        : { icon: <Filter />, label: "Filter pins" };
+
+  const isCompactAdd = panelPlacement === "bottom";
 
   return (
     <div className="app-shell">
-      <MapView pins={filteredPins} onMapClick={handleMapClick} />
+      <MapView
+        pins={filteredPins}
+        onMapClick={handleMapClick}
+        pendingLocation={activePanel === "add" ? selectedLocation : null}
+      />
 
       <div className="title-card">
         <div className="title-row">
           <Scissors className="title-icon" aria-hidden />
-          <div>
-            <p className="eyebrow">The Hair Fetish Map</p>
-            <h1>Find friends near you</h1>
-            <div className="title-meta">
-              <span className="pill">
-                {loadingPins ? "Loading pins…" : `${approvedPinsCount} pins`}
-              </span>
-              {pinsError && <span className="pill error">Error loading pins</span>}
-            </div>
+          <div className="title-text">
+            <h1>The Hair Fetish Map</h1>
           </div>
+        </div>
+        <div className="title-meta">
+          <span className="pill">
+            {loadingPins ? "Loading pins…" : `${approvedPinsCount} pins`}
+          </span>
+          {pinsError && <span className="pill error">Error loading pins</span>}
         </div>
 
         <div className="title-actions">
@@ -576,19 +588,29 @@ function App() {
       </div>
 
       {activePanel && (
-        <div className={`floating-panel ${panelPlacement}`}>
-          <div className="panel-header">
-            <div className="panel-heading">
+        <div
+          className={`floating-panel ${panelPlacement} ${activePanel === "add" && showFullAddForm ? "expanded" : ""}`}
+        >
+          <div className="panel-top">
+            <div className="panel-title">
               <div className="panel-icon">{panelTitle.icon}</div>
-              <p className="eyebrow">{panelTitle.label}</p>
+              <h3>{panelTitle.label}</h3>
             </div>
-            <button type="button" className="icon-button" onClick={closePanel}>
-              <X size={18} />
+            <button type="button" className="close-button" onClick={closePanel}>
+              <X size={24} />
             </button>
           </div>
 
           {activePanel === "info" && infoPanel}
-          {activePanel === "add" && addPanel}
+          {activePanel === "add" && (
+            <div
+              className={`panel-body-wrapper ${
+                isCompactAdd && !showFullAddForm ? "compact" : ""
+              }`}
+            >
+              {addPanel}
+            </div>
+          )}
           {activePanel === "filter" && filterPanel}
         </div>
       )}
