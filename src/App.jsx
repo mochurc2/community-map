@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Filter, Info, MapPin, Plus, Scissors, X } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
@@ -124,11 +124,13 @@ function App() {
   const [activePanel, setActivePanel] = useState(null);
   const [panelPlacement, setPanelPlacement] = useState("side");
   const [showFullAddForm, setShowFullAddForm] = useState(false);
+  const [titleCardHeight, setTitleCardHeight] = useState(0);
   const [filters, setFilters] = useState({
     gender_identity: "",
     seeking: [],
     interest_tags: [],
   });
+  const titleCardRef = useRef(null);
 
   useEffect(() => {
     async function fetchPins() {
@@ -280,6 +282,18 @@ function App() {
     return () => window.removeEventListener("resize", handlePlacement);
   }, [activePanel, selectedLocation]);
 
+  useEffect(() => {
+    const updateHeight = () => {
+      if (!titleCardRef.current) return;
+      const rect = titleCardRef.current.getBoundingClientRect();
+      setTitleCardHeight(rect.height);
+    };
+
+    updateHeight();
+    window.addEventListener("resize", updateHeight);
+    return () => window.removeEventListener("resize", updateHeight);
+  }, []);
+
   const filteredPins = useMemo(() => {
     return pins.filter((pin) => {
       const matchesGender =
@@ -329,21 +343,28 @@ function App() {
         <MapPin size={18} />
         <span>Selected location: {locationLabel}</span>
       </div>
-      <button
-        type="button"
-        className="primary"
-        onClick={() => setShowFullAddForm(true)}
-        disabled={!selectedLocation}
-      >
-        Continue to form
-      </button>
+      {panelPlacement === "bottom" && (
+        <button
+          type="button"
+          className="primary"
+          onClick={() => setShowFullAddForm(true)}
+          disabled={!selectedLocation}
+        >
+          Continue to form
+        </button>
+      )}
     </div>
   );
 
   const infoPanel = (
     <div className="panel-body">
       <div className="panel-section">
-        <p className="panel-lead">About this map</p>
+        <div className="title-meta">
+          <span className="pill">
+            {loadingPins ? "Loading pins…" : `${approvedPinsCount} pins`}
+          </span>
+          {pinsError && <span className="pill error">Error loading pins</span>}
+        </div>
         <p className="muted">
           Drop a pin to share who you are, what you enjoy, and where you are based.
           Moderators approve submissions before they appear on the public map so
@@ -492,7 +513,6 @@ function App() {
   const filterPanel = (
     <div className="panel-body">
       <div className="panel-section">
-        <p className="panel-lead">Filter pins</p>
         <p className="muted">Narrow down visible pins by selecting the traits below.</p>
       </div>
       <div className="form-grid compact">
@@ -545,51 +565,78 @@ function App() {
         pendingLocation={activePanel === "add" ? selectedLocation : null}
       />
 
-      <div className="title-card">
-        <div className="title-row">
-          <Scissors className="title-icon" aria-hidden />
-          <div className="title-text">
-            <h1>The Hair Fetish Map</h1>
+      <div className="overlay-rail" ref={titleCardRef}>
+        <div className="title-card">
+          <div className="title-row">
+            <Scissors className="title-icon" aria-hidden />
+            <div className="title-text">
+              <h1>The Hair Fetish Map</h1>
+            </div>
+          </div>
+
+          <div className="title-actions">
+            <button
+              type="button"
+              className={`icon-pill ${activePanel === "info" ? "active" : ""}`}
+              onClick={() => togglePanel("info")}
+            >
+              <Info size={18} />
+              <span>Info</span>
+            </button>
+            <button
+              type="button"
+              className={`icon-pill ${activePanel === "add" ? "active" : ""}`}
+              onClick={() => togglePanel("add")}
+            >
+              <Plus size={18} />
+              <span>Add pin</span>
+            </button>
+            <button
+              type="button"
+              className={`icon-pill ${activePanel === "filter" ? "active" : ""}`}
+              onClick={() => togglePanel("filter")}
+            >
+              <Filter size={18} />
+              <span>Filter</span>
+            </button>
           </div>
         </div>
-        <div className="title-meta">
-          <span className="pill">
-            {loadingPins ? "Loading pins…" : `${approvedPinsCount} pins`}
-          </span>
-          {pinsError && <span className="pill error">Error loading pins</span>}
-        </div>
 
-        <div className="title-actions">
-          <button
-            type="button"
-            className={`icon-pill ${activePanel === "info" ? "active" : ""}`}
-            onClick={() => togglePanel("info")}
+        {activePanel && panelPlacement === "side" && (
+          <div
+            className={`floating-panel ${panelPlacement} ${
+              activePanel === "add" && showFullAddForm ? "expanded" : ""
+            }`}
           >
-            <Info size={18} />
-            <span>Info</span>
-          </button>
-          <button
-            type="button"
-            className={`icon-pill ${activePanel === "add" ? "active" : ""}`}
-            onClick={() => togglePanel("add")}
-          >
-            <Plus size={18} />
-            <span>Add pin</span>
-          </button>
-          <button
-            type="button"
-            className={`icon-pill ${activePanel === "filter" ? "active" : ""}`}
-            onClick={() => togglePanel("filter")}
-          >
-            <Filter size={18} />
-            <span>Filter</span>
-          </button>
-        </div>
+            <div className="panel-top">
+              <div className="panel-title">
+                <div className="panel-icon">{panelTitle.icon}</div>
+                <h3>{panelTitle.label}</h3>
+              </div>
+              <button type="button" className="close-button" onClick={closePanel}>
+                <X size={24} />
+              </button>
+            </div>
+
+              {activePanel === "info" && infoPanel}
+              {activePanel === "add" && (
+                <div className="panel-body-wrapper">{addPanel}</div>
+              )}
+              {activePanel === "filter" && filterPanel}
+          </div>
+        )}
       </div>
 
-      {activePanel && (
+      {activePanel && panelPlacement === "bottom" && (
         <div
-          className={`floating-panel ${panelPlacement} ${activePanel === "add" && showFullAddForm ? "expanded" : ""}`}
+          className={`floating-panel ${panelPlacement} ${
+            activePanel === "add" && showFullAddForm ? "expanded" : ""
+          }`}
+          style={
+            panelPlacement === "bottom" && activePanel === "add" && showFullAddForm
+              ? { top: `${Math.max(titleCardHeight + 42, 150)}px` }
+              : undefined
+          }
         >
           <div className="panel-top">
             <div className="panel-title">
