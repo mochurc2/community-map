@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, Filter, Info, MapPin, Plus, Scissors, X } from "lucide-react";
+import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
 import { fetchBubbleOptions, getDefaultBubbleOptions } from "./bubbleOptions";
@@ -477,12 +477,13 @@ function App() {
 
   const addPanelIntro = (
     <div className="panel-section">
-      <div className="status-row">
-        <MapPin size={18} />
-        <div className="location-stack">
-          <span className="eyebrow">Location</span>
-          <span className="location-strong">{locationLabel}</span>
-          <span className="muted small">{locationDetails}</span>
+      <div className="label location-label">
+        <div className="label-heading">
+          <span>Location</span>
+        </div>
+        <div className="location-chip-row">
+          <span className="location-chip">{locationLabel}</span>
+          <span className="location-chip subdued">{locationDetails}</span>
         </div>
       </div>
       {panelPlacement === "bottom" && !showFullAddForm && (
@@ -556,10 +557,6 @@ function App() {
               </div>
             </div>
           </div>
-
-          <p className="helper">
-            Location details are filled in automatically from where you click on the map.
-          </p>
 
           <label className="label">
             Nickname
