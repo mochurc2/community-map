@@ -1,32 +1,35 @@
-import { supabase } from "./supabaseClient";
+import { supabase, supabaseAdmin } from "./supabaseClient";
 
 const baseDefaultOptions = {
-  gender_identity: [
-    "Woman",
-    "Man",
-    "Nonbinary",
-    "Genderqueer",
-    "Trans woman",
-    "Trans man",
-    "Agender",
-  ],
-  seeking: [
-    "Women",
-    "Men",
-    "Nonbinary people",
-    "Queer folks",
-    "Friends",
-    "Play partners",
-    "Mentorship",
-  ],
+  gender_identity: ["Man", "Woman", "Nonbinary", "Trans"],
+  seeking: ["Man", "Woman", "Nonbinary", "Trans"],
   interest_tags: [
-    "Rope",
-    "Impact",
-    "DS dynamics",
-    "Service",
-    "Switching",
-    "Sensory play",
-    "Workshops",
+    "Giving Haircuts",
+    "Receiving Haircuts",
+    "Short Hair",
+    "Medium Hair",
+    "Long Hair",
+    "Hair Play",
+    "Shaving",
+    "Facial Hair",
+    "Body Hair",
+    "Buzzcuts",
+    "Flattops",
+    "Bobs",
+    "MPB",
+    "BDSM",
+    "Bleaching/Dye",
+  ],
+  contact_methods: [
+    "Email",
+    "Discord",
+    "Reddit",
+    "Instagram",
+    "Tumblr",
+    "X/Twitter",
+    "Youtube",
+    "Website",
+    "OnlyFans",
   ],
 };
 
@@ -34,6 +37,7 @@ const cloneOptions = (options) => ({
   gender_identity: [...options.gender_identity],
   seeking: [...options.seeking],
   interest_tags: [...options.interest_tags],
+  contact_methods: [...options.contact_methods],
 });
 
 export const defaultBubbleOptions = cloneOptions(baseDefaultOptions);
@@ -55,11 +59,18 @@ export async function fetchBubbleOptions() {
     gender_identity: [],
     seeking: [],
     interest_tags: [],
+    contact_methods: [],
   };
 
   data.forEach((row) => {
     if (options[row.field]) {
       options[row.field].push(row.label);
+    }
+  });
+
+  Object.keys(options).forEach((key) => {
+    if (options[key].length === 0) {
+      options[key] = [...baseDefaultOptions[key]];
     }
   });
 
@@ -77,7 +88,7 @@ export async function fetchBubbleOptionsWithIds() {
 }
 
 export async function addBubbleOption(field, label) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("bubble_options")
     .insert({ field, label })
     .select()
@@ -88,7 +99,7 @@ export async function addBubbleOption(field, label) {
 }
 
 export async function updateBubbleOption(id, label) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("bubble_options")
     .update({ label })
     .eq("id", id)
@@ -100,7 +111,10 @@ export async function updateBubbleOption(id, label) {
 }
 
 export async function deleteBubbleOption(id) {
-  const { error } = await supabase.from("bubble_options").delete().eq("id", id);
+  const { error } = await supabaseAdmin
+    .from("bubble_options")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
   return true;
 }
