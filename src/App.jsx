@@ -56,6 +56,12 @@ const contactPlaceholders = {
   OnlyFans: "@username",
 };
 
+const defaultExpiryDate = () => {
+  const now = new Date();
+  now.setFullYear(now.getFullYear() + 1);
+  return now.toISOString().split("T")[0];
+};
+
 const buildInitialFormState = () => ({
   icon: "💈",
   nickname: "",
@@ -70,8 +76,8 @@ const buildInitialFormState = () => ({
   state_province: "",
   country: "",
   country_code: "",
-  expires_at: "",
-  never_delete: true,
+  expires_at: defaultExpiryDate(),
+  never_delete: false,
 });
 
 function BubbleSelector({
@@ -131,9 +137,13 @@ function BubbleSelector({
             key={option}
             type="button"
             className={`bubble ${
-              multiple ? value.includes(option) : value === option
-                ? "selected"
-                : ""
+              multiple
+                ? value.includes(option)
+                  ? "selected"
+                  : ""
+                : value === option
+                  ? "selected"
+                  : ""
             }`}
             onClick={() => toggleOption(option)}
           >
@@ -202,7 +212,13 @@ function App() {
 
       if (error) {
         console.error(error);
-        setPinsError(error.message);
+        if (error.message?.includes("age")) {
+          setPinsError(
+            "The Supabase schema is missing the 'age' column. Please run the SQL in supabase/schema.sql to refresh your database."
+          );
+        } else {
+          setPinsError(error.message);
+        }
       } else {
         setPins(data || []);
       }
@@ -362,7 +378,13 @@ function App() {
 
     if (error) {
       console.error(error);
-      setSubmitError(error.message);
+      if (error.message?.includes("age")) {
+        setSubmitError(
+          "The Supabase schema is missing the 'age' column. Please run the latest SQL in supabase/schema.sql to update your database."
+        );
+      } else {
+        setSubmitError(error.message);
+      }
     } else {
       setSubmitMsg("Thanks! Your pin has been submitted for review.");
       setForm(buildInitialFormState());
@@ -535,42 +557,9 @@ function App() {
             </div>
           </div>
 
-          <div className="location-edit-grid">
-            <label className="label">
-              City
-              <input
-                type="text"
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                placeholder="Auto-filled"
-                className="input"
-              />
-            </label>
-            <label className="label">
-              Region
-              <input
-                type="text"
-                name="state_province"
-                value={form.state_province}
-                onChange={handleChange}
-                placeholder="State / province"
-                className="input"
-              />
-            </label>
-            <label className="label">
-              Country code
-              <input
-                type="text"
-                name="country"
-                value={form.country}
-                onChange={handleChange}
-                placeholder="e.g. US"
-                className="input"
-                maxLength={3}
-              />
-            </label>
-          </div>
+          <p className="helper">
+            Location details are filled in automatically from where you click on the map.
+          </p>
 
           <label className="label">
             Nickname
@@ -670,7 +659,29 @@ function App() {
           </div>
 
           <div className="delete-row">
-            <label className="checkbox-label">
+            <label className="label">
+              <div className="label-heading">
+                <span>Delete pin after</span>
+                <span className="helper-text">We will remove at 11:59 PM on that date</span>
+              </div>
+              <div className="input-with-icon">
+                <CalendarClock size={18} />
+                <input
+                  type="date"
+                  className="input"
+                  value={form.expires_at}
+                  disabled={form.never_delete}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      expires_at: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </label>
+
+            <label className="checkbox-label below-date">
               <input
                 type="checkbox"
                 checked={form.never_delete}
@@ -678,35 +689,14 @@ function App() {
                   setForm((prev) => ({
                     ...prev,
                     never_delete: e.target.checked,
-                    expires_at: e.target.checked ? "" : prev.expires_at,
+                    expires_at: e.target.checked
+                      ? prev.expires_at
+                      : prev.expires_at || defaultExpiryDate(),
                   }))
                 }
               />
               <span>Never delete</span>
             </label>
-
-            {!form.never_delete && (
-              <label className="label">
-                <div className="label-heading">
-                  <span>Delete pin after</span>
-                  <span className="helper-text">We will remove at 11:59 PM on that date</span>
-                </div>
-                <div className="input-with-icon">
-                  <CalendarClock size={18} />
-                  <input
-                    type="date"
-                    className="input"
-                    value={form.expires_at}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        expires_at: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </label>
-            )}
           </div>
 
           {submitError && <p className="status error">{submitError}</p>}
@@ -773,6 +763,7 @@ function App() {
         pins={filteredPins}
         onMapClick={handleMapClick}
         pendingLocation={activePanel === "add" ? selectedLocation : null}
+        pendingIcon={activePanel === "add" ? form.icon : null}
       />
 
       <div className="overlay-rail" ref={titleCardRef}>

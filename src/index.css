@@ -224,7 +224,7 @@ textarea {
   display: flex;
   gap: 0.65rem;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .title-icon {
@@ -359,6 +359,7 @@ textarea {
 .panel-body {
   padding: 0.25rem 1rem 1rem;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
 }
 
@@ -366,6 +367,7 @@ textarea {
   flex: 1;
   display: flex;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .panel-body-wrapper.compact {
@@ -584,6 +586,10 @@ textarea {
   gap: 0.5rem;
   align-items: center;
   font-weight: 600;
+}
+
+.checkbox-label.below-date {
+  margin-top: -0.25rem;
 }
 
 .input-with-icon {
