@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 
-function MapView({ pins, onMapClick, pendingLocation }) {
+function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
@@ -82,6 +82,23 @@ function MapView({ pins, onMapClick, pendingLocation }) {
         },
       });
 
+      map.addLayer({
+        id: "pending-pin-emoji",
+        type: "symbol",
+        source: "pending-pin",
+        layout: {
+          "text-field": ["coalesce", ["get", "icon"], "📍"],
+          "text-size": 18,
+          "text-offset": [0, -0.9],
+          "text-anchor": "bottom",
+        },
+        paint: {
+          "text-color": "#0f172a",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1,
+        },
+      });
+
       setMapLoaded(true);
     });
 
@@ -155,10 +172,13 @@ function MapView({ pins, onMapClick, pendingLocation }) {
             type: "Point",
             coordinates: [pendingLocation.lng, pendingLocation.lat],
           },
+          properties: {
+            icon: pendingIcon,
+          },
         },
       ],
     });
-  }, [pendingLocation, mapLoaded]);
+  }, [pendingLocation, pendingIcon, mapLoaded]);
 
   if (!styleUrl) {
     return (
