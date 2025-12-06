@@ -366,6 +366,11 @@ textarea {
   width: 100%;
 }
 
+.panel-body form {
+  width: 100%;
+  min-width: 0;
+}
+
 .panel-body-wrapper {
   flex: 1;
   display: flex;
@@ -439,6 +444,11 @@ textarea {
   max-width: 100%;
 }
 
+.form-grid > * {
+  min-width: 0;
+  width: 100%;
+}
+
 .form-grid.compact {
   gap: 0.8rem;
   margin-top: 0.75rem;
@@ -448,6 +458,8 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
   font-size: 0.95rem;
   font-weight: 600;
   color: #0f172a;
@@ -473,6 +485,7 @@ textarea {
   margin-top: 0.35rem;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .bubble {
@@ -580,6 +593,8 @@ textarea {
   overflow-y: hidden;
   padding-bottom: 0.35rem;
   max-width: 100%;
+  width: 100%;
+  min-width: 0;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -620,7 +635,7 @@ textarea {
 .contact-grid {
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .delete-row {
