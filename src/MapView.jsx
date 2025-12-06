@@ -41,10 +41,10 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         type: "circle",
         source: "pins",
         paint: {
-          "circle-radius": 6,
-          "circle-color": "#ef4444",
+          "circle-radius": 13,
+          "circle-color": "#ffffff",
           "circle-stroke-width": 2,
-          "circle-stroke-color": "#f8fafc",
+          "circle-stroke-color": "#d1d5db",
         },
       });
 
@@ -55,11 +55,15 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         layout: {
           "text-field": ["coalesce", ["get", "icon"], "📍"],
           "text-size": 18,
-          "text-offset": [0, -0.8],
-          "text-anchor": "bottom",
+          "text-offset": [0, 0],
+          "text-anchor": "center",
+          "text-font": [
+            "Noto Color Emoji Regular",
+            "Open Sans Regular",
+            "Arial Unicode MS Regular",
+          ],
         },
         paint: {
-          "text-color": "#0f172a",
           "text-halo-color": "#ffffff",
           "text-halo-width": 1,
         },
@@ -75,10 +79,10 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         type: "circle",
         source: "pending-pin",
         paint: {
-          "circle-radius": 8,
-          "circle-color": "#111827",
+          "circle-radius": 14,
+          "circle-color": "#ffffff",
           "circle-stroke-width": 3,
-          "circle-stroke-color": "#22d3ee",
+          "circle-stroke-color": "#2563eb",
         },
       });
 
@@ -89,11 +93,15 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         layout: {
           "text-field": ["coalesce", ["get", "icon"], "📍"],
           "text-size": 18,
-          "text-offset": [0, -0.9],
-          "text-anchor": "bottom",
+          "text-offset": [0, 0],
+          "text-anchor": "center",
+          "text-font": [
+            "Noto Color Emoji Regular",
+            "Open Sans Regular",
+            "Arial Unicode MS Regular",
+          ],
         },
         paint: {
-          "text-color": "#0f172a",
           "text-halo-color": "#ffffff",
           "text-halo-width": 1,
         },
