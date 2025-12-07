@@ -3,6 +3,13 @@
   background-color: #ffffff;
   font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
   line-height: 1.6;
+  --font-family-base: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --section-title-size: 1.05rem;
+  --section-title-weight: 700;
+  --subtext-size: 0.95rem;
+  --subtext-color: #6b7280;
+  --chip-font-size: 0.95rem;
+  --chip-font-weight: 500;
 }
 
 body,
@@ -12,7 +19,7 @@ textarea,
 select,
 .maplibregl-ctrl,
 .maplibregl-popup {
-  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family-base);
 }
 
 a {
@@ -47,6 +54,16 @@ h6 {
   margin: 0;
   font-weight: 700;
   color: #0f172a;
+}
+
+.floating-panel h3,
+.bubble-moderation-shell h2,
+.bubble-moderation-shell h3,
+.eyebrow {
+  font-size: var(--section-title-size);
+  font-weight: var(--section-title-weight);
+  color: #0f172a;
+  line-height: 1.35;
 }
 
 p {
@@ -261,8 +278,8 @@ textarea {
   border-radius: 999px;
   background: #f3f4f6;
   color: #0f172a;
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--chip-font-size);
+  font-weight: var(--chip-font-weight);
   border: 1px solid #e5e7eb;
 }
 
@@ -287,6 +304,8 @@ textarea {
   border: 1px solid #e5e7eb;
   color: #0f172a;
   padding: 0.55rem 0.85rem;
+  font-size: var(--chip-font-size);
+  font-weight: var(--chip-font-weight);
 }
 
 .icon-pill svg {
@@ -421,8 +440,15 @@ textarea {
   gap: 0.55rem;
 }
 
-.muted {
-  color: #6b7280;
+.muted,
+.helper-text,
+.helper,
+.subtle-footnote,
+.pin-subtitle {
+  color: var(--subtext-color);
+  font-size: var(--subtext-size);
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .muted-block {
@@ -482,9 +508,9 @@ textarea {
 }
 
 .helper-text {
-  color: #6b7280;
-  font-size: 0.85rem;
-  font-weight: 500;
+  color: var(--subtext-color);
+  font-size: var(--subtext-size);
+  font-weight: 400;
 }
 
 .helper-text.label-helper {
@@ -494,8 +520,9 @@ textarea {
 
 .subtle-footnote {
   margin: 0.35rem 0 0;
-  color: #4b5563;
-  font-size: 0.9rem;
+  color: var(--subtext-color);
+  font-size: var(--subtext-size);
+  font-weight: 400;
 }
 
 .bubble-grid {
@@ -514,7 +541,8 @@ textarea {
   color: #111827;
   border-radius: 999px;
   padding: 0.45rem 0.85rem;
-  font-weight: 600;
+  font-size: var(--chip-font-size);
+  font-weight: var(--chip-font-weight);
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease, border 120ms ease,
     color 120ms ease;
@@ -545,12 +573,14 @@ textarea {
 
 .pin-panel .panel-title h3 {
   line-height: 1.25;
+  font-size: var(--section-title-size);
 }
 
 .pin-subtitle {
   margin: 0;
-  color: #4b5563;
-  font-size: 0.95rem;
+  color: var(--subtext-color);
+  font-size: var(--subtext-size);
+  font-weight: 400;
 }
 
 .pin-panel-body {
@@ -607,8 +637,9 @@ textarea {
 }
 
 .helper {
-  color: #6b7280;
-  font-size: 0.9rem;
+  color: var(--subtext-color);
+  font-size: var(--subtext-size);
+  font-weight: 400;
   margin-top: -0.15rem;
 }
 
@@ -833,9 +864,8 @@ textarea {
 }
 
 .eyebrow {
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-size: var(--section-title-size);
+  font-weight: var(--section-title-weight);
   color: #0f172a;
 }
 
