@@ -48,7 +48,7 @@ function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
               Cancel
             </button>
             <button type="button" className="ghost-button" onClick={remove} disabled={busy}>
-              ✕
+              Delete
             </button>
           </div>
         </div>
@@ -60,9 +60,6 @@ function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
           aria-label={`Edit ${option.label}`}
         >
           <span>{option.label}</span>
-          <span className="chip-delete" onClick={remove}>
-            ✕
-          </span>
         </button>
       )}
     </div>
@@ -95,15 +92,21 @@ function ModerationPage() {
   const [error, setError] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [activeTab, setActiveTab] = useState("pending");
-  const [bubbleOptions, setBubbleOptions] = useState({
+  const [serverBubbleRows, setServerBubbleRows] = useState([]);
+  const [draftBubbleOptions, setDraftBubbleOptions] = useState({
     gender_identity: [],
     seeking: [],
     interest_tags: [],
     contact_methods: [],
   });
   const [bubbleError, setBubbleError] = useState(null);
-  const [optionForm, setOptionForm] = useState({ field: "gender_identity", label: "" });
-  const [savingOption, setSavingOption] = useState(false);
+  const [newBubbleInputs, setNewBubbleInputs] = useState({
+    gender_identity: "",
+    seeking: "",
+    interest_tags: "",
+    contact_methods: "",
+  });
+  const [savingChanges, setSavingChanges] = useState(false);
   const defaultBubbleSet = useMemo(() => getDefaultBubbleOptions(), []);
   const [hasAccess, setHasAccess] = useState(false);
   const [email, setEmail] = useState("");
@@ -118,6 +121,7 @@ function ModerationPage() {
           labels.map((label, idx) => ({
             id: `default-${field}-${idx}`,
             label,
+            source: "default",
           })),
         ])
       ),
@@ -126,7 +130,6 @@ function ModerationPage() {
 
   const mapRowsToBubbles = useCallback(
     (rows) => {
-      if (!rows || rows.length === 0) return buildDefaultModerationOptions();
       const grouped = {
         gender_identity: [],
         seeking: [],
@@ -134,16 +137,21 @@ function ModerationPage() {
         contact_methods: [],
       };
 
-      rows.forEach((row) => {
+      const defaults = buildDefaultModerationOptions();
+
+      rows?.forEach((row) => {
         if (grouped[row.field]) {
-          grouped[row.field].push({ id: row.id, label: row.label });
+          grouped[row.field].push({ id: row.id, label: row.label, source: "remote" });
         }
       });
 
       Object.keys(grouped).forEach((field) => {
-        if (grouped[field].length === 0) {
-          grouped[field] = buildDefaultModerationOptions()[field];
-        }
+        const existingLabels = new Set(grouped[field].map((opt) => opt.label.toLowerCase()));
+        defaults[field].forEach((opt) => {
+          if (!existingLabels.has(opt.label.toLowerCase())) {
+            grouped[field].push(opt);
+          }
+        });
       });
 
       return grouped;
@@ -155,13 +163,22 @@ function ModerationPage() {
     setBubbleError(null);
     try {
       const rows = await fetchBubbleOptionsWithIds();
-      setBubbleOptions(mapRowsToBubbles(rows));
+      setServerBubbleRows(rows || []);
+      const mapped = mapRowsToBubbles(rows);
+      setDraftBubbleOptions(mapped);
+      setNewBubbleInputs({
+        gender_identity: "",
+        seeking: "",
+        interest_tags: "",
+        contact_methods: "",
+      });
     } catch (err) {
       console.error(err);
       setBubbleError(err.message);
-      setBubbleOptions(buildDefaultModerationOptions());
+      const fallback = buildDefaultModerationOptions();
+      setDraftBubbleOptions(fallback);
     }
-  }, [mapRowsToBubbles]);
+  }, [buildDefaultModerationOptions, mapRowsToBubbles]);
 
   useEffect(() => {
     supabase.auth
@@ -247,56 +264,135 @@ function ModerationPage() {
     setPassword("");
   };
 
-  const handleAddOption = async (e) => {
-    e.preventDefault();
-    if (!optionForm.label.trim()) return;
-    setSavingOption(true);
+  const handleAddOption = (field) => {
     setBubbleError(null);
-    try {
-      await addBubbleOption(optionForm.field, optionForm.label.trim());
-      await refreshBubbleOptions();
-      setOptionForm({ field: "gender_identity", label: "" });
-    } catch (err) {
-      console.error(err);
-      setBubbleError(err.message);
-    } finally {
-      setSavingOption(false);
-    }
-  };
-
-  const handleSaveBubble = async (field, option, label) => {
-    setBubbleError(null);
-    try {
-      if (String(option.id).startsWith("default-")) {
-        await addBubbleOption(field, label);
-      } else {
-        await updateBubbleOption(option.id, label);
-      }
-      await refreshBubbleOptions();
-    } catch (err) {
-      console.error(err);
-      setBubbleError(err.message);
-    }
-  };
-
-  const handleDeleteBubble = async (field, option) => {
-    setBubbleError(null);
-    if (String(option.id).startsWith("default-")) {
-      setBubbleOptions((current) => ({
-        ...current,
-        [field]: current[field].filter((opt) => opt.id !== option.id),
-      }));
+    const label = newBubbleInputs[field].trim();
+    if (!label) return;
+    const exists = draftBubbleOptions[field]?.some(
+      (opt) => opt.label.toLowerCase() === label.toLowerCase()
+    );
+    if (exists) {
+      setBubbleError("That bubble already exists in this section.");
       return;
     }
 
-    try {
-      await deleteBubbleOption(option.id);
-      await refreshBubbleOptions();
-    } catch (err) {
-      console.error(err);
-      setBubbleError(err.message);
-    }
+    const newOption = {
+      id: `draft-${field}-${Date.now()}`,
+      label,
+      source: "draft",
+    };
+
+    setDraftBubbleOptions((current) => ({
+      ...current,
+      [field]: [...(current[field] || []), newOption],
+    }));
+
+    setNewBubbleInputs((current) => ({ ...current, [field]: "" }));
   };
+
+  const handleSaveBubble = (field, option, label) => {
+    setBubbleError(null);
+    setDraftBubbleOptions((current) => ({
+      ...current,
+      [field]: current[field].map((opt) => (opt.id === option.id ? { ...opt, label } : opt)),
+    }));
+  };
+
+  const handleDeleteBubble = (field, option) => {
+    setBubbleError(null);
+    setDraftBubbleOptions((current) => ({
+      ...current,
+      [field]: current[field].filter((opt) => opt.id !== option.id),
+    }));
+  };
+
+  const serverBubblesByField = useMemo(
+    () => ({
+      gender_identity: serverBubbleRows.filter((row) => row.field === "gender_identity"),
+      seeking: serverBubbleRows.filter((row) => row.field === "seeking"),
+      interest_tags: serverBubbleRows.filter((row) => row.field === "interest_tags"),
+      contact_methods: serverBubbleRows.filter((row) => row.field === "contact_methods"),
+    }),
+    [serverBubbleRows]
+  );
+
+  const pendingChanges = useMemo(() => {
+    const changes = [];
+
+    Object.keys(draftBubbleOptions).forEach((field) => {
+      const draftOptions = draftBubbleOptions[field] || [];
+      const serverOptions = serverBubblesByField[field] || [];
+      const serverMap = new Map(serverOptions.map((opt) => [opt.id, opt]));
+      const serverLabels = new Set(serverOptions.map((opt) => opt.label.toLowerCase()));
+      const draftIds = new Set(draftOptions.map((opt) => opt.id));
+
+      draftOptions.forEach((opt) => {
+        if (serverMap.has(opt.id)) {
+          const serverOpt = serverMap.get(opt.id);
+          if (serverOpt.label !== opt.label) {
+            changes.push({
+              type: "update",
+              field,
+              id: opt.id,
+              from: serverOpt.label,
+              to: opt.label,
+            });
+          }
+        } else if (!serverLabels.has(opt.label.toLowerCase())) {
+          changes.push({ type: "add", field, label: opt.label });
+        }
+      });
+
+      serverOptions.forEach((opt) => {
+        if (!draftIds.has(opt.id)) {
+          changes.push({ type: "delete", field, id: opt.id, label: opt.label });
+        }
+      });
+    });
+
+    return changes;
+  }, [draftBubbleOptions, serverBubblesByField]);
+
+  const applyPendingChanges = useCallback(
+    async (changes) => {
+      if (!changes || changes.length === 0) return;
+      const summary = changes
+        .map((change) => {
+          if (change.type === "update") {
+            return `${change.field}: ${change.from} → ${change.to}`;
+          }
+          return `${change.type} ${change.field}: ${change.label}`;
+        })
+        .join("\n");
+
+      const confirmed = window.confirm(`Apply ${changes.length} changes?\n\n${summary}`);
+      if (!confirmed) return;
+
+      setSavingChanges(true);
+      setBubbleError(null);
+      try {
+        for (const change of changes) {
+          if (change.type === "add") {
+            await addBubbleOption(change.field, change.label);
+          }
+          if (change.type === "update") {
+            await updateBubbleOption(change.id, change.to);
+          }
+          if (change.type === "delete") {
+            await deleteBubbleOption(change.id);
+          }
+        }
+
+        await refreshBubbleOptions();
+      } catch (err) {
+        console.error(err);
+        setBubbleError(err.message);
+      } finally {
+        setSavingChanges(false);
+      }
+    },
+    [refreshBubbleOptions]
+  );
 
   const pinGroups = useMemo(
     () => ({
@@ -476,6 +572,13 @@ function ModerationPage() {
     { id: "stats", label: "Page stats" },
   ];
 
+  const bubbleSections = [
+    { id: "gender_identity", title: "Gender" },
+    { id: "seeking", title: "Interested in" },
+    { id: "interest_tags", title: "Interests" },
+    { id: "contact_methods", title: "Contact options" },
+  ];
+
   return (
     <div style={{ minHeight: "100vh", background: "#f6f7fb", padding: "2rem 0" }}>
       <div
@@ -516,80 +619,67 @@ function ModerationPage() {
         {activeTab !== "bubbles" && activeTab !== "stats" && renderPins(pinGroups[activeTab])}
 
         {activeTab === "bubbles" && (
-          <section
-            style={{
-              padding: "1.25rem 1.1rem",
-              borderRadius: 16,
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-              display: "grid",
-              gap: "0.85rem",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center" }}>
+          <section className="bubble-moderation-shell">
+            <div className="bubble-moderation-heading">
               <div>
-                <p style={{ margin: 0, color: "#6366f1", fontWeight: 700 }}>Bubble library</p>
-                <h2 style={{ margin: "0.25rem 0 0" }}>Manage selectable options</h2>
-                <p style={{ margin: "0.35rem 0 0", color: "#4b5563" }}>
-                  These chips power the gender, interested-in, interests, and contact fields on the public form.
+                <p className="eyebrow">Bubble library</p>
+                <h2 style={{ marginTop: "0.35rem" }}>Manage selectable options</h2>
+                <p className="muted">
+                  Stage changes to the gender, interested-in, interests, and contact chips, then save once you are
+                  happy with the edits.
                 </p>
+              </div>
+              <div className="bubble-action-cluster">
+                <div className="pending-count">
+                  <span className="small-chip">{pendingChanges.length} pending</span>
+                  {pendingChanges.length > 0 && <span className="muted">Review below before syncing</span>}
+                </div>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => applyPendingChanges(pendingChanges)}
+                  disabled={pendingChanges.length === 0 || savingChanges}
+                >
+                  {savingChanges ? "Saving…" : "Save changes"}
+                </button>
               </div>
             </div>
 
-            <form
-              onSubmit={handleAddOption}
-              style={{ display: "grid", gridTemplateColumns: "220px 1fr 140px", gap: "0.75rem", alignItems: "center" }}
-            >
-              <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontWeight: 600 }}>
-                Field
-                <select
-                  className="input"
-                  value={optionForm.field}
-                  onChange={(e) => setOptionForm((f) => ({ ...f, field: e.target.value }))}
-                >
-                  <option value="gender_identity">Gender</option>
-                  <option value="seeking">Interested in</option>
-                  <option value="interest_tags">Interests</option>
-                  <option value="contact_methods">Contact options</option>
-                </select>
-              </label>
-
-              <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontWeight: 600 }}>
-                New bubble
-                <input
-                  className="input"
-                  placeholder="Add a new option"
-                  value={optionForm.label}
-                  onChange={(e) => setOptionForm((f) => ({ ...f, label: e.target.value }))}
-                />
-              </label>
-
-              <button type="submit" disabled={savingOption}>
-                {savingOption ? "Saving…" : "Add bubble"}
-              </button>
-            </form>
-
             {bubbleError && <p style={{ margin: 0, color: "#b91c1c" }}>Bubble error: {bubbleError}</p>}
 
-            <div className="bubble-moderation-grid">
-              {[
-                ["gender_identity", "Gender"],
-                ["seeking", "Interested in"],
-                ["interest_tags", "Interests"],
-                ["contact_methods", "Contact options"],
-              ].map(([field, title]) => (
-                <div key={field} className="bubble-moderation-column">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
-                    <h3 style={{ margin: 0 }}>{title}</h3>
-                    <span className="small-chip">{bubbleOptions[field]?.length || 0} bubbles</span>
+            <div className="bubble-moderation-sections">
+              {bubbleSections.map(({ id, title }) => (
+                <div key={id} className="bubble-moderation-section">
+                  <div className="bubble-section-header">
+                    <div>
+                      <p className="eyebrow">{title}</p>
+                      <h3 style={{ marginTop: "0.25rem" }}>{draftBubbleOptions[id]?.length || 0} total bubbles</h3>
+                    </div>
+                    <div className="inline-add-form">
+                      <input
+                        className="input"
+                        placeholder={`Add a ${title.toLowerCase()} bubble`}
+                        value={newBubbleInputs[id]}
+                        onChange={(e) => setNewBubbleInputs((current) => ({ ...current, [id]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddOption(id);
+                          }
+                        }}
+                      />
+                      <button type="button" onClick={() => handleAddOption(id)}>
+                        Add
+                      </button>
+                    </div>
                   </div>
+
                   <div className="bubble-editor-list">
-                    {bubbleOptions[field]?.map((option) => (
+                    {draftBubbleOptions[id]?.map((option) => (
                       <ModerationBubbleEditor
-                        key={option.id}
+                        key={`${option.id}-${option.label}`}
                         option={option}
-                        field={field}
+                        field={id}
                         onSave={handleSaveBubble}
                         onDelete={handleDeleteBubble}
                       />
@@ -597,6 +687,45 @@ function ModerationPage() {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="pending-changes-panel">
+              <div>
+                <p className="eyebrow">Pending changes</p>
+                <p className="muted" style={{ marginTop: "0.2rem" }}>
+                  Confirm below to sync to Supabase. Default bubbles that are not yet stored will be added automatically.
+                </p>
+              </div>
+              {pendingChanges.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>No edits waiting to sync.</p>
+              ) : (
+                <ul className="pending-list">
+                  {pendingChanges.map((change, idx) => (
+                    <li key={`${change.type}-${change.field}-${idx}`}>
+                      <span className={`pending-chip pending-${change.type}`}>{change.type}</span>
+                      <span>
+                        {change.field.replace("_", " ")} ·
+                        {change.type === "update"
+                          ? ` ${change.from} → ${change.to}`
+                          : ` ${change.label}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="pending-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => applyPendingChanges(pendingChanges)}
+                  disabled={pendingChanges.length === 0 || savingChanges}
+                >
+                  {savingChanges ? "Saving…" : "Save changes"}
+                </button>
+                <p className="muted" style={{ margin: 0 }}>
+                  You can keep editing bubbles above; changes stay local until you save.
+                </p>
+              </div>
             </div>
           </section>
         )}
