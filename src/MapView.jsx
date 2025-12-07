@@ -74,7 +74,35 @@ const renderEmojiImage = async (emoji) => {
   context.font = `${Math.round(size * 0.7)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
   context.fillText(emoji || DEFAULT_EMOJI, size / 2, size / 2 + 1);
 
-  return createImageBitmap(canvas);
+  try {
+    if ("createImageBitmap" in window) {
+      return await createImageBitmap(canvas);
+    }
+  } catch (error) {
+    console.warn("Falling back to canvas for emoji rendering", error);
+  }
+
+  return canvas;
+};
+
+const emojiFromId = (id) => {
+  if (!id?.startsWith("emoji-icon-")) return null;
+
+  const codepoints = id
+    .slice("emoji-icon-".length)
+    .split("-")
+    .filter(Boolean)
+    .map((part) => Number.parseInt(part, 16))
+    .filter((value) => Number.isFinite(value));
+
+  if (!codepoints.length) return null;
+
+  try {
+    return String.fromCodePoint(...codepoints);
+  } catch (error) {
+    console.warn("Unable to parse emoji id", id, error);
+    return null;
+  }
 };
 
 const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
@@ -291,6 +319,11 @@ function MapView({
           "icon-halo-color": "#ffffff",
           "icon-halo-width": 1,
         },
+      });
+
+      map.on("styleimagemissing", async (event) => {
+        const emoji = emojiFromId(event.id) || DEFAULT_EMOJI;
+        await ensureEmojiImage(emoji);
       });
 
       await ensureEmojiImage(DEFAULT_EMOJI);
