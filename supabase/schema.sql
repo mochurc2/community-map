@@ -54,12 +54,13 @@ create table if not exists public.bubble_options (
   created_at timestamptz not null default now()
 );
 
-create index if not exists bubble_options_field_idx on public.bubble_options (field);
-create index if not exists bubble_options_status_idx on public.bubble_options (status);
-
+-- Ensure legacy tables get the status column before creating indexes
 alter table public.bubble_options
   add column if not exists status text not null default 'approved'
     check (status in ('pending', 'approved', 'rejected'));
+
+create index if not exists bubble_options_field_idx on public.bubble_options (field);
+create index if not exists bubble_options_status_idx on public.bubble_options (status);
 
 -- Enable row level security
 alter table public.pins enable row level security;
