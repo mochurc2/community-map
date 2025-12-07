@@ -25,6 +25,7 @@ const baseDefaultOptions = {
     "Discord",
     "Reddit",
     "Instagram",
+    "Snapchat",
     "Tumblr",
     "X/Twitter",
     "Youtube",

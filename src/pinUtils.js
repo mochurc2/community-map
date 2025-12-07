@@ -125,6 +125,17 @@ export const validateContactValue = (channel, rawValue) => {
         ? { valid: true, normalizedValue: result.normalized }
         : { valid: false, message: result.message };
     }
+    case "Snapchat": {
+      const result = validateFromPattern(
+        value,
+        /^[A-Za-z0-9._-]{3,15}$/,
+        "Enter a Snapchat username (3-15 characters).",
+        stripAt
+      );
+      return result.valid
+        ? { valid: true, normalizedValue: result.normalized }
+        : { valid: false, message: result.message };
+    }
     case "X/Twitter": {
       const result = validateFromPattern(
         value,
@@ -186,13 +197,21 @@ export const buildContactLink = (channel, rawValue) => {
 
   switch (channel) {
     case "Email":
-      return { label: channel, href: `mailto:${value}`, displayText: `mailto:${value}` };
+      return { label: channel, href: `mailto:${value}`, displayText: value };
     case "Instagram": {
       const handle = stripAt(value);
       return {
         label: channel,
         href: `https://instagram.com/${handle}`,
         displayText: `https://instagram.com/${handle}`,
+      };
+    }
+    case "Snapchat": {
+      const handle = stripAt(value);
+      return {
+        label: channel,
+        href: `https://www.snapchat.com/add/${handle}`,
+        displayText: `https://www.snapchat.com/add/${handle}`,
       };
     }
     case "X/Twitter": {
