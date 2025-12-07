@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
-import { fetchBubbleOptions, getDefaultBubbleOptions } from "./bubbleOptions";
+import {
+  ensurePendingBubbleOption,
+  fetchBubbleOptions,
+  getDefaultBubbleOptions,
+  getDefaultStatusMap,
+} from "./bubbleOptions";
 import { buildContactLink, getGenderAbbreviation, getGenderList } from "./pinUtils";
 
 const MAX_VISIBLE_BUBBLES = 6;
@@ -204,13 +209,41 @@ function BubbleSelector({
   onChange,
   allowCustom = false,
   onAddOption = () => {},
+  prioritizeSelected = false,
+  alwaysShowAll = false,
+  footnote,
 }) {
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(alwaysShowAll);
   const [customInput, setCustomInput] = useState("");
 
+  useEffect(() => {
+    if (alwaysShowAll) {
+      setShowAll(true);
+    }
+  }, [alwaysShowAll]);
+
+  const selectedValues = useMemo(() => {
+    if (multiple) {
+      return new Set(Array.isArray(value) ? value : []);
+    }
+    return value ? new Set([value]) : new Set();
+  }, [multiple, value]);
+
+  const orderedOptions = useMemo(() => {
+    const base = Array.isArray(options) ? [...options] : [];
+    if (!prioritizeSelected) return base;
+
+    return base.sort((a, b) => {
+      const aSelected = selectedValues.has(a);
+      const bSelected = selectedValues.has(b);
+      if (aSelected === bSelected) return a.localeCompare(b);
+      return aSelected ? -1 : 1;
+    });
+  }, [options, prioritizeSelected, selectedValues]);
+
   const displayOptions = useMemo(
-    () => (showAll ? options : options.slice(0, MAX_VISIBLE_BUBBLES)),
-    [options, showAll]
+    () => (showAll || alwaysShowAll ? orderedOptions : orderedOptions.slice(0, MAX_VISIBLE_BUBBLES)),
+    [alwaysShowAll, orderedOptions, showAll]
   );
 
   const toggleOption = (option) => {
@@ -265,7 +298,7 @@ function BubbleSelector({
             {option}
           </button>
         ))}
-        {options.length > MAX_VISIBLE_BUBBLES && (
+        {orderedOptions.length > MAX_VISIBLE_BUBBLES && !alwaysShowAll && (
           <button
             type="button"
             className="bubble ghost"
@@ -289,6 +322,7 @@ function BubbleSelector({
           </button>
         </div>
       )}
+      {footnote && <p className="subtle-footnote">{footnote}</p>}
     </label>
   );
 }
@@ -301,6 +335,7 @@ function App() {
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
   const [bubbleOptions, setBubbleOptions] = useState(getDefaultBubbleOptions);
+  const [bubbleStatusMap, setBubbleStatusMap] = useState(getDefaultStatusMap);
   const [form, setForm] = useState(buildInitialFormState);
   const [submitMsg, setSubmitMsg] = useState(null);
   const [submitError, setSubmitError] = useState(null);
@@ -315,6 +350,7 @@ function App() {
     interest_tags: [],
     ageRange: [MIN_AGE, MAX_AGE],
   });
+  const [customInterestOptions, setCustomInterestOptions] = useState([]);
   const titleCardRef = useRef(null);
 
   useEffect(() => {
@@ -344,8 +380,14 @@ function App() {
 
     fetchPins();
     fetchBubbleOptions()
-      .then((options) => setBubbleOptions(options))
-      .catch(() => setBubbleOptions(getDefaultBubbleOptions()));
+      .then(({ options, statusMap }) => {
+        setBubbleOptions(options);
+        setBubbleStatusMap(statusMap);
+      })
+      .catch(() => {
+        setBubbleOptions(getDefaultBubbleOptions());
+        setBubbleStatusMap(getDefaultStatusMap());
+      });
   }, []);
 
   const autofillLocation = useCallback(async (lat, lng) => {
@@ -445,13 +487,36 @@ function App() {
     }));
   };
 
-  const handleCustomOption = useCallback((field, option) => {
+  const handleCustomOption = useCallback(async (field, option) => {
+    const normalized = option.trim();
+    if (!normalized) return;
+
+    if (field === "interest_tags") {
+      setCustomInterestOptions((prev) => {
+        const exists = prev.some((label) => label.toLowerCase() === normalized.toLowerCase());
+        return exists ? prev : [...prev, normalized];
+      });
+
+      setBubbleStatusMap((prev) => ({
+        ...prev,
+        interest_tags: { ...prev.interest_tags, [normalized.toLowerCase()]: "pending" },
+      }));
+
+      try {
+        await ensurePendingBubbleOption(field, normalized);
+      } catch (err) {
+        console.error("Error saving pending bubble", err);
+      }
+
+      return;
+    }
+
     setBubbleOptions((prev) => {
       const current = prev[field] || [];
-      if (current.includes(option)) return prev;
-      return { ...prev, [field]: [...current, option] };
+      if (current.includes(normalized)) return prev;
+      return { ...prev, [field]: [...current, normalized] };
     });
-  }, []);
+  }, [ensurePendingBubbleOption]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -630,9 +695,13 @@ function App() {
       return ageNumber >= minAge && ageNumber <= maxAge;
     };
 
-    const matchesInterestSelection = (pin) =>
-      filters.interest_tags.length === 0 ||
-      filters.interest_tags.some((opt) => (pin.interest_tags || []).includes(opt));
+    const matchesInterestSelection = (pin) => {
+      const approvedInterests = (pin.interest_tags || []).filter(isInterestApproved);
+      return (
+        filters.interest_tags.length === 0 ||
+        filters.interest_tags.some((opt) => approvedInterests.includes(opt))
+      );
+    };
 
     return pins.filter(
       (pin) =>
@@ -641,7 +710,7 @@ function App() {
         matchesInterestSelection(pin) &&
         matchesAgeRange(pin)
     );
-  }, [filters.ageRange, filters.genders, filters.interest_tags, filters.seeking, pins]);
+  }, [filters.ageRange, filters.genders, filters.interest_tags, filters.seeking, isInterestApproved, pins]);
 
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
@@ -716,6 +785,31 @@ function App() {
       background: `linear-gradient(to right, #e5e7eb ${startPercent}%, #2563eb ${startPercent}%, #2563eb ${endPercent}%, #e5e7eb ${endPercent}%)`,
     };
   }, [filters.ageRange]);
+
+  const isInterestApproved = useCallback(
+    (label) => (bubbleStatusMap.interest_tags?.[label?.toLowerCase?.() || ""] || "approved") === "approved",
+    [bubbleStatusMap.interest_tags]
+  );
+
+  const interestOptionsForForm = useMemo(() => {
+    const selected = Array.isArray(form.interest_tags) ? form.interest_tags : [];
+    const combined = [...selected, ...bubbleOptions.interest_tags, ...customInterestOptions];
+    const seen = new Set();
+
+    const deduped = combined.filter((label) => {
+      const key = (label || "").toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return deduped.sort((a, b) => {
+      const aSelected = selected.some((value) => value.toLowerCase() === a.toLowerCase());
+      const bSelected = selected.some((value) => value.toLowerCase() === b.toLowerCase());
+      if (aSelected === bSelected) return a.localeCompare(b);
+      return aSelected ? -1 : 1;
+    });
+  }, [bubbleOptions.interest_tags, customInterestOptions, form.interest_tags]);
 
   const approvedPinsCount = pins.length;
   const locationLabel = selectedLocation
@@ -859,12 +953,15 @@ function App() {
           <BubbleSelector
             label="Interests"
             helper="Select all that apply"
-            options={bubbleOptions.interest_tags}
+            options={interestOptionsForForm}
             multiple
             value={form.interest_tags}
             onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
             onAddOption={(option) => handleCustomOption("interest_tags", option)}
             allowCustom
+            prioritizeSelected
+            alwaysShowAll
+            footnote="Custom interests are subject to moderation and may not appear until they are approved."
           />
 
           <label className="label">
@@ -1037,7 +1134,7 @@ function App() {
     ? visibleSelectedPin.seeking
     : [];
   const selectedInterestTags = Array.isArray(visibleSelectedPin?.interest_tags)
-    ? visibleSelectedPin.interest_tags
+    ? visibleSelectedPin.interest_tags.filter(isInterestApproved)
     : [];
   const selectedGenderList = visibleSelectedPin
     ? getGenderList(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
