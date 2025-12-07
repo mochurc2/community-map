@@ -7,7 +7,8 @@ import {
   getDefaultBubbleOptions,
   updateBubbleOption,
 } from "./bubbleOptions";
-import { supabase, supabaseAdmin } from "./supabaseClient";
+import ConfigErrorNotice from "./ConfigErrorNotice";
+import { supabase, supabaseAdmin, supabaseConfigError } from "./supabaseClient";
 const moderationClient = supabaseAdmin || supabase;
 
 const normalizeStatus = (value) => {
@@ -116,6 +117,10 @@ function formatDate(value) {
 }
 
 function ModerationPage() {
+  if (supabaseConfigError) {
+    return <ConfigErrorNotice message={supabaseConfigError.message} />;
+  }
+
   const [pins, setPins] = useState([]);
   const [loadingPins, setLoadingPins] = useState(false);
   const [error, setError] = useState(null);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
-import { supabase } from "./supabaseClient";
+import ConfigErrorNotice from "./ConfigErrorNotice";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 import MapView from "./MapView";
 import {
   ensurePendingBubbleOption,
@@ -307,6 +308,10 @@ function BubbleSelector({
 }
 
 function App() {
+  if (supabaseConfigError) {
+    return <ConfigErrorNotice message={supabaseConfigError.message} />;
+  }
+
   const [pins, setPins] = useState([]);
   const [pinsError, setPinsError] = useState(null);
   const [loadingPins, setLoadingPins] = useState(true);
@@ -333,6 +338,26 @@ function App() {
   });
   const [customInterestOptions, setCustomInterestOptions] = useState([]);
   const titleCardRef = useRef(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const updateViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      root.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+    };
+
+    updateViewportHeight();
+
+    window.visualViewport?.addEventListener("resize", updateViewportHeight);
+    window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateViewportHeight);
+      window.visualViewport?.removeEventListener("scroll", updateViewportHeight);
+      window.removeEventListener("resize", updateViewportHeight);
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchPins() {
@@ -643,13 +668,15 @@ function App() {
   };
 
   useEffect(() => {
-    const handlePlacement = () => {
-      const isWideEnough = window.innerWidth >= 960;
+    const mediaQuery = window.matchMedia("(min-width: 960px)");
+
+    const handlePlacement = (isWideEnough) => {
       const placement = isWideEnough ? "side" : "bottom";
-      setPanelPlacement(placement);
+
+      setPanelPlacement((prev) => (prev === placement ? prev : placement));
 
       if (activePanel === "add") {
-        if (placement === "bottom" || hasSubmitted) {
+        if (!isWideEnough || hasSubmitted) {
           setShowFullAddForm(false);
         } else if (selectedLocation) {
           setShowFullAddForm(true);
@@ -657,9 +684,11 @@ function App() {
       }
     };
 
-    handlePlacement();
-    window.addEventListener("resize", handlePlacement);
-    return () => window.removeEventListener("resize", handlePlacement);
+    handlePlacement(mediaQuery.matches);
+
+    const handleChange = (event) => handlePlacement(event.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [activePanel, selectedLocation, hasSubmitted]);
 
   useEffect(() => {

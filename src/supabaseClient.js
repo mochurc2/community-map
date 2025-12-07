@@ -4,10 +4,26 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+const missingConfig = [
+  !supabaseUrl && "VITE_SUPABASE_URL",
+  !supabaseKey && "VITE_SUPABASE_ANON_KEY",
+].filter(Boolean);
 
-export const supabaseAdmin = supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-  : supabase;
+export const supabaseConfigError =
+  missingConfig.length > 0
+    ? new Error(
+        `Supabase environment variables are missing: ${missingConfig.join(
+          ", "
+        )}. Check your .env file.`,
+      )
+    : null;
+
+export const supabase =
+  supabaseConfigError === null ? createClient(supabaseUrl, supabaseKey) : null;
+
+export const supabaseAdmin =
+  supabaseConfigError === null && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : supabase;

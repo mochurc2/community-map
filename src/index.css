@@ -10,6 +10,7 @@
   --subtext-color: #6b7280;
   --chip-font-size: 0.95rem;
   --chip-font-weight: 500;
+  --app-viewport-height: 100vh;
 }
 
 body,
@@ -42,7 +43,8 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
 }
 
 h1,
@@ -176,15 +178,18 @@ textarea {
 
 .app-shell {
   position: relative;
-  min-height: 100vh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
   background: #ffffff;
   color: #0f172a;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .map-wrapper {
   position: relative;
-  min-height: 100vh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
 }
 
 .map-container {
@@ -217,7 +222,8 @@ textarea {
 .map-placeholder {
   display: grid;
   place-items: center;
-  min-height: 100vh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
   padding: 2rem;
   color: #111827;
   background: #f8fafc;
@@ -348,19 +354,19 @@ textarea {
 .floating-panel.bottom {
   left: 50%;
   transform: translateX(-50%);
-  bottom: 18px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
   width: calc(100% - 32px);
-  max-height: 70vh;
+  max-height: min(70vh, 70dvh, calc(var(--app-viewport-height) - 48px));
 }
 
 .floating-panel.bottom.expanded {
   top: 120px;
-  bottom: 18px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
   max-height: none;
 }
 
 .floating-panel.bottom .panel-body-wrapper {
-  max-height: calc(100vh - 220px);
+  max-height: calc(var(--app-viewport-height) - 220px);
 }
 
 .panel-top {
@@ -1162,6 +1168,36 @@ textarea {
   border-radius: 999px;
   font-weight: 700;
   font-size: 0.85rem;
+}
+
+.config-error {
+  min-height: var(--app-viewport-height);
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+}
+
+.config-error-card {
+  max-width: 720px;
+  width: 100%;
+  background: #0b1220;
+  padding: 1.75rem;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.config-error-card h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+}
+
+.config-error-card .helper-text {
+  color: #cbd5e1;
+  margin-top: 0.35rem;
 }
 
 @media (max-width: 900px) {
