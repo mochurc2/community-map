@@ -990,36 +990,37 @@ function App() {
           </span>
           {pinsError && <span className="pill error">Error loading pins</span>}
         </div>
-        <p className="panel-stack">
-          <strong>Welcome!</strong> 
-        </p>
         <div className="panel-stack">
           <div className="panel-subsection">
             <span className="eyebrow">Welcome!</span>
-            <p className="list">
+            <p className="muted">
               This community map lets people share a quick intro and
           the area they call home. Pins are lightly randomized for privacy, and
           moderators approve submissions so browsing stays safe and friendly.
             </p>
           </div>
           <div className="panel-subsection">
-            <span className="eyebrow">How to use the map</span>
-            <ul className="list">
-              <li>
-                <strong>Create your pin:</strong> Tap the map, choose an emoji, and share a
-                short intro. Contact details stay hidden until a moderator approves
+            <span className="eyebrow">Create your pin</span>
+            <p className="muted">
+              Tap the map, choose an emoji, and share a
+                short intro. Your pin will stay hidden until a moderator approves
                 your submission.
-              </li>
-              <li>
-                <strong>Browse others:</strong> Select pins to read their notes and see
-                approved interests, seeking preferences, and contact options.
-              </li>
-              <li>
-                <strong>Filter what you see:</strong> Open Filter to narrow pins by
+            </p>
+          </div>
+          <div className="panel-subsection">
+            <span className="eyebrow">Browse others</span>
+            <p className="muted">
+              Select pins on the map to read their notes and see
+                their interests and contact options.
+            </p>
+          </div>
+          <div className="panel-subsection">
+            <span className="eyebrow">Filter what you see</span>
+            <p className="muted">
+              Use the filter tool to narrow pins by
                 gender, seeking preferences, interests, or age range. Reset anytime
                 to view everyone again.
-              </li>
-            </ul>
+            </p>
           </div>
           <div className="panel-subsection">
             <span className="eyebrow">House rules</span>
