@@ -547,6 +547,8 @@ textarea {
   background: #f6f7fb;
   color: #111827;
   border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
   padding: 0.45rem 0.85rem;
   font-size: var(--chip-font-size);
   font-weight: var(--chip-font-weight);
@@ -578,9 +580,20 @@ textarea {
   font-size: 1.6rem;
 }
 
+.pin-panel .panel-top {
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.pin-panel .panel-title {
+  align-items: center;
+}
+
 .pin-panel .panel-title h3 {
   line-height: 1.25;
   font-size: var(--section-title-size);
+  display: flex;
+  align-items: center;
 }
 
 .pin-subtitle {
