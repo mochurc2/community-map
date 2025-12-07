@@ -504,6 +504,58 @@ textarea {
   text-align: left;
 }
 
+.bubble-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.bubble.static {
+  cursor: default;
+  pointer-events: none;
+}
+
+.bubble.link-bubble {
+  pointer-events: auto;
+}
+
+.pin-panel .panel-icon {
+  font-size: 1.6rem;
+}
+
+.pin-panel .panel-title h3 {
+  line-height: 1.25;
+}
+
+.pin-subtitle {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.95rem;
+}
+
+.pin-panel-body {
+  padding-top: 0;
+}
+
+.pin-chip-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+.pin-section {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.pin-note {
+  margin: 0;
+  color: #374151;
+  line-height: 1.5;
+}
+
 .bubble:hover {
   transform: translateY(-1px);
   border-color: #cbd5e1;

@@ -3,6 +3,7 @@ import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import MapView from "./MapView";
 import { fetchBubbleOptions, getDefaultBubbleOptions } from "./bubbleOptions";
+import { buildContactLink, getGenderAbbreviation, getGenderList } from "./pinUtils";
 
 const MAX_VISIBLE_BUBBLES = 6;
 const EMOJI_CHOICES = [
@@ -294,6 +295,7 @@ function App() {
   const [loadingPins, setLoadingPins] = useState(true);
 
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedPin, setSelectedPin] = useState(null);
   const [bubbleOptions, setBubbleOptions] = useState(getDefaultBubbleOptions);
   const [form, setForm] = useState(buildInitialFormState);
   const [submitMsg, setSubmitMsg] = useState(null);
@@ -394,6 +396,7 @@ function App() {
 
   const handleMapClick = useCallback(
     (lngLat) => {
+      setSelectedPin(null);
       setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
       setSubmitMsg(null);
       setSubmitError(null);
@@ -401,6 +404,12 @@ function App() {
     },
     [autofillLocation]
   );
+
+  const handlePinSelect = useCallback((pin) => {
+    setSelectedPin(pin);
+    setSelectedLocation(null);
+    setActivePanel(null);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -551,6 +560,11 @@ function App() {
       return matchesGender && matchesSeeking && matchesInterests;
     });
   }, [filters.gender_identity, filters.interest_tags, filters.seeking, pins]);
+
+  const visibleSelectedPin =
+    selectedPin && filteredPins.some((pin) => pin.id === selectedPin.id)
+      ? selectedPin
+      : null;
 
   const togglePanel = (panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
@@ -858,13 +872,103 @@ function App() {
 
   const isCompactAdd = panelPlacement === "bottom";
 
+  const selectedGenderList = visibleSelectedPin
+    ? getGenderList(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
+    : [];
+  const selectedGenderAbbr = visibleSelectedPin
+    ? getGenderAbbreviation(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
+    : "";
+  const pinAgeGenderLine = visibleSelectedPin
+    ? [visibleSelectedPin.age ? `${visibleSelectedPin.age}` : "", selectedGenderAbbr]
+      .filter(Boolean)
+      .join(" · ")
+    : "";
+  const pinContactLinks = visibleSelectedPin
+    ? Object.entries(visibleSelectedPin.contact_methods || {})
+      .map(([channel, value]) => buildContactLink(channel, value))
+      .filter(Boolean)
+    : [];
+
+  const pinInfoPanel =
+    visibleSelectedPin && (
+      <div className="panel-body pin-panel-body">
+        <div className="pin-chip-row top-row">
+          {visibleSelectedPin.age && (
+            <span className="bubble static">Age {visibleSelectedPin.age}</span>
+          )}
+          {selectedGenderList.map((gender) => (
+            <span key={gender} className="bubble static">
+              {gender}
+            </span>
+          ))}
+          {!visibleSelectedPin.age && selectedGenderList.length === 0 && (
+            <span className="bubble static">No age or gender shared</span>
+          )}
+        </div>
+
+        {visibleSelectedPin.seeking && visibleSelectedPin.seeking.length > 0 && (
+          <div className="pin-section">
+            <span className="eyebrow">Interested in</span>
+            <div className="bubble-row">
+              {visibleSelectedPin.seeking.map((item) => (
+                <span key={item} className="bubble static">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {visibleSelectedPin.interest_tags && visibleSelectedPin.interest_tags.length > 0 && (
+          <div className="pin-section">
+            <span className="eyebrow">Interests</span>
+            <div className="bubble-row">
+              {visibleSelectedPin.interest_tags.map((item) => (
+                <span key={item} className="bubble static">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {visibleSelectedPin.note && (
+          <div className="pin-section">
+            <span className="eyebrow">Note</span>
+            <p className="pin-note">{visibleSelectedPin.note}</p>
+          </div>
+        )}
+
+        {pinContactLinks.length > 0 && (
+          <div className="pin-section">
+            <span className="eyebrow">Contact</span>
+            <div className="bubble-row">
+              {pinContactLinks.map(({ label, href }) => (
+                <a
+                  key={`${label}-${href}`}
+                  className="bubble link-bubble"
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+
   return (
     <div className="app-shell">
       <MapView
         pins={filteredPins}
         onMapClick={handleMapClick}
+        onPinSelect={handlePinSelect}
         pendingLocation={activePanel === "add" ? selectedLocation : null}
         pendingIcon={activePanel === "add" ? form.icon : null}
+        selectedPinId={visibleSelectedPin?.id}
       />
 
       <div className="overlay-rail" ref={titleCardRef}>
@@ -927,6 +1031,31 @@ function App() {
               {activePanel === "filter" && filterPanel}
           </div>
         )}
+
+        {panelPlacement === "side" && visibleSelectedPin && (
+          <div className="floating-panel side pin-panel">
+            <div className="panel-top">
+              <div className="panel-title">
+                <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
+                <div>
+                  <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
+                  {pinAgeGenderLine && (
+                    <p className="pin-subtitle">{pinAgeGenderLine}</p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setSelectedPin(null)}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {pinInfoPanel}
+          </div>
+        )}
       </div>
 
       {activePanel && panelPlacement === "bottom" && (
@@ -961,6 +1090,29 @@ function App() {
             </div>
           )}
           {activePanel === "filter" && filterPanel}
+        </div>
+      )}
+
+      {panelPlacement === "bottom" && visibleSelectedPin && (
+        <div className="floating-panel bottom pin-panel">
+          <div className="panel-top">
+            <div className="panel-title">
+              <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
+              <div>
+                <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
+                {pinAgeGenderLine && <p className="pin-subtitle">{pinAgeGenderLine}</p>}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="close-button"
+              onClick={() => setSelectedPin(null)}
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          {pinInfoPanel}
         </div>
       )}
     </div>
