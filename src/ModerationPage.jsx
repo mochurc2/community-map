@@ -9,7 +9,6 @@ import {
 } from "./bubbleOptions";
 import { supabase, supabaseAdmin } from "./supabaseClient";
 
-const PASSCODE = import.meta.env.VITE_MODERATION_PASSCODE;
 const HAS_SERVICE_ROLE_KEY = Boolean(import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY);
 const moderationClient = supabaseAdmin || supabase;
 
@@ -96,7 +95,6 @@ function ModerationPage() {
   const [pins, setPins] = useState([]);
   const [loadingPins, setLoadingPins] = useState(false);
   const [error, setError] = useState(null);
-  const [passcodeInput, setPasscodeInput] = useState("");
   const [authError, setAuthError] = useState(null);
   const [activeTab, setActiveTab] = useState("pending");
   const [bubbleOptions, setBubbleOptions] = useState({
@@ -109,9 +107,11 @@ function ModerationPage() {
   const [optionForm, setOptionForm] = useState({ field: "gender_identity", label: "" });
   const [savingOption, setSavingOption] = useState(false);
   const defaultBubbleSet = useMemo(() => getDefaultBubbleOptions(), []);
-  const hasPasscode = useMemo(() => Boolean(PASSCODE), []);
-  const [hasAccess, setHasAccess] = useState(!hasPasscode);
+  const [hasAccess, setHasAccess] = useState(false);
   const [serviceRoleWarning, setServiceRoleWarning] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
 
   const buildDefaultModerationOptions = useCallback(
     () =>
@@ -167,12 +167,27 @@ function ModerationPage() {
   }, [mapRowsToBubbles]);
 
   useEffect(() => {
-    if (!hasPasscode) return;
-    const saved = localStorage.getItem("moderation_passcode");
-    if (saved && saved === PASSCODE) {
-      setHasAccess(true);
-    }
-  }, [hasPasscode]);
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setHasAccess(Boolean(data?.session?.user));
+      })
+      .catch((err) => {
+        console.error(err);
+        setAuthError(err.message);
+      });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setHasAccess(Boolean(session?.user));
+      if (!session?.user) {
+        setPins([]);
+      }
+    });
+
+    return () => {
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   const fetchPins = useCallback(async () => {
     setLoadingPins(true);
@@ -224,20 +239,21 @@ function ModerationPage() {
     fetchPins();
   };
 
-  const handleUnlock = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (!hasPasscode) {
-      setHasAccess(true);
-      return;
+    setAuthError(null);
+    setAuthLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setAuthError(error.message);
     }
+    setAuthLoading(false);
+  };
 
-    if (passcodeInput.trim() === PASSCODE) {
-      localStorage.setItem("moderation_passcode", passcodeInput.trim());
-      setHasAccess(true);
-      setAuthError(null);
-    } else {
-      setAuthError("Incorrect passcode. Please try again.");
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setEmail("");
+    setPassword("");
   };
 
   const handleAddOption = async (e) => {
@@ -318,30 +334,39 @@ function ModerationPage() {
           <p className="badge" style={{ background: "#0f172a", color: "#fff" }}>
             Moderators only
           </p>
-          <h1 style={{ marginTop: "0.35rem" }}>Enter the moderation passcode</h1>
+          <h1 style={{ marginTop: "0.35rem" }}>Moderator login</h1>
           <p style={{ marginTop: "0.4rem", color: "#374151" }}>
-            This page manages pending submissions. Only trusted reviewers should have access.
+            Sign in with the Supabase moderator account to manage submissions and bubble options.
           </p>
-          {!hasPasscode && (
-            <p style={{ marginTop: "0.6rem", color: "#111827", fontWeight: 600 }}>
-              No passcode is configured yet. Set <code>VITE_MODERATION_PASSCODE</code> in <code>.env</code> to protect this page.
-            </p>
-          )}
 
-          <form onSubmit={handleUnlock} style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
+          <form onSubmit={handleLogin} style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
             <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontWeight: 600 }}>
-              Passcode
+              Email
+              <input
+                type="email"
+                className="input"
+                placeholder="moderator@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontWeight: 600 }}>
+              Password
               <input
                 type="password"
                 className="input"
-                placeholder="Enter the secret phrase"
-                value={passcodeInput}
-                onChange={(e) => setPasscodeInput(e.target.value)}
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
             </label>
             {authError && <p style={{ color: "#b91c1c", margin: 0 }}>{authError}</p>}
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <button type="submit">Unlock</button>
+              <button type="submit" disabled={authLoading}>
+                {authLoading ? "Signing in…" : "Sign in"}
+              </button>
               <Link to="/" className="link" style={{ color: "#4f46e5", fontWeight: 700 }}>
                 ← Back to map
               </Link>
@@ -479,9 +504,14 @@ function ModerationPage() {
               Review, approve, and keep the bubble library up to date.
             </p>
           </div>
-          <Link to="/" className="link" style={{ color: "#0f172a", fontWeight: 700 }}>
-            ← Back to map
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <button type="button" className="ghost-button" onClick={handleLogout}>
+              Sign out
+            </button>
+            <Link to="/" className="link" style={{ color: "#0f172a", fontWeight: 700 }}>
+              ← Back to map
+            </Link>
+          </div>
         </header>
 
         <div className="tab-row">
