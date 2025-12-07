@@ -203,8 +203,8 @@ function MapView({
           "text-offset": [1.2, 0],
           "text-max-width": 12,
           "text-optional": true,
-          "text-allow-overlap": true,
-          "text-ignore-placement": true,
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
           "symbol-sort-key": [
             "case",
             ["boolean", ["feature-state", "selected"], false],
@@ -285,23 +285,6 @@ function MapView({
     map.on("error", (evt) => {
       const message = evt?.error?.message || "Map could not load";
       setMapError(message);
-    });
-
-    const handlePinClick = (event) => {
-      const [target] = event.features || [];
-      if (target && onPinSelectRef.current) {
-        onPinSelectRef.current(target.properties);
-      }
-    };
-
-    ["pins-layer", "pins-emoji", "pin-labels"].forEach((layerId) => {
-      map.on("click", layerId, handlePinClick);
-      map.on("mouseenter", layerId, () =>
-        map.getCanvas().style.setProperty("cursor", "pointer")
-      );
-      map.on("mouseleave", layerId, () =>
-        map.getCanvas().style.removeProperty("cursor")
-      );
     });
 
     map.on("click", (e) => {
