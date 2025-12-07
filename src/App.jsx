@@ -119,11 +119,11 @@ const getBaseEmoji = (emoji) => {
 
 const contactPlaceholders = {
   Email: "name@example.com",
-  Discord: "name#1234 (no link)",
+  Discord: "username1234",
   Reddit: "u/username",
   Instagram: "@username",
   Snapchat: "@username",
-  Tumblr: "username (no domain)",
+  Tumblr: "username",
   "X/Twitter": "@username",
   Youtube: "Full YouTube link",
   Website: "https://example.com",
@@ -986,21 +986,20 @@ function App() {
       <div className="panel-section">
         <div className="title-meta">
           <span className="pill">
-            {loadingPins ? "Loading pins…" : `${approvedPinsCount} pins`}
+            {loadingPins ? "Loading pins…" : `${approvedPinsCount} Pins on the map!`}
           </span>
           {pinsError && <span className="pill error">Error loading pins</span>}
         </div>
-        <p className="muted">
-          <strong>Welcome!</strong> This community map lets people share a quick intro and
-          the area they call home. Pins are lightly randomized for privacy, and
-          moderators approve submissions so browsing stays safe and friendly.
+        <p className="panel-stack">
+          <strong>Welcome!</strong> 
         </p>
         <div className="panel-stack">
           <div className="panel-subsection">
-            <span className="eyebrow">Get oriented</span>
-            <p className="muted">
-              Keep the Info panel open to learn the basics. Use the buttons on the
-              title card to jump between Info, Add, and Filter at any time.
+            <span className="eyebrow">Welcome!</span>
+            <p className="list">
+              This community map lets people share a quick intro and
+          the area they call home. Pins are lightly randomized for privacy, and
+          moderators approve submissions so browsing stays safe and friendly.
             </p>
           </div>
           <div className="panel-subsection">
