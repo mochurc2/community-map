@@ -52,7 +52,9 @@ const ensureProtocol = (value) =>
   /^(https?:)?\/\//i.test(value) ? value : `https://${value}`;
 
 export const buildContactLink = (channel, rawValue) => {
-  const value = rawValue?.trim();
+  if (typeof rawValue !== "string") return null;
+
+  const value = rawValue.trim();
   if (!value) return null;
 
   switch (channel) {
