@@ -122,6 +122,7 @@ const contactPlaceholders = {
   Discord: "name#1234 (no link)",
   Reddit: "u/username",
   Instagram: "@username",
+  Snapchat: "@username",
   Tumblr: "username (no domain)",
   "X/Twitter": "@username",
   Youtube: "Full YouTube link",
@@ -889,6 +890,29 @@ function App() {
     });
   }, [bubbleOptions.interest_tags, interestPopularity]);
 
+  const contactPopularity = useMemo(() => {
+    const counts = new Map();
+    pins.forEach((pin) => {
+      Object.entries(pin.contact_methods || {}).forEach(([channel, value]) => {
+        if (!value) return;
+        const normalized = normalizeLabel(channel);
+        if (!normalized) return;
+        counts.set(normalized, (counts.get(normalized) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [pins]);
+
+  const orderedContactOptions = useMemo(() => {
+    const uniqueOptions = Array.from(new Set(bubbleOptions.contact_methods || []));
+    return uniqueOptions.sort((a, b) => {
+      const countA = contactPopularity.get(normalizeLabel(a)) || 0;
+      const countB = contactPopularity.get(normalizeLabel(b)) || 0;
+      if (countA !== countB) return countB - countA;
+      return a.localeCompare(b);
+    });
+  }, [bubbleOptions.contact_methods, contactPopularity]);
+
   const interestOptionsForForm = useMemo(() => {
     const selected = Array.isArray(form.interest_tags) ? form.interest_tags : [];
     const selectedNormalized = new Set(selected.map((label) => normalizeLabel(label)));
@@ -1160,7 +1184,7 @@ function App() {
             <BubbleSelector
               label="Contact info"
               helper="Select services to show and add your handle or link"
-              options={bubbleOptions.contact_methods}
+              options={orderedContactOptions}
               multiple
               value={form.contact_channels}
               onChange={handleContactChannels}
@@ -1247,8 +1271,7 @@ function App() {
       </div>
       <div className="form-grid compact">
         <BubbleSelector
-          label="Gender identity"
-          helper="Show any"
+          label="Gender"
           options={bubbleOptions.gender_identity}
           multiple
           value={filters.genders}
@@ -1256,16 +1279,15 @@ function App() {
         />
         <BubbleSelector
           label="Interested in"
-          helper="Show any"
           options={bubbleOptions.seeking}
           multiple
           value={filters.seeking}
           onChange={(value) => handleFilterChange("seeking", value)}
         />
-        <div className="age-filter">
+        <div className="label age-filter">
           <div className="label-heading">
             <span>Age range</span>
-            <span className="helper-text">{filters.ageRange[0]}–{filters.ageRange[1]}</span>
+            <span className="helper-text label-helper">{filters.ageRange[0]}–{filters.ageRange[1]}</span>
           </div>
           <div className="age-range-slider">
             <div className="age-range-track" style={ageRangeStyle} aria-hidden="true" />
@@ -1288,7 +1310,6 @@ function App() {
         </div>
         <BubbleSelector
           label="Interests"
-          helper="Show any"
           options={orderedInterestOptions}
           multiple
           value={filters.interest_tags}
