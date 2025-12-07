@@ -449,6 +449,8 @@ function App() {
 
   const handleMapClick = useCallback(
     (lngLat) => {
+      if (hasSubmitted) return;
+
       setSelectedPin(null);
       setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
       if (!hasSubmitted) {
@@ -610,10 +612,11 @@ function App() {
         setSubmitError(error.message);
       }
     } else {
-      setSubmitMsg("Thanks! Your pin has been submitted for review.");
+      setSubmitMsg("Thanks! Your pin has been submitted for review. Please only submit one pin at a time.");
       setForm(buildInitialFormState());
       setHasSubmitted(true);
       setShowFullAddForm(false);
+      setSelectedLocation(null);
     }
 
     setSubmitting(false);
@@ -832,7 +835,7 @@ function App() {
       }`
     : "Tap the map to pick a spot and fill in the details.";
 
-  const addPanelIntro = (
+  const addPanelIntro = hasSubmitted ? null : (
     <div className="panel-section">
       <div className="label location-label">
         <div className="label-heading">
@@ -925,7 +928,7 @@ function App() {
   const addPanel = (
     <div className="panel-body">
       <div className="panel-section">
-        {panelPlacement !== "bottom" && (
+        {panelPlacement !== "bottom" && !hasSubmitted && (
           <p className="muted">
             Select location for your pin and fill out the form. All pins are subject to
             moderation before appearing on the map.
@@ -1289,8 +1292,8 @@ function App() {
         pins={filteredPins}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
-        pendingLocation={activePanel === "add" ? selectedLocation : null}
-        pendingIcon={activePanel === "add" ? form.icon : null}
+        pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}
+        pendingIcon={!hasSubmitted && activePanel === "add" ? form.icon : null}
         selectedPinId={visibleSelectedPin?.id}
       />
 
