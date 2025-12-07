@@ -306,9 +306,10 @@ function App() {
   const [showFullAddForm, setShowFullAddForm] = useState(false);
   const [titleCardHeight, setTitleCardHeight] = useState(0);
   const [filters, setFilters] = useState({
-    gender_identity: "",
+    genders: [],
     seeking: [],
     interest_tags: [],
+    ageRange: [18, 100],
   });
   const titleCardRef = useRef(null);
 
@@ -572,21 +573,71 @@ function App() {
   }, []);
 
   const filteredPins = useMemo(() => {
-    return pins.filter((pin) => {
-      const matchesGender =
-        !filters.gender_identity ||
-        (pin.genders || []).includes(filters.gender_identity) ||
-        pin.gender_identity === filters.gender_identity;
-      const matchesSeeking =
-        filters.seeking.length === 0 ||
-        filters.seeking.some((opt) => (pin.seeking || []).includes(opt));
-      const matchesInterests =
-        filters.interest_tags.length === 0 ||
-        filters.interest_tags.some((opt) => (pin.interest_tags || []).includes(opt));
+    const matchesGenderSelection = (pin) => {
+      if (filters.genders.length === 0) return true;
 
-      return matchesGender && matchesSeeking && matchesInterests;
-    });
-  }, [filters.gender_identity, filters.interest_tags, filters.seeking, pins]);
+      const pinGenders = Array.isArray(pin.genders)
+        ? pin.genders
+        : pin.gender_identity
+          ? [pin.gender_identity]
+          : [];
+
+      const hasTransSelected = filters.genders.includes("Trans");
+      const baseSelections = filters.genders.filter((gender) => gender !== "Trans");
+
+      if (hasTransSelected && baseSelections.length === 0) {
+        return pinGenders.includes("Trans");
+      }
+
+      if (hasTransSelected) {
+        return baseSelections.some(
+          (selection) => pinGenders.includes(selection) && pinGenders.includes("Trans")
+        );
+      }
+
+      return baseSelections.some((selection) => pinGenders.includes(selection));
+    };
+
+    const matchesSeekingSelection = (pin) => {
+      if (filters.seeking.length === 0) return true;
+
+      const pinSeeking = Array.isArray(pin.seeking) ? pin.seeking : [];
+      const hasTransSelected = filters.seeking.includes("Trans");
+      const baseSelections = filters.seeking.filter((gender) => gender !== "Trans");
+
+      if (hasTransSelected && baseSelections.length === 0) {
+        return pinSeeking.includes("Trans");
+      }
+
+      if (hasTransSelected) {
+        return baseSelections.some(
+          (selection) => pinSeeking.includes(selection) && pinSeeking.includes("Trans")
+        );
+      }
+
+      return baseSelections.some((selection) => pinSeeking.includes(selection));
+    };
+
+    const matchesAgeRange = (pin) => {
+      if (!pin.age) return true;
+      const [minAge, maxAge] = filters.ageRange;
+      const ageNumber = Number(pin.age);
+      if (Number.isNaN(ageNumber)) return true;
+      return ageNumber >= minAge && ageNumber <= maxAge;
+    };
+
+    const matchesInterestSelection = (pin) =>
+      filters.interest_tags.length === 0 ||
+      filters.interest_tags.some((opt) => (pin.interest_tags || []).includes(opt));
+
+    return pins.filter(
+      (pin) =>
+        matchesGenderSelection(pin) &&
+        matchesSeekingSelection(pin) &&
+        matchesInterestSelection(pin) &&
+        matchesAgeRange(pin)
+    );
+  }, [filters.ageRange, filters.genders, filters.interest_tags, filters.seeking, pins]);
 
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
@@ -606,8 +657,21 @@ function App() {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleAgeRangeChange = (index, value) => {
+    setFilters((prev) => {
+      const numericValue = Number(value);
+      const nextRange = [...prev.ageRange];
+      if (index === 0) {
+        nextRange[0] = Math.min(numericValue, nextRange[1]);
+      } else {
+        nextRange[1] = Math.max(numericValue, nextRange[0]);
+      }
+      return { ...prev, ageRange: nextRange };
+    });
+  };
+
   const clearFilters = () =>
-    setFilters({ gender_identity: "", seeking: [], interest_tags: [] });
+    setFilters({ genders: [], seeking: [], interest_tags: [], ageRange: [18, 100] });
 
   const approvedPinsCount = pins.length;
   const locationLabel = selectedLocation
@@ -861,10 +925,11 @@ function App() {
       <div className="form-grid compact">
         <BubbleSelector
           label="Gender identity"
-          helper="Show one"
+          helper="Show any"
           options={bubbleOptions.gender_identity}
-          value={filters.gender_identity}
-          onChange={(value) => handleFilterChange("gender_identity", value)}
+          multiple
+          value={filters.genders}
+          onChange={(value) => handleFilterChange("genders", value)}
         />
         <BubbleSelector
           label="Interested in"
@@ -874,6 +939,28 @@ function App() {
           value={filters.seeking}
           onChange={(value) => handleFilterChange("seeking", value)}
         />
+        <div className="age-filter">
+          <div className="label-heading">
+            <span>Age range</span>
+            <span className="helper-text">{filters.ageRange[0]}–{filters.ageRange[1]}</span>
+          </div>
+          <div className="age-slider-row">
+            <input
+              type="range"
+              min={18}
+              max={100}
+              value={filters.ageRange[0]}
+              onChange={(e) => handleAgeRangeChange(0, e.target.value)}
+            />
+            <input
+              type="range"
+              min={18}
+              max={100}
+              value={filters.ageRange[1]}
+              onChange={(e) => handleAgeRangeChange(1, e.target.value)}
+            />
+          </div>
+        </div>
         <BubbleSelector
           label="Interests"
           helper="Show any"
