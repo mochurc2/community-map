@@ -346,7 +346,7 @@ function App() {
   const [submitError, setSubmitError] = useState(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [activePanel, setActivePanel] = useState(null);
+  const [activePanel, setActivePanel] = useState("info");
   const [panelPlacement, setPanelPlacement] = useState("side");
   const [showFullAddForm, setShowFullAddForm] = useState(false);
   const [titleCardHeight, setTitleCardHeight] = useState(0);
@@ -870,15 +870,54 @@ function App() {
           {pinsError && <span className="pill error">Error loading pins</span>}
         </div>
         <p className="muted">
-          Drop a pin to share who you are, what you enjoy, and where you are based.
-          Moderators approve submissions before they appear on the public map so
-          everyone can browse safely.
+          <strong>Welcome!</strong> This community map lets people share a quick intro and
+          the area they call home. Pins are lightly randomized for privacy, and
+          moderators approve submissions so browsing stays safe and friendly.
         </p>
-        <ul className="list">
-          <li>Use the icons on the title card to toggle info, add pins, or filter.</li>
-          <li>Tap on the map to pick your spot, then submit a short intro.</li>
-          <li>Contact handles stay hidden until your pin is approved.</li>
-        </ul>
+        <div className="panel-stack">
+          <div className="panel-subsection">
+            <span className="eyebrow">Get oriented</span>
+            <p className="muted">
+              Keep the Info panel open to learn the basics. Use the buttons on the
+              title card to jump between Info, Add, and Filter at any time.
+            </p>
+          </div>
+          <div className="panel-subsection">
+            <span className="eyebrow">How to use the map</span>
+            <ul className="list">
+              <li>
+                <strong>Create your pin:</strong> Tap the map, choose an emoji, and share a
+                short intro. Contact details stay hidden until a moderator approves
+                your submission.
+              </li>
+              <li>
+                <strong>Browse others:</strong> Select pins to read their notes and see
+                approved interests, seeking preferences, and contact options.
+              </li>
+              <li>
+                <strong>Filter what you see:</strong> Open Filter to narrow pins by
+                gender, seeking preferences, interests, or age range. Reset anytime
+                to view everyone again.
+              </li>
+            </ul>
+          </div>
+          <div className="panel-subsection">
+            <span className="eyebrow">House rules</span>
+            <ul className="list">
+              <li>You must be 18 or older to use this map.</li>
+              <li>Share truthful information and stay respectful.</li>
+              <li>
+                Protect your privacy—only share what you are comfortable with and be
+                mindful of the randomized pin placement.
+              </li>
+              <li>Do not use this site for stalking, harassment, or other harm.</li>
+              <li>
+                By browsing or posting, you agree to these guidelines and take
+                responsibility for your own safety.
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );
