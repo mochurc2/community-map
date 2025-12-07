@@ -37,3 +37,18 @@ create policy "Moderators can manage bubble options" on public.bubble_options
   for all to service_role
   using (true)
   with check (true);
+
+-- Message/report policies
+drop policy if exists "Public users can submit messages" on public.messages;
+create policy "Public users can submit messages" on public.messages
+  for insert to anon
+  with check (
+    status = 'open'
+    and kind in ('site_feedback', 'pin_report')
+  );
+
+drop policy if exists "Moderators can manage messages" on public.messages;
+create policy "Moderators can manage messages" on public.messages
+  for all to service_role
+  using (true)
+  with check (true);

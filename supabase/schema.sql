@@ -64,6 +64,55 @@ alter table public.bubble_options
 create index if not exists bubble_options_field_idx on public.bubble_options (field);
 create index if not exists bubble_options_status_idx on public.bubble_options (status);
 
+-- Messages and reports submitted by site visitors
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null check (kind in ('site_feedback', 'pin_report')),
+  message text not null,
+  contact_info text,
+  pin_id uuid references public.pins (id) on delete set null,
+  status text not null default 'open' check (status in ('open', 'resolved')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.messages add column if not exists kind text;
+alter table public.messages alter column kind type text;
+alter table public.messages
+  alter column kind set not null,
+  alter column kind set default 'site_feedback';
+alter table public.messages
+  drop constraint if exists messages_kind_check;
+alter table public.messages
+  add constraint messages_kind_check check (kind in ('site_feedback', 'pin_report'));
+alter table public.messages add column if not exists message text;
+alter table public.messages alter column message type text;
+alter table public.messages alter column message set not null;
+alter table public.messages add column if not exists contact_info text;
+alter table public.messages add column if not exists pin_id uuid;
+alter table public.messages add column if not exists status text not null default 'open';
+alter table public.messages
+  drop constraint if exists messages_status_check;
+alter table public.messages
+  add constraint messages_status_check check (status in ('open', 'resolved'));
+alter table public.messages add column if not exists created_at timestamptz not null default now();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'messages_pin_id_fkey'
+  ) then
+    alter table public.messages
+      add constraint messages_pin_id_fkey foreign key (pin_id)
+      references public.pins (id) on delete set null;
+  end if;
+end $$;
+
+create index if not exists messages_status_idx on public.messages (status);
+create index if not exists messages_pin_idx on public.messages (pin_id);
+create index if not exists messages_created_idx on public.messages (created_at desc);
+
 -- Enable row level security
 alter table public.pins enable row level security;
 alter table public.bubble_options enable row level security;
+alter table public.messages enable row level security;
