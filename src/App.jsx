@@ -12,6 +12,7 @@ import {
   buildContactLink,
   getGenderList,
   randomizeLocation,
+  validateContactValue,
 } from "./pinUtils";
 
 const MAX_VISIBLE_BUBBLES = 6;
@@ -118,12 +119,12 @@ const getBaseEmoji = (emoji) => {
 
 const contactPlaceholders = {
   Email: "name@example.com",
-  Discord: "name#1234",
+  Discord: "name#1234 (no link)",
   Reddit: "u/username",
   Instagram: "@username",
-  Tumblr: "username",
+  Tumblr: "username (no domain)",
   "X/Twitter": "@username",
-  Youtube: "channel link",
+  Youtube: "Full YouTube link",
   Website: "https://example.com",
   OnlyFans: "@username",
 };
@@ -169,14 +170,10 @@ function BubbleSelector({
   alwaysShowAll = false,
   footnote,
 }) {
-  const [showAll, setShowAll] = useState(alwaysShowAll);
+  const [userShowAll, setUserShowAll] = useState(alwaysShowAll);
   const [customInput, setCustomInput] = useState("");
 
-  useEffect(() => {
-    if (alwaysShowAll) {
-      setShowAll(true);
-    }
-  }, [alwaysShowAll]);
+  const showAll = alwaysShowAll || userShowAll;
 
   const selectedValues = useMemo(() => {
     if (multiple) {
@@ -198,8 +195,8 @@ function BubbleSelector({
   }, [options, prioritizeSelected, selectedValues]);
 
   const displayOptions = useMemo(
-    () => (showAll || alwaysShowAll ? orderedOptions : orderedOptions.slice(0, MAX_VISIBLE_BUBBLES)),
-    [alwaysShowAll, orderedOptions, showAll]
+    () => (showAll ? orderedOptions : orderedOptions.slice(0, MAX_VISIBLE_BUBBLES)),
+    [orderedOptions, showAll]
   );
 
   const toggleOption = (option) => {
@@ -258,7 +255,7 @@ function BubbleSelector({
           <button
             type="button"
             className="bubble ghost"
-            onClick={() => setShowAll((v) => !v)}
+            onClick={() => setUserShowAll((v) => !v)}
           >
             {showAll ? "Show less" : "+ more"}
           </button>
@@ -293,6 +290,7 @@ function App() {
   const [bubbleOptions, setBubbleOptions] = useState(getDefaultBubbleOptions);
   const [bubbleStatusMap, setBubbleStatusMap] = useState(getDefaultStatusMap);
   const [form, setForm] = useState(buildInitialFormState);
+  const [contactErrors, setContactErrors] = useState({});
   const [submitMsg, setSubmitMsg] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -439,6 +437,15 @@ function App() {
       });
       return { ...prev, contact_channels: channels, contact_methods: nextMethods };
     });
+    setContactErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        if (!channels.includes(key)) {
+          delete next[key];
+        }
+      });
+      return next;
+    });
   };
 
   const handleContactInput = (channel, value) => {
@@ -446,6 +453,17 @@ function App() {
       ...prev,
       contact_methods: { ...prev.contact_methods, [channel]: value },
     }));
+
+    const validation = value.trim() ? validateContactValue(channel, value) : { valid: true };
+    setContactErrors((prev) => {
+      const next = { ...prev };
+      if (validation.valid) {
+        delete next[channel];
+      } else {
+        next[channel] = validation.message;
+      }
+      return next;
+    });
   };
 
   const handleCustomOption = useCallback(async (field, option) => {
@@ -477,7 +495,7 @@ function App() {
       if (current.includes(normalized)) return prev;
       return { ...prev, [field]: [...current, normalized] };
     });
-  }, [ensurePendingBubbleOption]);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -513,18 +531,30 @@ function App() {
       return;
     }
 
+    const contactValidationErrors = {};
+    const contactPayload = {};
+    form.contact_channels.forEach((channel) => {
+      const value = form.contact_methods[channel];
+      const validation = validateContactValue(channel, value);
+      if (!validation.valid) {
+        contactValidationErrors[channel] = validation.message;
+      } else if (validation.normalizedValue) {
+        contactPayload[channel] = validation.normalizedValue;
+      }
+    });
+
+    if (Object.keys(contactValidationErrors).length > 0) {
+      setContactErrors(contactValidationErrors);
+      setSubmitError("Please fix the highlighted contact info before submitting.");
+      return;
+    }
+
+    setContactErrors({});
     setSubmitting(true);
     setSubmitError(null);
     setSubmitMsg(null);
 
     const randomizedLocation = randomizeLocation(selectedLocation, 500, 1500);
-    const contactPayload = {};
-    form.contact_channels.forEach((channel) => {
-      const value = form.contact_methods[channel];
-      if (value && value.trim()) {
-        contactPayload[channel] = value.trim();
-      }
-    });
 
     const expiresAt = form.never_delete || !form.expires_at
       ? null
@@ -565,6 +595,7 @@ function App() {
     } else {
       setSubmitMsg("Thanks! Your pin has been submitted for review. Please only submit one pin at a time.");
       setForm(buildInitialFormState());
+      setContactErrors({});
       setHasSubmitted(true);
       setShowFullAddForm(false);
       setSelectedLocation(null);
@@ -1034,18 +1065,22 @@ function App() {
 
             {form.contact_channels.length > 0 && (
               <div className="contact-grid">
-                {form.contact_channels.map((channel) => (
-                  <label key={channel} className="label">
-                    {channel}
-                    <input
-                      type="text"
-                      className="input"
-                      value={form.contact_methods[channel] || ""}
-                      onChange={(e) => handleContactInput(channel, e.target.value)}
-                      placeholder={contactPlaceholders[channel] || "Add handle or link"}
-                    />
-                  </label>
-                ))}
+                {form.contact_channels.map((channel) => {
+                  const contactError = contactErrors[channel];
+                  return (
+                    <label key={channel} className="label">
+                      {channel}
+                      <input
+                        type="text"
+                        className="input"
+                        value={form.contact_methods[channel] || ""}
+                        onChange={(e) => handleContactInput(channel, e.target.value)}
+                        placeholder={contactPlaceholders[channel] || "Add handle or link"}
+                      />
+                      {contactError && <span className="field-error">{contactError}</span>}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1260,16 +1295,22 @@ function App() {
           <div className="pin-section">
             <span className="eyebrow">Contact</span>
             <div className="bubble-row">
-              {pinContactLinks.map(({ label, href }) => (
-                <a
-                  key={`${label}-${href}`}
-                  className="bubble link-bubble"
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {label}
-                </a>
+              {pinContactLinks.map(({ label, href, displayText }) => (
+                href ? (
+                  <a
+                    key={`${label}-${href}`}
+                    className="bubble link-bubble"
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {displayText || label}
+                  </a>
+                ) : (
+                  <span key={`${label}-${displayText}`} className="bubble static">
+                    {displayText || label}
+                  </span>
+                )
               ))}
             </div>
           </div>

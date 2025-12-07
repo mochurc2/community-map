@@ -513,6 +513,13 @@ textarea {
   font-weight: 400;
 }
 
+.field-error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin-top: 0.35rem;
+  display: block;
+}
+
 .helper-text.label-helper {
   margin: 0.15rem 0 0;
   display: block;
