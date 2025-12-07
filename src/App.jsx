@@ -1023,7 +1023,7 @@ function App() {
           </div>
           <div className="panel-subsection">
             <span className="eyebrow">House rules</span>
-            <ul className="list">
+            <ul className="muted">
               <li>You must be 18 or older to use this map.</li>
               <li>Share truthful information and stay respectful.</li>
               <li>
