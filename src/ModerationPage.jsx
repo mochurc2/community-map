@@ -10,6 +10,7 @@ import {
 import { supabase, supabaseAdmin } from "./supabaseClient";
 
 const PASSCODE = import.meta.env.VITE_MODERATION_PASSCODE;
+const HAS_SERVICE_ROLE_KEY = Boolean(import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY);
 const moderationClient = supabaseAdmin || supabase;
 
 function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
@@ -110,6 +111,7 @@ function ModerationPage() {
   const defaultBubbleSet = useMemo(() => getDefaultBubbleOptions(), []);
   const hasPasscode = useMemo(() => Boolean(PASSCODE), []);
   const [hasAccess, setHasAccess] = useState(!hasPasscode);
+  const [serviceRoleWarning, setServiceRoleWarning] = useState(null);
 
   const buildDefaultModerationOptions = useCallback(
     () =>
@@ -191,6 +193,12 @@ function ModerationPage() {
 
   useEffect(() => {
     if (!hasAccess) return;
+    if (!HAS_SERVICE_ROLE_KEY) {
+      setServiceRoleWarning(
+        "Set VITE_SUPABASE_SERVICE_ROLE_KEY in your environment to load pending submissions for moderation."
+      );
+      return;
+    }
     fetchPins();
     refreshBubbleOptions();
   }, [fetchPins, hasAccess, refreshBubbleOptions]);
@@ -483,6 +491,11 @@ function ModerationPage() {
         </div>
 
         {error && <p style={{ color: "#b91c1c", margin: 0 }}>Error: {error}</p>}
+        {serviceRoleWarning && (
+          <p style={{ margin: 0, color: "#b45309", background: "#fef3c7", padding: "0.75rem 1rem", borderRadius: 12 }}>
+            {serviceRoleWarning}
+          </p>
+        )}
 
         {activeTab !== "bubbles" && activeTab !== "stats" && renderPins(pinGroups[activeTab])}
 
