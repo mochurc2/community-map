@@ -174,7 +174,7 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
       mapRef.current = null;
       setMapLoaded(false);
     };
-  }, [styleUrl]);
+  }, [ensureEmojiImage]);
 
   useEffect(() => {
     if (!mapLoaded) return;

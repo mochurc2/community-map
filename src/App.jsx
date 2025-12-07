@@ -450,12 +450,6 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (activePanel === "add" && panelPlacement !== "bottom" && selectedLocation) {
-      setShowFullAddForm(true);
-    }
-  }, [activePanel, panelPlacement, selectedLocation]);
-
   const closePanel = () => setActivePanel(null);
 
   const handleFilterChange = (field, value) => {
