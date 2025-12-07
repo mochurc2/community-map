@@ -31,3 +31,12 @@ create policy "Authenticated moderators can manage bubble options" on public.bub
   for all to authenticated
   using (public.is_moderator(auth.uid()))
   with check (public.is_moderator(auth.uid()));
+
+-- Allow authenticated moderators to manage visitor messages
+alter table public.messages enable row level security;
+
+drop policy if exists "Authenticated moderators can manage messages" on public.messages;
+create policy "Authenticated moderators can manage messages" on public.messages
+  for all to authenticated
+  using (public.is_moderator(auth.uid()))
+  with check (public.is_moderator(auth.uid()));

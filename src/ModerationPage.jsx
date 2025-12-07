@@ -124,6 +124,10 @@ function ModerationPage() {
   const [pins, setPins] = useState([]);
   const [loadingPins, setLoadingPins] = useState(false);
   const [error, setError] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageError, setMessageError] = useState(null);
+  const [activeMessageFilter, setActiveMessageFilter] = useState("open");
   const [authError, setAuthError] = useState(null);
   const [activeTab, setActiveTab] = useState("pending");
   const [serverBubbleRows, setServerBubbleRows] = useState([]);
@@ -275,11 +279,29 @@ function ModerationPage() {
     setLoadingPins(false);
   }, [purgeExpiredPins]);
 
+  const fetchMessages = useCallback(async () => {
+    setLoadingMessages(true);
+    const { data, error: supaError } = await moderationClient
+      .from("messages")
+      .select("*, pin:pins(*)")
+      .order("created_at", { ascending: false });
+
+    if (supaError) {
+      console.error(supaError);
+      setMessageError(supaError.message);
+    } else {
+      setMessages(data || []);
+      setMessageError(null);
+    }
+    setLoadingMessages(false);
+  }, []);
+
   useEffect(() => {
     if (!hasAccess) return;
     fetchPins();
+    fetchMessages();
     refreshBubbleOptions();
-  }, [fetchPins, hasAccess, refreshBubbleOptions]);
+  }, [fetchMessages, fetchPins, hasAccess, refreshBubbleOptions]);
 
   const updateStatus = async (id, status) => {
     const approved = status === "approved";
@@ -330,6 +352,24 @@ function ModerationPage() {
     }
 
     fetchPins();
+  };
+
+  const handleReportPinStatus = async (pinId, status) => {
+    await updateStatus(pinId, status);
+    fetchMessages();
+  };
+
+  const updateMessageStatus = async (id, status) => {
+    setMessageError(null);
+    const { error: supaError } = await moderationClient.from("messages").update({ status }).eq("id", id);
+
+    if (supaError) {
+      console.error(supaError);
+      setMessageError(supaError.message);
+      return;
+    }
+
+    fetchMessages();
   };
 
   const handleLogin = async (e) => {
@@ -539,6 +579,15 @@ function ModerationPage() {
     [pins]
   );
 
+  const messageGroups = useMemo(
+    () => ({
+      all: messages,
+      open: messages.filter((msg) => msg.status === "open"),
+      resolved: messages.filter((msg) => msg.status === "resolved"),
+    }),
+    [messages]
+  );
+
   const stats = useMemo(
     () => ({
       total: pins.length,
@@ -547,6 +596,15 @@ function ModerationPage() {
       rejected: pinGroups.rejected.length,
     }),
     [pins, pinGroups.approved.length, pinGroups.pending.length, pinGroups.rejected.length]
+  );
+
+  const messageStats = useMemo(
+    () => ({
+      total: messages.length,
+      open: messageGroups.open.length,
+      resolved: messageGroups.resolved.length,
+    }),
+    [messageGroups.open.length, messageGroups.resolved.length, messages.length]
   );
 
   if (!hasAccess) {
@@ -700,11 +758,153 @@ function ModerationPage() {
     );
   };
 
+  const renderMessages = (list) => {
+    if (loadingMessages) {
+      return <p style={{ margin: 0 }}>Loading messages…</p>;
+    }
+
+    if (!loadingMessages && list.length === 0) {
+      return (
+        <p style={{ margin: 0, color: "#16a34a", fontWeight: 700 }}>
+          Nothing to review 🎉
+        </p>
+      );
+    }
+
+    return (
+      <div style={{ display: "grid", gap: "0.75rem" }}>
+        {list.map((msg) => {
+          const pin = msg.pin;
+          return (
+            <div
+              key={msg.id}
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: "16px",
+                padding: "1rem 1.1rem",
+                background: "#fff",
+                boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                <div>
+                  <p style={{ margin: 0, fontWeight: 700 }}>
+                    {msg.kind === "pin_report" ? "Pin report" : "Site feedback"}
+                  </p>
+                  <p style={{ margin: "0.2rem 0 0", color: "#4b5563" }}>
+                    Received {new Date(msg.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <span
+                  className={`status-pill status-${msg.status === "resolved" ? "approved" : "pending"}`}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  {msg.status}
+                </span>
+              </div>
+
+              <p style={{ margin: "0.75rem 0 0.35rem", fontSize: "0.98rem", color: "#111827" }}>{msg.message}</p>
+              <p style={{ margin: 0, color: "#4b5563", fontSize: "0.95rem" }}>
+                Contact: {msg.contact_info || "Not provided"}
+              </p>
+
+              {pin && (
+                <div
+                  style={{
+                    marginTop: "0.65rem",
+                    padding: "0.75rem",
+                    borderRadius: 12,
+                    border: "1px solid #e5e7eb",
+                    background: "#f9fafb",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span>{pin.icon || "📍"}</span>
+                        <span>{pin.nickname || "No nickname"}</span>
+                      </p>
+                      <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                        {pin.city || "Unknown location"} {pin.state_province && `(${pin.state_province})`} {pin.country || pin.country_code}
+                      </p>
+                      <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                        Gender: {pin.genders?.length ? pin.genders.join(", ") : pin.gender_identity || "unspecified"}
+                        {pin.seeking && pin.seeking.length > 0 && <> — Interested in: {pin.seeking.join(", ")}</>}
+                      </p>
+                      {pin.interest_tags && pin.interest_tags.length > 0 && (
+                        <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                          Interests: {pin.interest_tags.join(", ")}
+                        </p>
+                      )}
+                      {pin.note && (
+                        <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                          Note: {pin.note}
+                        </p>
+                      )}
+                      {pin.contact_methods && Object.keys(pin.contact_methods).length > 0 && (
+                        <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                          Contact: {Object.entries(pin.contact_methods)
+                            .map(([key, val]) => `${key}: ${val}`)
+                            .join(" · ")}
+                        </p>
+                      )}
+                      <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "#6b7280" }}>
+                        Delete after: {pin.never_delete ? "Never" : formatDate(pin.expires_at)}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: "right", color: "#4b5563", fontSize: "0.9rem" }}>
+                      <p style={{ margin: 0, fontWeight: 700 }}>{pin.status}</p>
+                      <p style={{ margin: "0.1rem 0 0" }}>Submitted {new Date(pin.submitted_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="pin-status-row" style={{ marginTop: "0.45rem" }}>
+                    {["approved", "pending", "rejected"].map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleReportPinStatus(pin.id, status)}
+                        className={`status-button status-${status} ${pin.status === status ? "active" : ""}`}
+                      >
+                        {status === "approved" && "Approve"}
+                        {status === "pending" && "Mark pending"}
+                        {status === "rejected" && "Reject"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pin-status-row" style={{ justifyContent: "flex-end", marginTop: "0.4rem" }}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={msg.status === "open"}
+                  onClick={() => updateMessageStatus(msg.id, "open")}
+                >
+                  Mark open
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  style={{ background: "#ecfdf3", borderColor: "#bbf7d0", color: "#166534" }}
+                  disabled={msg.status === "resolved"}
+                  onClick={() => updateMessageStatus(msg.id, "resolved")}
+                >
+                  Resolve
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const tabs = [
     { id: "all", label: "All pins", count: stats.total },
     { id: "pending", label: "Pending pins", count: stats.pending },
     { id: "approved", label: "Approved pins", count: stats.approved },
     { id: "rejected", label: "Rejected pins", count: stats.rejected },
+    { id: "messages", label: "Messages", count: messageStats.open },
     { id: "bubbles", label: "Bubble Library" },
     { id: "stats", label: "Page stats" },
   ];
@@ -714,6 +914,12 @@ function ModerationPage() {
     { id: "seeking", title: "Interested in" },
     { id: "interest_tags", title: "Interests" },
     { id: "contact_methods", title: "Contact options" },
+  ];
+
+  const messageFilters = [
+    { id: "open", label: "Open", count: messageStats.open },
+    { id: "resolved", label: "Resolved", count: messageStats.resolved },
+    { id: "all", label: "All", count: messageStats.total },
   ];
 
   return (
@@ -730,9 +936,9 @@ function ModerationPage() {
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <p style={{ margin: 0, fontWeight: 700, color: "#4f46e5" }}>Moderation</p>
-            <h1 style={{ margin: "0.2rem 0 0" }}>Pin submissions</h1>
+            <h1 style={{ margin: "0.2rem 0 0" }}>Pins & messages</h1>
             <p style={{ margin: "0.4rem 0 0", color: "#4b5563" }}>
-              Review, approve, and keep the bubble library up to date.
+              Review submissions, visitor reports, and keep the bubble library up to date.
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -752,6 +958,42 @@ function ModerationPage() {
         </div>
 
         {error && <p style={{ color: "#b91c1c", margin: 0 }}>Error: {error}</p>}
+
+        {activeTab === "messages" && (
+          <section style={{ display: "grid", gap: "0.75rem" }}>
+            <div className="pending-actions">
+              <div>
+                <p className="eyebrow" style={{ margin: 0 }}>Visitor messages</p>
+                <p className="muted" style={{ marginTop: 4 }}>
+                  Feedback, site issues, and pin reports submitted from the map.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {messageFilters.map((filter) => (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    className="ghost-button"
+                    style={
+                      activeMessageFilter === filter.id
+                        ? { background: "#eef2ff", borderColor: "#c7d2fe", color: "#3730a3" }
+                        : undefined
+                    }
+                    onClick={() => setActiveMessageFilter(filter.id)}
+                  >
+                    {filter.label}
+                    {typeof filter.count === "number" && filter.count > 0 && (
+                      <span className="small-chip">{filter.count}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {messageError && <p style={{ color: "#b91c1c", margin: 0 }}>Error: {messageError}</p>}
+            {renderMessages(messageGroups[activeMessageFilter] || [])}
+          </section>
+        )}
 
         {activeTab === "rejected" && pinGroups.rejected.length > 0 && (
           <div
@@ -783,7 +1025,12 @@ function ModerationPage() {
           </div>
         )}
 
-        {activeTab !== "bubbles" && activeTab !== "stats" && renderPins(pinGroups[activeTab])}
+        {[
+          "all",
+          "pending",
+          "approved",
+          "rejected",
+        ].includes(activeTab) && renderPins(pinGroups[activeTab])}
 
         {activeTab === "bubbles" && (
           <section className="bubble-moderation-shell">

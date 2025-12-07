@@ -337,6 +337,12 @@ function App() {
     ageRange: [MIN_AGE, MAX_AGE],
   });
   const [customInterestOptions, setCustomInterestOptions] = useState([]);
+  const [feedbackPrompt, setFeedbackPrompt] = useState(null);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackContact, setFeedbackContact] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState(null);
+  const [feedbackStatus, setFeedbackStatus] = useState(null);
   const titleCardRef = useRef(null);
 
   useEffect(() => {
@@ -667,6 +673,42 @@ function App() {
     setSubmitting(false);
   };
 
+  const handleFeedbackSubmit = async (event) => {
+    event.preventDefault();
+    if (!feedbackPrompt) return;
+
+    const trimmedMessage = feedbackMessage.trim();
+    if (!trimmedMessage) {
+      setFeedbackError("Please add a message before sending.");
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    setFeedbackError(null);
+    setFeedbackStatus(null);
+
+    const payload = {
+      kind: feedbackPrompt.kind,
+      message: trimmedMessage,
+      contact_info: feedbackContact.trim() || null,
+      pin_id: feedbackPrompt.pinId || null,
+      status: "open",
+    };
+
+    const { error } = await supabase.from("messages").insert(payload);
+
+    if (error) {
+      console.error(error);
+      setFeedbackError(error.message);
+    } else {
+      setFeedbackStatus("Thanks for your note! A moderator will review it soon.");
+      setFeedbackMessage("");
+      setFeedbackContact("");
+    }
+
+    setFeedbackSubmitting(false);
+  };
+
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 960px)");
 
@@ -820,6 +862,18 @@ function App() {
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
     : null;
+
+  const openFeedback = (kind, details = {}) => {
+    setFeedbackPrompt({ kind, ...details });
+    setFeedbackMessage("");
+    setFeedbackContact("");
+    setFeedbackError(null);
+    setFeedbackStatus(null);
+  };
+
+  const closeFeedback = () => {
+    setFeedbackPrompt(null);
+  };
 
   const togglePanel = (panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
@@ -1066,6 +1120,19 @@ function App() {
                 responsibility for your own safety.
               </li>
             </ul>
+          </div>
+          <div className="panel-subsection feedback-subsection">
+            <div>
+              <span className="eyebrow">Need to share feedback?</span>
+              <p className="muted">Send a quick note to the moderators.</p>
+            </div>
+            <button
+              type="button"
+              className="tiny-button"
+              onClick={() => openFeedback("site_feedback")}
+            >
+              Give site feedback
+            </button>
           </div>
         </div>
       </div>
@@ -1386,6 +1453,24 @@ function App() {
       .filter(Boolean)
     : [];
 
+  const reportPinButton =
+    visibleSelectedPin && visibleSelectedPin.id
+      ? (
+          <button
+            type="button"
+            className="tiny-button subtle"
+            onClick={() =>
+              openFeedback("pin_report", {
+                pinId: visibleSelectedPin.id,
+                pinNickname: visibleSelectedPin.nickname || "Unnamed pin",
+              })
+            }
+          >
+            Report pin
+          </button>
+        )
+      : null;
+
   const pinInfoPanel =
     visibleSelectedPin && (
       <div className="panel-body pin-panel-body">
@@ -1550,13 +1635,16 @@ function App() {
                 <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
                 <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
               </div>
-              <button
-                type="button"
-                className="close-button"
-                onClick={() => setSelectedPin(null)}
-              >
-                <X size={24} />
-              </button>
+              <div className="panel-actions">
+                {reportPinButton}
+                <button
+                  type="button"
+                  className="close-button"
+                  onClick={() => setSelectedPin(null)}
+                >
+                  <X size={24} />
+                </button>
+              </div>
             </div>
 
             {pinInfoPanel}
@@ -1606,16 +1694,84 @@ function App() {
               <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
               <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
             </div>
-            <button
-              type="button"
-              className="close-button"
-              onClick={() => setSelectedPin(null)}
-            >
-              <X size={24} />
-            </button>
+            <div className="panel-actions">
+              {reportPinButton}
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setSelectedPin(null)}
+              >
+                <X size={24} />
+              </button>
+            </div>
           </div>
 
           {pinInfoPanel}
+        </div>
+      )}
+
+      {feedbackPrompt && (
+        <div className="feedback-overlay" role="dialog" aria-modal="true">
+          <div className="feedback-backdrop" onClick={closeFeedback} />
+          <div className="feedback-card">
+            <div className="panel-top" style={{ marginBottom: "0.5rem" }}>
+              <div className="panel-title">
+                <div className="panel-icon">💬</div>
+                <h3>{feedbackPrompt.kind === "pin_report" ? "Report pin" : "Share site feedback"}</h3>
+              </div>
+              <button type="button" className="close-button" onClick={closeFeedback}>
+                <X size={22} />
+              </button>
+            </div>
+            <div className="panel-section" style={{ padding: 0 }}>
+              {feedbackPrompt.kind === "pin_report" && feedbackPrompt.pinNickname && (
+                <p className="muted" style={{ marginBottom: "0.5rem" }}>
+                  Reporting: <strong>{feedbackPrompt.pinNickname}</strong>
+                </p>
+              )}
+              <form onSubmit={handleFeedbackSubmit} className="form-grid compact">
+                <label className="label">
+                  Message *
+                  <textarea
+                    className="input"
+                    rows={4}
+                    value={feedbackMessage}
+                    onChange={(e) => setFeedbackMessage(e.target.value)}
+                    placeholder={
+                      feedbackPrompt.kind === "pin_report"
+                        ? "Describe what's wrong with this pin."
+                        : "Share bugs, ideas, or anything else."
+                    }
+                  />
+                </label>
+                <label className="label">
+                  Contact info (optional)
+                  <input
+                    type="text"
+                    className="input"
+                    value={feedbackContact}
+                    onChange={(e) => setFeedbackContact(e.target.value)}
+                    placeholder="Discord @name, email, or other way to reach you"
+                  />
+                  <span className="helper-text">
+                    Include platform + handle if you want a moderator to follow up.
+                  </span>
+                </label>
+
+                {feedbackError && <p className="status error">{feedbackError}</p>}
+                {feedbackStatus && <p className="status success">{feedbackStatus}</p>}
+
+                <div className="feedback-actions">
+                  <button type="button" className="ghost" onClick={closeFeedback} disabled={feedbackSubmitting}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary" disabled={feedbackSubmitting}>
+                    {feedbackSubmitting ? "Sending…" : "Send"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       )}
     </div>
