@@ -174,7 +174,7 @@ const defaultExpiryDate = () => {
 };
 
 const buildInitialFormState = () => ({
-  icon: "💈",
+  icon: "",
   nickname: "",
   age: "",
   genders: [],
@@ -455,6 +455,33 @@ function App() {
       return;
     }
 
+    if (!form.icon) {
+      setSubmitError("Please pick an icon for your pin.");
+      return;
+    }
+
+    const trimmedNickname = form.nickname.trim();
+    if (!trimmedNickname) {
+      setSubmitError("Add a nickname so others can recognize your pin.");
+      return;
+    }
+
+    const ageNumber = Number(form.age);
+    if (!form.age || Number.isNaN(ageNumber)) {
+      setSubmitError("Enter your age (numbers only).");
+      return;
+    }
+
+    if (ageNumber < 18) {
+      setSubmitError("You must be 18 or older to post a pin.");
+      return;
+    }
+
+    if (form.genders.length === 0) {
+      setSubmitError("Select at least one gender option.");
+      return;
+    }
+
     setSubmitting(true);
     setSubmitError(null);
     setSubmitMsg(null);
@@ -482,8 +509,8 @@ function App() {
       country: isoCountry || null,
       country_code: isoCountry || null,
       icon: form.icon || "📍",
-      nickname: form.nickname || null,
-      age: form.age ? Number(form.age) : null,
+      nickname: trimmedNickname,
+      age: ageNumber,
       genders: form.genders,
       gender_identity: form.genders[0] || "unspecified",
       seeking: form.seeking,
@@ -561,10 +588,9 @@ function App() {
     });
   }, [filters.gender_identity, filters.interest_tags, filters.seeking, pins]);
 
-  const visibleSelectedPin =
-    selectedPin && filteredPins.some((pin) => pin.id === selectedPin.id)
-      ? selectedPin
-      : null;
+  const visibleSelectedPin = selectedPin
+    ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
+    : null;
 
   const togglePanel = (panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
@@ -657,7 +683,7 @@ function App() {
           <div className="label">
             <div className="label-heading">
               <span>Icon</span>
-              <span className="helper-text">Pick an emoji for your pin</span>
+              <span className="helper-text">Pick an emoji for your pin (required)</span>
             </div>
             <div className="emoji-scroll" role="listbox" aria-label="Pick an emoji">
               <div className="emoji-grid">
@@ -686,6 +712,7 @@ function App() {
               placeholder="Up to 12 characters"
               className="input"
               maxLength={12}
+              required
             />
           </label>
 
@@ -697,14 +724,15 @@ function App() {
               value={form.age}
               onChange={handleChange}
               className="input"
-              min={0}
+              min={18}
               max={120}
+              required
             />
           </label>
 
           <BubbleSelector
             label="Gender"
-            helper="Select all that apply"
+            helper="Select all that apply (required)"
             options={bubbleOptions.gender_identity}
             multiple
             value={form.genders}
@@ -805,7 +833,7 @@ function App() {
                     ...prev,
                     never_delete: e.target.checked,
                     expires_at: e.target.checked
-                      ? prev.expires_at
+                      ? ""
                       : prev.expires_at || defaultExpiryDate(),
                   }))
                 }
@@ -872,6 +900,12 @@ function App() {
 
   const isCompactAdd = panelPlacement === "bottom";
 
+  const selectedSeeking = Array.isArray(visibleSelectedPin?.seeking)
+    ? visibleSelectedPin.seeking
+    : [];
+  const selectedInterestTags = Array.isArray(visibleSelectedPin?.interest_tags)
+    ? visibleSelectedPin.interest_tags
+    : [];
   const selectedGenderList = visibleSelectedPin
     ? getGenderList(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
     : [];
@@ -906,11 +940,11 @@ function App() {
           )}
         </div>
 
-        {visibleSelectedPin.seeking && visibleSelectedPin.seeking.length > 0 && (
+        {selectedSeeking.length > 0 && (
           <div className="pin-section">
             <span className="eyebrow">Interested in</span>
             <div className="bubble-row">
-              {visibleSelectedPin.seeking.map((item) => (
+              {selectedSeeking.map((item) => (
                 <span key={item} className="bubble static">
                   {item}
                 </span>
@@ -919,11 +953,11 @@ function App() {
           </div>
         )}
 
-        {visibleSelectedPin.interest_tags && visibleSelectedPin.interest_tags.length > 0 && (
+        {selectedInterestTags.length > 0 && (
           <div className="pin-section">
             <span className="eyebrow">Interests</span>
             <div className="bubble-row">
-              {visibleSelectedPin.interest_tags.map((item) => (
+              {selectedInterestTags.map((item) => (
                 <span key={item} className="bubble static">
                   {item}
                 </span>
