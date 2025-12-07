@@ -643,13 +643,15 @@ function App() {
   };
 
   useEffect(() => {
-    const handlePlacement = () => {
-      const isWideEnough = window.innerWidth >= 960;
+    const mediaQuery = window.matchMedia("(min-width: 960px)");
+
+    const handlePlacement = (isWideEnough) => {
       const placement = isWideEnough ? "side" : "bottom";
-      setPanelPlacement(placement);
+
+      setPanelPlacement((prev) => (prev === placement ? prev : placement));
 
       if (activePanel === "add") {
-        if (placement === "bottom" || hasSubmitted) {
+        if (!isWideEnough || hasSubmitted) {
           setShowFullAddForm(false);
         } else if (selectedLocation) {
           setShowFullAddForm(true);
@@ -657,9 +659,11 @@ function App() {
       }
     };
 
-    handlePlacement();
-    window.addEventListener("resize", handlePlacement);
-    return () => window.removeEventListener("resize", handlePlacement);
+    handlePlacement(mediaQuery.matches);
+
+    const handleChange = (event) => handlePlacement(event.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [activePanel, selectedLocation, hasSubmitted]);
 
   useEffect(() => {
