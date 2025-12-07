@@ -336,12 +336,14 @@ function App() {
   useEffect(() => {
     async function fetchPins() {
       setLoadingPins(true);
+      const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .from("pins")
         .select(
-          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at"
+          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at, never_delete"
         )
-        .eq("status", "approved");
+        .eq("status", "approved")
+        .or(`never_delete.eq.true,expires_at.is.null,expires_at.gt.${nowIso}`);
 
       if (error) {
         console.error(error);
@@ -613,6 +615,7 @@ function App() {
       note: form.note || null,
       contact_methods: contactPayload,
       expires_at: expiresAt ? expiresAt.toISOString() : null,
+      never_delete: Boolean(form.never_delete),
       status: "pending",
       approved: false,
     });

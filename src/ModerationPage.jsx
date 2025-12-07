@@ -238,8 +238,23 @@ function ModerationPage() {
     };
   }, []);
 
+  const purgeExpiredPins = useCallback(async () => {
+    const nowIso = new Date().toISOString();
+    const { error: purgeError } = await moderationClient
+      .from("pins")
+      .delete()
+      .lte("expires_at", nowIso)
+      .eq("never_delete", false);
+
+    if (purgeError) {
+      console.error(purgeError);
+      setError((current) => current || purgeError.message);
+    }
+  }, []);
+
   const fetchPins = useCallback(async () => {
     setLoadingPins(true);
+    await purgeExpiredPins();
     const { data, error: supaError } = await moderationClient
       .from("pins")
       .select("*")
@@ -253,7 +268,7 @@ function ModerationPage() {
       setError(null);
     }
     setLoadingPins(false);
-  }, []);
+  }, [purgeExpiredPins]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -276,6 +291,36 @@ function ModerationPage() {
     if (supaError) {
       console.error(supaError);
       alert("Error updating pin: " + supaError.message);
+      return;
+    }
+
+    fetchPins();
+  };
+
+  const deletePin = async (id) => {
+    const confirmed = window.confirm("Delete this rejected pin permanently?");
+    if (!confirmed) return;
+
+    const { error: supaError } = await moderationClient.from("pins").delete().eq("id", id);
+
+    if (supaError) {
+      console.error(supaError);
+      alert("Error deleting pin: " + supaError.message);
+      return;
+    }
+
+    fetchPins();
+  };
+
+  const deleteAllRejectedPins = async () => {
+    const confirmed = window.confirm("Delete all rejected pins permanently? This cannot be undone.");
+    if (!confirmed) return;
+
+    const { error: supaError } = await moderationClient.from("pins").delete().eq("status", "rejected");
+
+    if (supaError) {
+      console.error(supaError);
+      alert("Error deleting rejected pins: " + supaError.message);
       return;
     }
 
@@ -610,7 +655,7 @@ function ModerationPage() {
                   </p>
                 )}
                 <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "#6b7280" }}>
-                  Delete after: {formatDate(pin.expires_at)}
+                  Delete after: {pin.never_delete ? "Never" : formatDate(pin.expires_at)}
                 </p>
               </div>
               <div style={{ textAlign: "right", color: "#4b5563", fontSize: "0.9rem" }}>
@@ -632,6 +677,18 @@ function ModerationPage() {
                 </button>
               ))}
             </div>
+            {pin.status === "rejected" && (
+              <div className="pin-status-row" style={{ justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  style={{ color: "#b91c1c" }}
+                  onClick={() => deletePin(pin.id)}
+                >
+                  Delete pin
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -690,6 +747,36 @@ function ModerationPage() {
         </div>
 
         {error && <p style={{ color: "#b91c1c", margin: 0 }}>Error: {error}</p>}
+
+        {activeTab === "rejected" && pinGroups.rejected.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "0.75rem",
+              padding: "0.9rem 1rem",
+              borderRadius: 12,
+              border: "1px solid #fecaca",
+              background: "#fef2f2",
+            }}
+          >
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: "#991b1b" }}>Rejected pin cleanup</p>
+              <p style={{ margin: "0.25rem 0 0", color: "#b91c1c" }}>
+                Delete all rejected pins from the database once you have reviewed them.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="ghost-button"
+              style={{ color: "#b91c1c", fontWeight: 700 }}
+              onClick={deleteAllRejectedPins}
+            >
+              Delete all rejected pins
+            </button>
+          </div>
+        )}
 
         {activeTab !== "bubbles" && activeTab !== "stats" && renderPins(pinGroups[activeTab])}
 
