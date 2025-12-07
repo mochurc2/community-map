@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+import { getGenderAbbreviation } from "./pinUtils";
+
 const DEFAULT_EMOJI = "📍";
 
 const emojiId = (emoji) =>
@@ -11,7 +13,7 @@ const emojiId = (emoji) =>
     .join("-")}`;
 
 const renderEmojiImage = async (emoji) => {
-  const size = 64;
+  const size = 72;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -29,18 +31,31 @@ const renderEmojiImage = async (emoji) => {
 
 const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 
-function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
+function MapView({
+  pins,
+  onMapClick,
+  onPinSelect,
+  pendingLocation,
+  pendingIcon,
+  selectedPinId,
+}) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
+  const onPinSelectRef = useRef(onPinSelect);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
+  const selectedPinRef = useRef(null);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
+
+  useEffect(() => {
+    onPinSelectRef.current = onPinSelect;
+  }, [onPinSelect]);
 
   const ensureEmojiImage = useCallback(async (emoji) => {
     const map = mapRef.current;
@@ -100,10 +115,15 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         type: "circle",
         source: "pins",
         paint: {
-          "circle-radius": 13,
+          "circle-radius": 11,
           "circle-color": "#ffffff",
           "circle-stroke-width": 2,
-          "circle-stroke-color": "#d1d5db",
+          "circle-stroke-color": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false],
+            "#22c55e",
+            "#d1d5db",
+          ],
         },
       });
 
@@ -113,12 +133,34 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         source: "pins",
         layout: {
           "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(DEFAULT_EMOJI)],
-          "icon-size": 0.55,
+          "icon-size": 0.68,
           "icon-allow-overlap": true,
         },
         paint: {
           "icon-halo-color": "#ffffff",
           "icon-halo-width": 1,
+        },
+      });
+
+      map.addLayer({
+        id: "pin-labels",
+        type: "symbol",
+        source: "pins",
+        layout: {
+          "text-field": ["get", "labelText"],
+          "text-size": 13,
+          "text-font": ["Inter Regular", "Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-variable-anchor": ["left", "right"],
+          "text-justify": "auto",
+          "text-offset": [1.2, 0],
+          "text-max-width": 12,
+          "text-optional": true,
+        },
+        paint: {
+          "text-color": "#0f172a",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 0.5,
+          "text-opacity": 0.92,
         },
       });
 
@@ -164,6 +206,18 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
     });
 
     map.on("click", (e) => {
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["pins-layer", "pins-emoji", "pin-labels"],
+      });
+
+      if (features?.length) {
+        const target = features[0];
+        if (onPinSelectRef.current) {
+          onPinSelectRef.current(target.properties);
+        }
+        return;
+      }
+
       if (onMapClickRef.current) {
         onMapClickRef.current(e.lngLat);
       }
@@ -195,21 +249,36 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
       await Promise.all(Array.from(emojisToLoad).map((emoji) => ensureEmojiImage(emoji)));
       if (cancelled) return;
 
-      const features = (pins || []).map((p) => ({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [p.lng, p.lat],
-        },
-        properties: {
+      const features = (pins || []).map((p) => {
+        const genderAbbr = getGenderAbbreviation(p.genders, p.gender_identity);
+        const ageText = p.age ? `${p.age}` : "";
+        const detailLine = [ageText, genderAbbr].filter(Boolean).join(" · ");
+        const labelText = `${p.nickname || "Unknown"}${detailLine ? `\n${detailLine}` : ""}`;
+
+        return {
+          type: "Feature",
           id: p.id,
-          city: p.city,
-          gender_identity: p.gender_identity,
-          note: p.note,
-          iconImageId: emojiId(p.icon || DEFAULT_EMOJI),
-          nickname: p.nickname,
-        },
-      }));
+          geometry: {
+            type: "Point",
+            coordinates: [p.lng, p.lat],
+          },
+          properties: {
+            id: p.id,
+            city: p.city,
+            gender_identity: p.gender_identity,
+            note: p.note,
+            iconImageId: emojiId(p.icon || DEFAULT_EMOJI),
+            nickname: p.nickname,
+            age: p.age,
+            genders: p.genders,
+            seeking: p.seeking,
+            interest_tags: p.interest_tags,
+            contact_methods: p.contact_methods,
+            icon: p.icon,
+            labelText,
+          },
+        };
+      });
 
       source.setData({
         type: "FeatureCollection",
@@ -267,6 +336,31 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
       cancelled = true;
     };
   }, [pendingLocation, pendingIcon, mapLoaded, ensureEmojiImage]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    if (!map || !map.getSource("pins")) return;
+
+    const previousId = selectedPinRef.current;
+    if (previousId !== null && previousId !== undefined) {
+      map.setFeatureState(
+        { source: "pins", id: previousId },
+        { selected: false }
+      );
+    }
+
+    if (selectedPinId !== null && selectedPinId !== undefined) {
+      map.setFeatureState(
+        { source: "pins", id: selectedPinId },
+        { selected: true }
+      );
+      selectedPinRef.current = selectedPinId;
+      return;
+    }
+
+    selectedPinRef.current = null;
+  }, [selectedPinId, mapLoaded, pins]);
 
   if (!styleUrl) {
     return (
