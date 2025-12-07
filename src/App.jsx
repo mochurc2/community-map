@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
-import { supabase } from "./supabaseClient";
+import ConfigErrorNotice from "./ConfigErrorNotice";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 import MapView from "./MapView";
 import {
   ensurePendingBubbleOption,
@@ -307,6 +308,10 @@ function BubbleSelector({
 }
 
 function App() {
+  if (supabaseConfigError) {
+    return <ConfigErrorNotice message={supabaseConfigError.message} />;
+  }
+
   const [pins, setPins] = useState([]);
   const [pinsError, setPinsError] = useState(null);
   const [loadingPins, setLoadingPins] = useState(true);

@@ -1170,6 +1170,36 @@ textarea {
   font-size: 0.85rem;
 }
 
+.config-error {
+  min-height: var(--app-viewport-height);
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+}
+
+.config-error-card {
+  max-width: 720px;
+  width: 100%;
+  background: #0b1220;
+  padding: 1.75rem;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.config-error-card h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+}
+
+.config-error-card .helper-text {
+  color: #cbd5e1;
+  margin-top: 0.35rem;
+}
+
 @media (max-width: 900px) {
   .overlay-rail {
     left: 50%;
