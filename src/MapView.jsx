@@ -1,6 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+
+const DEFAULT_EMOJI = "📍";
+
+const emojiId = (emoji) =>
+  `emoji-icon-${Array.from(emoji || DEFAULT_EMOJI)
+    .map((char) => char.codePointAt(0)?.toString(16))
+    .filter(Boolean)
+    .join("-")}`;
+
+const renderEmojiImage = async (emoji) => {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `${Math.round(size * 0.7)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  context.fillText(emoji || DEFAULT_EMOJI, size / 2, size / 2 + 1);
+
+  return createImageBitmap(canvas);
+};
 
 const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 
@@ -10,10 +35,44 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
   const onMapClickRef = useRef(onMapClick);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
+  const loadedIconsRef = useRef(new Set());
+  const loadingIconsRef = useRef(new Map());
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
+
+  const ensureEmojiImage = useCallback(async (emoji) => {
+    const map = mapRef.current;
+    if (!map) return null;
+
+    const id = emojiId(emoji);
+    if (loadedIconsRef.current.has(id) || map.hasImage(id)) {
+      loadedIconsRef.current.add(id);
+      return id;
+    }
+
+    if (loadingIconsRef.current.has(id)) {
+      return loadingIconsRef.current.get(id);
+    }
+
+    const loadPromise = (async () => {
+      const imageBitmap = await renderEmojiImage(emoji || DEFAULT_EMOJI);
+      if (imageBitmap && mapRef.current && !mapRef.current.hasImage(id)) {
+        mapRef.current.addImage(id, imageBitmap, { pixelRatio: 2 });
+        loadedIconsRef.current.add(id);
+      }
+      return id;
+    })();
+
+    loadingIconsRef.current.set(id, loadPromise);
+
+    try {
+      return await loadPromise;
+    } finally {
+      loadingIconsRef.current.delete(id);
+    }
+  }, []);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
@@ -27,7 +86,7 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
 
     mapRef.current = map;
 
-    map.on("load", () => {
+    map.on("load", async () => {
       map.addSource("pins", {
         type: "geojson",
         data: {
@@ -53,19 +112,13 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         type: "symbol",
         source: "pins",
         layout: {
-          "text-field": ["coalesce", ["get", "icon"], "📍"],
-          "text-size": 18,
-          "text-offset": [0, 0],
-          "text-anchor": "center",
-          "text-font": [
-            "Noto Color Emoji Regular",
-            "Open Sans Regular",
-            "Arial Unicode MS Regular",
-          ],
+          "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(DEFAULT_EMOJI)],
+          "icon-size": 0.55,
+          "icon-allow-overlap": true,
         },
         paint: {
-          "text-halo-color": "#ffffff",
-          "text-halo-width": 1,
+          "icon-halo-color": "#ffffff",
+          "icon-halo-width": 1,
         },
       });
 
@@ -91,22 +144,17 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
         type: "symbol",
         source: "pending-pin",
         layout: {
-          "text-field": ["coalesce", ["get", "icon"], "📍"],
-          "text-size": 18,
-          "text-offset": [0, 0],
-          "text-anchor": "center",
-          "text-font": [
-            "Noto Color Emoji Regular",
-            "Open Sans Regular",
-            "Arial Unicode MS Regular",
-          ],
+          "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(DEFAULT_EMOJI)],
+          "icon-size": 0.55,
+          "icon-allow-overlap": true,
         },
         paint: {
-          "text-halo-color": "#ffffff",
-          "text-halo-width": 1,
+          "icon-halo-color": "#ffffff",
+          "icon-halo-width": 1,
         },
       });
 
+      await ensureEmojiImage(DEFAULT_EMOJI);
       setMapLoaded(true);
     });
 
@@ -130,33 +178,51 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
 
   useEffect(() => {
     if (!mapLoaded) return;
-    const map = mapRef.current;
-    if (!map) return;
+    let cancelled = false;
 
-    const source = map.getSource("pins");
-    if (!source) return;
+    const updatePins = async () => {
+      const map = mapRef.current;
+      if (!map) return;
 
-    const features = (pins || []).map((p) => ({
-      type: "Feature",
-      geometry: {
-        type: "Point",
-        coordinates: [p.lng, p.lat],
-      },
-      properties: {
-        id: p.id,
-        city: p.city,
-        gender_identity: p.gender_identity,
-        note: p.note,
-        icon: p.icon,
-        nickname: p.nickname,
-      },
-    }));
+      const source = map.getSource("pins");
+      if (!source) return;
 
-    source.setData({
-      type: "FeatureCollection",
-      features,
-    });
-  }, [pins, mapLoaded]);
+      const emojisToLoad = new Set([DEFAULT_EMOJI]);
+      (pins || []).forEach((p) => {
+        if (p.icon) emojisToLoad.add(p.icon);
+      });
+
+      await Promise.all(Array.from(emojisToLoad).map((emoji) => ensureEmojiImage(emoji)));
+      if (cancelled) return;
+
+      const features = (pins || []).map((p) => ({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [p.lng, p.lat],
+        },
+        properties: {
+          id: p.id,
+          city: p.city,
+          gender_identity: p.gender_identity,
+          note: p.note,
+          iconImageId: emojiId(p.icon || DEFAULT_EMOJI),
+          nickname: p.nickname,
+        },
+      }));
+
+      source.setData({
+        type: "FeatureCollection",
+        features,
+      });
+    };
+
+    updatePins();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pins, mapLoaded, ensureEmojiImage]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -166,27 +232,41 @@ function MapView({ pins, onMapClick, pendingLocation, pendingIcon }) {
     const pendingSource = map.getSource("pending-pin");
     if (!pendingSource) return;
 
-    if (!pendingLocation) {
-      pendingSource.setData({ type: "FeatureCollection", features: [] });
-      return;
-    }
+    let cancelled = false;
 
-    pendingSource.setData({
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          geometry: {
-            type: "Point",
-            coordinates: [pendingLocation.lng, pendingLocation.lat],
+    const updatePendingPin = async () => {
+      if (!pendingLocation) {
+        pendingSource.setData({ type: "FeatureCollection", features: [] });
+        return;
+      }
+
+      const iconToUse = pendingIcon || DEFAULT_EMOJI;
+      await ensureEmojiImage(iconToUse);
+      if (cancelled) return;
+
+      pendingSource.setData({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [pendingLocation.lng, pendingLocation.lat],
+            },
+            properties: {
+              iconImageId: emojiId(iconToUse),
+            },
           },
-          properties: {
-            icon: pendingIcon,
-          },
-        },
-      ],
-    });
-  }, [pendingLocation, pendingIcon, mapLoaded]);
+        ],
+      });
+    };
+
+    updatePendingPin();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingLocation, pendingIcon, mapLoaded, ensureEmojiImage]);
 
   if (!styleUrl) {
     return (
