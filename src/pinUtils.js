@@ -42,13 +42,17 @@ export const getGenderAbbreviation = (genders, fallbackGender) => {
 };
 
 export const getGenderList = (genders, fallbackGender) => {
-  if (Array.isArray(genders) && genders.length > 0) return genders;
-  if (fallbackGender) return [fallbackGender];
-  return [];
+  const list = Array.isArray(genders) && genders.length > 0 ? genders : fallbackGender ? [fallbackGender] : [];
+  return list.map((gender) => {
+    if (typeof gender !== "string") return gender;
+    const normalized = gender.trim().toLowerCase();
+    if (normalized === "nonbinary" || normalized === "non-binary") return "Non-binary";
+    return gender;
+  });
 };
 
-const stripAt = (value) => value.replace(/^@/, "");
-const ensureProtocol = (value) =>
+const stripAt = (value = "") => value.trim().replace(/^@/, "");
+const ensureProtocol = (value = "") =>
   /^(https?:)?\/\//i.test(value) ? value : `https://${value}`;
 
 export const buildContactLink = (channel, rawValue) => {
@@ -60,24 +64,40 @@ export const buildContactLink = (channel, rawValue) => {
   switch (channel) {
     case "Email":
       return { label: channel, href: `mailto:${value}` };
-    case "Instagram":
-      return { label: channel, href: `https://instagram.com/${stripAt(value)}` };
-    case "X/Twitter":
-      return { label: channel, href: `https://twitter.com/${stripAt(value)}` };
+    case "Instagram": {
+      const handle = stripAt(value);
+      if (!handle) return null;
+      return { label: channel, href: `https://instagram.com/${handle}` };
+    }
+    case "X/Twitter": {
+      const handle = stripAt(value);
+      if (!handle) return null;
+      return { label: channel, href: `https://twitter.com/${handle}` };
+    }
     case "Reddit": {
-      const handle = value.startsWith("u/") ? value : `u/${stripAt(value)}`;
+      const sanitized = stripAt(value);
+      const handle = sanitized.startsWith("u/") ? sanitized : `u/${sanitized}`;
       return { label: channel, href: `https://reddit.com/${handle}` };
     }
-    case "Discord":
-      return { label: channel, href: ensureProtocol(value) };
-    case "Tumblr":
-      return { label: channel, href: `https://${stripAt(value)}.tumblr.com` };
+    case "Discord": {
+      const username = stripAt(value);
+      if (!username) return null;
+      return { label: `Discord: ${username}`, href: null };
+    }
+    case "Tumblr": {
+      const handle = stripAt(value);
+      if (!handle) return null;
+      return { label: channel, href: `https://${handle}.tumblr.com` };
+    }
     case "Youtube":
       return { label: channel, href: ensureProtocol(value) };
     case "Website":
       return { label: channel, href: ensureProtocol(value) };
-    case "OnlyFans":
-      return { label: channel, href: `https://onlyfans.com/${stripAt(value)}` };
+    case "OnlyFans": {
+      const handle = stripAt(value);
+      if (!handle) return null;
+      return { label: channel, href: `https://onlyfans.com/${handle}` };
+    }
     default:
       return { label: channel, href: ensureProtocol(value) };
   }
