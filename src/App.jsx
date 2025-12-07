@@ -15,6 +15,25 @@ import {
 } from "./pinUtils";
 
 const MAX_VISIBLE_BUBBLES = 6;
+
+const SKIN_TONE_GROUPS = {
+  "👋": ["👋", "👋🏻", "👋🏼", "👋🏽", "👋🏾", "👋🏿"],
+  "💅": ["💅", "💅🏻", "💅🏼", "💅🏽", "💅🏾", "💅🏿"],
+  "👱‍♀️": ["👱‍♀️", "👱🏻‍♀️", "👱🏼‍♀️", "👱🏽‍♀️", "👱🏾‍♀️", "👱🏿‍♀️"],
+  "👱‍♂️": ["👱‍♂️", "👱🏻‍♂️", "👱🏼‍♂️", "👱🏽‍♂️", "👱🏾‍♂️", "👱🏿‍♂️"],
+  "👨": ["👨", "👨🏻", "👨🏼", "👨🏽", "👨🏾", "👨🏿"],
+  "👩": ["👩", "👩🏻", "👩🏼", "👩🏽", "👩🏾", "👩🏿"],
+  "👴": ["👴", "👴🏻", "👴🏼", "👴🏽", "👴🏾", "👴🏿"],
+  "👵": ["👵", "👵🏻", "👵🏼", "👵🏽", "👵🏾", "👵🏿"],
+  "👸": ["👸", "👸🏻", "👸🏼", "👸🏽", "👸🏾", "👸🏿"],
+  "🤴": ["🤴", "🤴🏻", "🤴🏼", "🤴🏽", "🤴🏾", "🤴🏿"],
+  "💇‍♂️": ["💇‍♂️", "💇🏻‍♂️", "💇🏼‍♂️", "💇🏽‍♂️", "💇🏾‍♂️", "💇🏿‍♂️"],
+  "💇‍♀️": ["💇‍♀️", "💇🏻‍♀️", "💇🏼‍♀️", "💇🏽‍♀️", "💇🏾‍♀️", "💇🏿‍♀️"],
+  "👭": ["👭", "👭🏻", "👭🏼", "👭🏽", "👭🏾", "👭🏿"],
+  "👩‍🤝‍👨": ["👩‍🤝‍👨", "👩🏻‍🤝‍👨🏻", "👩🏼‍🤝‍👨🏼", "👩🏽‍🤝‍👨🏽", "👩🏾‍🤝‍👨🏾", "👩🏿‍🤝‍👨🏿"],
+  "👬": ["👬", "👬🏻", "👬🏼", "👬🏽", "👬🏾", "👬🏿"],
+};
+
 const EMOJI_CHOICES = [
   "😊",
   "😅",
@@ -41,98 +60,23 @@ const EMOJI_CHOICES = [
   "💋",
   "💦",
   "👋",
-  "👋🏻",
-  "👋🏼",
-  "👋🏽",
-  "👋🏾",
-  "👋🏿",
   "💅",
-  "💅🏻",
-  "💅🏼",
-  "💅🏽",
-  "💅🏾",
-  "💅🏿",
   "👀",
   "👅",
   "👄",
   "👱‍♀️",
-  "👱🏻‍♀️",
-  "👱🏼‍♀️",
-  "👱🏽‍♀️",
-  "👱🏾‍♀️",
-  "👱🏿‍♀️",
   "👱‍♂️",
-  "👱🏻‍♂️",
-  "👱🏼‍♂️",
-  "👱🏽‍♂️",
-  "👱🏾‍♂️",
-  "👱🏿‍♂️",
   "👨",
-  "👨🏻",
-  "👨🏼",
-  "👨🏽",
-  "👨🏾",
-  "👨🏿",
   "👩",
-  "👩🏻",
-  "👩🏼",
-  "👩🏽",
-  "👩🏾",
-  "👩🏿",
   "👴",
-  "👴🏻",
-  "👴🏼",
-  "👴🏽",
-  "👴🏾",
-  "👴🏿",
   "👵",
-  "👵🏻",
-  "👵🏼",
-  "👵🏽",
-  "👵🏾",
-  "👵🏿",
   "👸",
-  "👸🏻",
-  "👸🏼",
-  "👸🏽",
-  "👸🏾",
-  "👸🏿",
   "🤴",
-  "🤴🏻",
-  "🤴🏼",
-  "🤴🏽",
-  "🤴🏾",
-  "🤴🏿",
   "💇‍♂️",
-  "💇🏻‍♂️",
-  "💇🏼‍♂️",
-  "💇🏽‍♂️",
-  "💇🏾‍♂️",
-  "💇🏿‍♂️",
   "💇‍♀️",
-  "💇🏻‍♀️",
-  "💇🏼‍♀️",
-  "💇🏽‍♀️",
-  "💇🏾‍♀️",
-  "💇🏿‍♀️",
   "👭",
-  "👭🏻",
-  "👭🏼",
-  "👭🏽",
-  "👭🏾",
-  "👭🏿",
   "👩‍🤝‍👨",
-  "👩🏻‍🤝‍👨🏻",
-  "👩🏼‍🤝‍👨🏼",
-  "👩🏽‍🤝‍👨🏽",
-  "👩🏾‍🤝‍👨🏾",
-  "👩🏿‍🤝‍👨🏿",
   "👬",
-  "👬🏻",
-  "👬🏼",
-  "👬🏽",
-  "👬🏾",
-  "👬🏿",
   "🐵",
   "🐺",
   "🐱",
@@ -150,8 +94,8 @@ const EMOJI_CHOICES = [
   "🔥",
   "✨",
   "🔒",
+  "⛓️",
   "❤️",
-  "🩷",
   "🧡",
   "💛",
   "💚",
@@ -163,6 +107,14 @@ const EMOJI_CHOICES = [
   "🪒",
   "✂️",
 ];
+
+const getBaseEmoji = (emoji) => {
+  if (!emoji) return "";
+  return (
+    Object.entries(SKIN_TONE_GROUPS).find(([, variants]) => variants.includes(emoji))?.[0] ||
+    emoji
+  );
+};
 
 const contactPlaceholders = {
   Email: "name@example.com",
@@ -779,6 +731,10 @@ function App() {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleEmojiSelect = (emoji) => {
+    setForm((prev) => ({ ...prev, icon: emoji }));
+  };
+
   const handleAgeRangeChange = (index, value) => {
     setFilters((prev) => {
       const numericValue = Number(value);
@@ -823,6 +779,10 @@ function App() {
       return aSelected ? -1 : 1;
     });
   }, [bubbleOptions.interest_tags, customInterestOptions, form.interest_tags]);
+
+  const selectedBaseEmoji = useMemo(() => getBaseEmoji(form.icon), [form.icon]);
+  const skinToneOptions = SKIN_TONE_GROUPS[selectedBaseEmoji];
+  const hasSkinToneOptions = Boolean(skinToneOptions?.length > 1);
 
   const approvedPinsCount = pins.length;
   const locationLabel = selectedLocation
@@ -950,19 +910,42 @@ function App() {
             <p className="helper-text label-helper">Required. Pick an emoji for your pin.</p>
             <div className="emoji-scroll" role="listbox" aria-label="Pick an emoji">
               <div className="emoji-grid">
-                {EMOJI_CHOICES.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className={`emoji-chip ${form.icon === emoji ? "selected" : ""}`}
-                    aria-pressed={form.icon === emoji}
-                    onClick={() => setForm((f) => ({ ...f, icon: emoji }))}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+                {EMOJI_CHOICES.map((emoji) => {
+                  const isSelected = selectedBaseEmoji === emoji;
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={`emoji-chip ${isSelected ? "selected" : ""}`}
+                      aria-pressed={isSelected}
+                      onClick={() => handleEmojiSelect(emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+            {hasSkinToneOptions && (
+              <div className="emoji-tone-panel">
+                <p className="helper-text label-helper">Choose a skin tone.</p>
+                <div className="emoji-scroll" role="listbox" aria-label="Pick a skin tone">
+                  <div className="emoji-grid">
+                    {skinToneOptions.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        className={`emoji-chip ${form.icon === emoji ? "selected" : ""}`}
+                        aria-pressed={form.icon === emoji}
+                        onClick={() => handleEmojiSelect(emoji)}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <label className="label">

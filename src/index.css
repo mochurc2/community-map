@@ -724,6 +724,12 @@ textarea {
   box-shadow: 0 8px 20px rgba(37, 99, 235, 0.16);
 }
 
+.emoji-tone-panel {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
 .location-edit-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
