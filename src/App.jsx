@@ -10,6 +10,7 @@ import {
 } from "./bubbleOptions";
 import {
   buildContactLink,
+  getGenderAbbreviation,
   getGenderList,
   randomizeLocation,
 } from "./pinUtils";
@@ -184,73 +185,7 @@ const defaultExpiryDate = () => {
 
 const MIN_AGE = 18;
 const MAX_AGE = 100;
-const BASE_GENDERS = ["Man", "Woman", "Non-binary", "Nonbinary"];
-const sanitizeHandle = (value = "") => value.trim().replace(/^@/, "");
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
-const twitterHandleRegex = /^[A-Za-z0-9_]{1,15}$/;
-const instagramHandleRegex = /^[A-Za-z0-9._]{1,30}$/;
-const redditHandleRegex = /^[A-Za-z0-9_-]{3,20}$/;
-const tumblrHandleRegex = /^[A-Za-z0-9-]{3,32}$/;
-const onlyFansHandleRegex = /^[A-Za-z0-9._]{3,30}$/;
-const urlishRegex = /^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/[\w#%&?=+.-]*)?$/i;
-
-const validateContactValue = (channel, rawValue) => {
-  const value = (rawValue || "").trim();
-  if (!value) {
-    return { error: `Add your ${channel} details or remove that contact option.` };
-  }
-
-  switch (channel) {
-    case "Email":
-      return emailRegex.test(value)
-        ? { value }
-        : { error: "Enter a valid email address (name@example.com)." };
-    case "Discord": {
-      const username = sanitizeHandle(value);
-      if (/\s|:\/\//.test(username) || username.length < 2) {
-        return { error: "Enter a Discord username (no links)." };
-      }
-      return { value: username };
-    }
-    case "Instagram": {
-      const handle = sanitizeHandle(value);
-      return instagramHandleRegex.test(handle)
-        ? { value: handle }
-        : { error: "Enter an Instagram handle like @name." };
-    }
-    case "X/Twitter": {
-      const handle = sanitizeHandle(value);
-      return twitterHandleRegex.test(handle)
-        ? { value: handle }
-        : { error: "Enter a valid X/Twitter handle like @name." };
-    }
-    case "Reddit": {
-      const handle = sanitizeHandle(value.replace(/^u\//i, ""));
-      return redditHandleRegex.test(handle)
-        ? { value: `u/${handle}` }
-        : { error: "Enter a Reddit username like u/name." };
-    }
-    case "Tumblr": {
-      const handle = sanitizeHandle(value);
-      return tumblrHandleRegex.test(handle)
-        ? { value: handle }
-        : { error: "Enter a Tumblr blog name (letters, numbers, or dashes)." };
-    }
-    case "OnlyFans": {
-      const handle = sanitizeHandle(value);
-      return onlyFansHandleRegex.test(handle)
-        ? { value: handle }
-        : { error: "Enter an OnlyFans handle like @name." };
-    }
-    case "Youtube":
-    case "Website":
-      return urlishRegex.test(value)
-        ? { value }
-        : { error: `Enter a full URL for ${channel}.` };
-    default:
-      return { value };
-  }
-};
+const BASE_GENDERS = ["Man", "Woman", "Nonbinary"];
 
 const buildInitialFormState = () => ({
   icon: "",
@@ -303,9 +238,12 @@ function BubbleSelector({
     const base = Array.isArray(options) ? [...options] : [];
     if (!prioritizeSelected) return base;
 
-    const selectedList = base.filter((option) => selectedValues.has(option));
-    const unselectedList = base.filter((option) => !selectedValues.has(option));
-    return [...selectedList, ...unselectedList];
+    return base.sort((a, b) => {
+      const aSelected = selectedValues.has(a);
+      const bSelected = selectedValues.has(b);
+      if (aSelected === bSelected) return a.localeCompare(b);
+      return aSelected ? -1 : 1;
+    });
   }, [options, prioritizeSelected, selectedValues]);
 
   const displayOptions = useMemo(
@@ -341,7 +279,7 @@ function BubbleSelector({
   };
 
   return (
-    <div className="label bubble-selector">
+    <label className="label">
       <div className="label-heading">
         <span>{label}</span>
       </div>
@@ -390,7 +328,7 @@ function BubbleSelector({
         </div>
       )}
       {footnote && <p className="subtle-footnote">{footnote}</p>}
-    </div>
+    </label>
   );
 }
 
@@ -512,7 +450,6 @@ function App() {
   const handleMapClick = useCallback(
     (lngLat) => {
       setSelectedPin(null);
-      if (hasSubmitted) return;
       setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
       if (!hasSubmitted) {
         setSubmitMsg(null);
@@ -591,8 +528,6 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitError(null);
-    setSubmitMsg(null);
     if (!selectedLocation) {
       setSubmitError("Click on the map to choose a location first.");
       return;
@@ -625,25 +560,18 @@ function App() {
       return;
     }
 
-    const baseGenderCount = form.genders.filter((gender) => BASE_GENDERS.includes(gender)).length;
-    if (form.genders.includes("Trans") && baseGenderCount === 0) {
-      setSubmitError("Add Man, Woman, or Non-binary along with Trans.");
-      return;
-    }
-
-    const contactPayload = {};
-    for (const channel of form.contact_channels) {
-      const validation = validateContactValue(channel, form.contact_methods[channel]);
-      if (validation.error) {
-        setSubmitError(validation.error);
-        return;
-      }
-      contactPayload[channel] = validation.value;
-    }
-
     setSubmitting(true);
+    setSubmitError(null);
+    setSubmitMsg(null);
 
     const randomizedLocation = randomizeLocation(selectedLocation, 500, 1500);
+    const contactPayload = {};
+    form.contact_channels.forEach((channel) => {
+      const value = form.contact_methods[channel];
+      if (value && value.trim()) {
+        contactPayload[channel] = value.trim();
+      }
+    });
 
     const expiresAt = form.never_delete || !form.expires_at
       ? null
@@ -682,11 +610,10 @@ function App() {
         setSubmitError(error.message);
       }
     } else {
-      setSubmitMsg("Thanks! Your pin has been submitted for review. Please only submit one pin at a time.");
+      setSubmitMsg("Thanks! Your pin has been submitted for review.");
       setForm(buildInitialFormState());
       setHasSubmitted(true);
       setShowFullAddForm(false);
-      setSelectedLocation(null);
     }
 
     setSubmitting(false);
@@ -875,32 +802,6 @@ function App() {
     };
   }, [filters.ageRange]);
 
-  const interestPopularity = useMemo(() => {
-    const counts = {};
-    (pins || []).forEach((pin) => {
-      const approvedInterests = (pin.interest_tags || []).filter(isInterestApproved);
-      approvedInterests.forEach((interest) => {
-        const key = interest?.toLowerCase?.();
-        if (!key) return;
-        counts[key] = (counts[key] || 0) + 1;
-      });
-    });
-    return counts;
-  }, [isInterestApproved, pins]);
-
-  const sortInterestsByPopularity = useCallback(
-    (options) => {
-      const base = Array.isArray(options) ? [...options] : [];
-      return base.sort((a, b) => {
-        const aCount = interestPopularity[a?.toLowerCase?.()] || 0;
-        const bCount = interestPopularity[b?.toLowerCase?.()] || 0;
-        if (aCount !== bCount) return bCount - aCount;
-        return (a || "").localeCompare(b || "");
-      });
-    },
-    [interestPopularity]
-  );
-
   const interestOptionsForForm = useMemo(() => {
     const selected = Array.isArray(form.interest_tags) ? form.interest_tags : [];
     const combined = [...selected, ...bubbleOptions.interest_tags, ...customInterestOptions];
@@ -913,13 +814,13 @@ function App() {
       return true;
     });
 
-    return sortInterestsByPopularity(deduped);
-  }, [bubbleOptions.interest_tags, customInterestOptions, form.interest_tags, sortInterestsByPopularity]);
-
-  const interestOptionsForFilter = useMemo(
-    () => sortInterestsByPopularity(bubbleOptions.interest_tags),
-    [bubbleOptions.interest_tags, sortInterestsByPopularity]
-  );
+    return deduped.sort((a, b) => {
+      const aSelected = selected.some((value) => value.toLowerCase() === a.toLowerCase());
+      const bSelected = selected.some((value) => value.toLowerCase() === b.toLowerCase());
+      if (aSelected === bSelected) return a.localeCompare(b);
+      return aSelected ? -1 : 1;
+    });
+  }, [bubbleOptions.interest_tags, customInterestOptions, form.interest_tags]);
 
   const approvedPinsCount = pins.length;
   const locationLabel = selectedLocation
@@ -1030,10 +931,10 @@ function App() {
             moderation before appearing on the map.
           </p>
         )}
-        {!hasSubmitted && addPanelIntro}
-        {hasSubmitted && (
+        {addPanelIntro}
+        {hasSubmitted && submitMsg && (
           <p className="status success" style={{ marginTop: "0.35rem" }}>
-            {submitMsg || "Your pin has been submitted for review. Please only submit one pin at a time."}
+            {submitMsg}
           </p>
         )}
       </div>
@@ -1118,6 +1019,7 @@ function App() {
             onAddOption={(option) => handleCustomOption("interest_tags", option)}
             allowCustom
             prioritizeSelected
+            alwaysShowAll
             footnote="Custom interests are subject to moderation and may not appear until they are approved."
           />
 
@@ -1264,7 +1166,7 @@ function App() {
         <BubbleSelector
           label="Interests"
           helper="Show any"
-          options={interestOptionsForFilter}
+          options={bubbleOptions.interest_tags}
           multiple
           value={filters.interest_tags}
           onChange={(value) => handleFilterChange("interest_tags", value)}
@@ -1296,13 +1198,17 @@ function App() {
   const selectedGenderList = visibleSelectedPin
     ? getGenderList(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
     : [];
-  const pinContactDetails = visibleSelectedPin
+  const selectedGenderAbbr = visibleSelectedPin
+    ? getGenderAbbreviation(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
+    : "";
+  const pinAgeGenderLine = visibleSelectedPin
+    ? [visibleSelectedPin.age ? `${visibleSelectedPin.age}` : "", selectedGenderAbbr]
+      .filter(Boolean)
+      .join(" · ")
+    : "";
+  const pinContactLinks = visibleSelectedPin
     ? Object.entries(visibleSelectedPin.contact_methods || {})
-      .map(([channel, value]) => {
-        const detail = buildContactLink(channel, value);
-        if (!detail) return null;
-        return { ...detail, channel };
-      })
+      .map(([channel, value]) => buildContactLink(channel, value))
       .filter(Boolean)
     : [];
 
@@ -1356,27 +1262,21 @@ function App() {
           </div>
         )}
 
-        {pinContactDetails.length > 0 && (
+        {pinContactLinks.length > 0 && (
           <div className="pin-section">
             <span className="eyebrow">Contact</span>
             <div className="bubble-row">
-              {pinContactDetails.map(({ label, href, channel }) =>
-                href ? (
-                  <a
-                    key={`${channel}-${href}`}
-                    className="bubble link-bubble"
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {label}
-                  </a>
-                ) : (
-                  <span key={`${channel}-${label}`} className="bubble static">
-                    {label}
-                  </span>
-                )
-              )}
+              {pinContactLinks.map(({ label, href }) => (
+                <a
+                  key={`${label}-${href}`}
+                  className="bubble link-bubble"
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {label}
+                </a>
+              ))}
             </div>
           </div>
         )}
@@ -1389,8 +1289,8 @@ function App() {
         pins={filteredPins}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
-        pendingLocation={activePanel === "add" && !hasSubmitted ? selectedLocation : null}
-        pendingIcon={activePanel === "add" && !hasSubmitted ? form.icon : null}
+        pendingLocation={activePanel === "add" ? selectedLocation : null}
+        pendingIcon={activePanel === "add" ? form.icon : null}
         selectedPinId={visibleSelectedPin?.id}
       />
 
@@ -1460,7 +1360,12 @@ function App() {
             <div className="panel-top">
               <div className="panel-title">
                 <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
-                <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
+                <div>
+                  <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
+                  {pinAgeGenderLine && (
+                    <p className="pin-subtitle">{pinAgeGenderLine}</p>
+                  )}
+                </div>
               </div>
               <button
                 type="button"
@@ -1516,7 +1421,10 @@ function App() {
           <div className="panel-top">
             <div className="panel-title">
               <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
-              <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
+              <div>
+                <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
+                {pinAgeGenderLine && <p className="pin-subtitle">{pinAgeGenderLine}</p>}
+              </div>
             </div>
             <button
               type="button"

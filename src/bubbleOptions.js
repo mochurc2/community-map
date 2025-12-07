@@ -1,8 +1,8 @@
 import { supabase, supabaseAdmin } from "./supabaseClient";
 
 const baseDefaultOptions = {
-  gender_identity: ["Man", "Woman", "Non-binary", "Trans"],
-  seeking: ["Men", "Women", "Non-Binary", "Trans"],
+  gender_identity: ["Man", "Woman", "Nonbinary", "Trans"],
+  seeking: ["Man", "Woman", "Nonbinary", "Trans"],
   interest_tags: [
     "Giving Haircuts",
     "Receiving Haircuts",
