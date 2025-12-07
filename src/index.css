@@ -3,11 +3,6 @@
   background-color: #ffffff;
   font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
   line-height: 1.6;
-  --font-family-base: "Inter", "Helvetica Neue", Arial, sans-serif;
-  --panel-title-size: 1.05rem;
-  --bubble-text-size: 0.95rem;
-  --subtext-size: 0.9rem;
-  --muted-text-color: #6b7280;
 }
 
 body,
@@ -17,7 +12,7 @@ textarea,
 select,
 .maplibregl-ctrl,
 .maplibregl-popup {
-  font-family: var(--font-family-base);
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
 }
 
 a {
@@ -266,8 +261,8 @@ textarea {
   border-radius: 999px;
   background: #f3f4f6;
   color: #0f172a;
-  font-size: var(--bubble-text-size);
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
   border: 1px solid #e5e7eb;
 }
 
@@ -371,11 +366,6 @@ textarea {
   gap: 0.5rem;
 }
 
-.panel-title h3 {
-  font-size: var(--panel-title-size);
-  font-weight: 700;
-}
-
 .panel-body {
   padding: 0.25rem 1rem 1rem;
   overflow-y: auto;
@@ -413,7 +403,6 @@ textarea {
 .panel-lead {
   font-weight: 700;
   color: #0f172a;
-  font-size: var(--panel-title-size);
 }
 
 .card {
@@ -433,8 +422,7 @@ textarea {
 }
 
 .muted {
-  color: var(--muted-text-color);
-  font-size: var(--subtext-size);
+  color: #6b7280;
 }
 
 .muted-block {
@@ -481,8 +469,8 @@ textarea {
   gap: 0.25rem;
   width: 100%;
   min-width: 0;
-  font-size: var(--panel-title-size);
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
   color: #0f172a;
 }
 
@@ -494,8 +482,8 @@ textarea {
 }
 
 .helper-text {
-  color: var(--muted-text-color);
-  font-size: var(--subtext-size);
+  color: #6b7280;
+  font-size: 0.85rem;
   font-weight: 500;
 }
 
@@ -506,8 +494,8 @@ textarea {
 
 .subtle-footnote {
   margin: 0.35rem 0 0;
-  color: var(--muted-text-color);
-  font-size: var(--subtext-size);
+  color: #4b5563;
+  font-size: 0.9rem;
 }
 
 .bubble-grid {
@@ -526,8 +514,7 @@ textarea {
   color: #111827;
   border-radius: 999px;
   padding: 0.45rem 0.85rem;
-  font-size: var(--bubble-text-size);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease, border 120ms ease,
     color 120ms ease;
@@ -562,8 +549,8 @@ textarea {
 
 .pin-subtitle {
   margin: 0;
-  color: var(--muted-text-color);
-  font-size: var(--subtext-size);
+  color: #4b5563;
+  font-size: 0.95rem;
 }
 
 .pin-panel-body {
@@ -620,14 +607,14 @@ textarea {
 }
 
 .helper {
-  color: var(--muted-text-color);
-  font-size: var(--subtext-size);
+  color: #6b7280;
+  font-size: 0.9rem;
   margin-top: -0.15rem;
 }
 
 .helper-text.small,
 .muted.small {
-  font-size: calc(var(--subtext-size) - 0.05rem);
+  font-size: 0.85rem;
 }
 
 .location-stack {
@@ -662,8 +649,7 @@ textarea {
   border-radius: 999px;
   border: 1px solid #e5e7eb;
   background: #ffffff;
-  font-weight: 500;
-  font-size: var(--bubble-text-size);
+  font-weight: 600;
   color: #0f172a;
   max-width: 100%;
   word-break: break-word;
@@ -847,7 +833,7 @@ textarea {
 }
 
 .eyebrow {
-  font-size: var(--panel-title-size);
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #0f172a;
@@ -1118,8 +1104,8 @@ textarea {
   background: #e5e7eb;
   color: #0f172a;
   border-radius: 999px;
-  font-weight: 500;
-  font-size: var(--bubble-text-size);
+  font-weight: 700;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 900px) {
