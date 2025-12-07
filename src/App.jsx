@@ -137,7 +137,32 @@ const defaultExpiryDate = () => {
 
 const MIN_AGE = 18;
 const MAX_AGE = 100;
-const BASE_GENDERS = ["Man", "Woman", "Nonbinary"];
+
+const normalizeLabel = (label) => label?.toString().trim().toLowerCase();
+
+const isBaseGenderLabel = (label) => {
+  const normalized = normalizeLabel(label);
+  return (
+    normalized === "man" ||
+    normalized === "men" ||
+    normalized === "woman" ||
+    normalized === "women" ||
+    normalized === "nonbinary" ||
+    normalized === "non-binary"
+  );
+};
+
+const getCanonicalBaseGender = (label) => {
+  const normalized = normalizeLabel(label);
+  if (normalized === "man" || normalized === "men" || normalized === "male" || normalized === "m") return "Man";
+  if (normalized === "woman" || normalized === "women" || normalized === "female" || normalized === "f") return "Woman";
+  if (normalized === "nonbinary" || normalized === "non-binary" || normalized === "nb" || normalized === "enby") {
+    return "Non-binary";
+  }
+  return "";
+};
+
+const isTransLabel = (label) => normalizeLabel(label)?.startsWith("trans");
 
 const buildInitialFormState = () => ({
   icon: "",
@@ -227,7 +252,7 @@ function BubbleSelector({
   };
 
   return (
-    <label className="label">
+    <div className="label">
       <div className="label-heading">
         <span>{label}</span>
       </div>
@@ -276,7 +301,7 @@ function BubbleSelector({
         </div>
       )}
       {footnote && <p className="subtle-footnote">{footnote}</p>}
-    </label>
+    </div>
   );
 }
 
@@ -531,6 +556,13 @@ function App() {
       return;
     }
 
+    const hasTransSelection = form.genders.some(isTransLabel);
+    const baseGenderSelection = form.genders.find(isBaseGenderLabel);
+    if (hasTransSelection && !baseGenderSelection) {
+      setSubmitError("Select Man, Woman, or Non-binary in addition to Trans.");
+      return;
+    }
+
     const contactValidationErrors = {};
     const contactPayload = {};
     form.contact_channels.forEach((channel) => {
@@ -562,6 +594,8 @@ function App() {
 
     const isoCountry = (form.country || form.country_code || "").trim().toUpperCase();
 
+    const primaryGender = getCanonicalBaseGender(baseGenderSelection) || form.genders[0] || "unspecified";
+
     const { error } = await supabase.from("pins").insert({
       lat: randomizedLocation.lat,
       lng: randomizedLocation.lng,
@@ -573,7 +607,7 @@ function App() {
       nickname: trimmedNickname,
       age: ageNumber,
       genders: form.genders,
-      gender_identity: form.genders[0] || "unspecified",
+      gender_identity: primaryGender,
       seeking: form.seeking,
       interest_tags: form.interest_tags,
       note: form.note || null,
@@ -651,40 +685,78 @@ function App() {
           ? [pin.gender_identity]
           : [];
 
-      const hasTransSelected = filters.genders.includes("Trans");
-      const baseSelections = filters.genders.filter((gender) => gender !== "Trans");
+      const selectedNormalized = filters.genders.map(normalizeLabel).filter(Boolean);
+      const baseSelections = Array.from(
+        new Set(
+          selectedNormalized
+            .map(getCanonicalBaseGender)
+            .filter(Boolean)
+            .map(normalizeLabel)
+        )
+      );
+      const hasTransSelected = selectedNormalized.some(isTransLabel);
+
+      const pinNormalized = pinGenders.map(normalizeLabel).filter(Boolean);
+      const pinHasTrans = pinNormalized.some(isTransLabel);
+      const pinBaseLabels = Array.from(
+        new Set(
+          pinNormalized
+            .map(getCanonicalBaseGender)
+            .filter(Boolean)
+            .map(normalizeLabel)
+        )
+      );
 
       if (hasTransSelected && baseSelections.length === 0) {
-        return pinGenders.includes("Trans");
+        return pinHasTrans;
       }
 
       if (hasTransSelected) {
         return baseSelections.some(
-          (selection) => pinGenders.includes(selection) && pinGenders.includes("Trans")
+          (selection) => pinHasTrans && pinBaseLabels.includes(selection)
         );
       }
 
-      return baseSelections.some((selection) => pinGenders.includes(selection));
+      return baseSelections.some((selection) => pinBaseLabels.includes(selection));
     };
 
     const matchesSeekingSelection = (pin) => {
       if (filters.seeking.length === 0) return true;
 
       const pinSeeking = Array.isArray(pin.seeking) ? pin.seeking : [];
-      const hasTransSelected = filters.seeking.includes("Trans");
-      const baseSelections = filters.seeking.filter((gender) => gender !== "Trans");
+      const selectedNormalized = filters.seeking.map(normalizeLabel).filter(Boolean);
+      const baseSelections = Array.from(
+        new Set(
+          selectedNormalized
+            .map(getCanonicalBaseGender)
+            .filter(Boolean)
+            .map(normalizeLabel)
+        )
+      );
+      const hasTransSelected = selectedNormalized.some(isTransLabel);
+
+      const pinNormalized = pinSeeking.map(normalizeLabel).filter(Boolean);
+      const pinHasTrans = pinNormalized.some(isTransLabel);
+      const pinBaseLabels = Array.from(
+        new Set(
+          pinNormalized
+            .map(getCanonicalBaseGender)
+            .filter(Boolean)
+            .map(normalizeLabel)
+        )
+      );
 
       if (hasTransSelected && baseSelections.length === 0) {
-        return pinSeeking.includes("Trans");
+        return pinHasTrans;
       }
 
       if (hasTransSelected) {
         return baseSelections.some(
-          (selection) => pinSeeking.includes(selection) && pinSeeking.includes("Trans")
+          (selection) => pinHasTrans && pinBaseLabels.includes(selection)
         );
       }
 
-      return baseSelections.some((selection) => pinSeeking.includes(selection));
+      return baseSelections.some((selection) => pinBaseLabels.includes(selection));
     };
 
     const matchesAgeRange = (pin) => {
@@ -727,34 +799,35 @@ function App() {
 
   const closePanel = () => setActivePanel(null);
 
-  const sanitizeGenderSelection = (next, previous) => {
-    const uniqueNext = Array.from(new Set(next));
-    const added = uniqueNext.find((gender) => !previous.includes(gender));
-    const isBaseAdded = added && BASE_GENDERS.includes(added);
+  const sanitizeGenderSelection = (next) => {
+    const incoming = Array.isArray(next) ? next : [];
+    const seen = new Set();
+    const uniqueNext = incoming.filter((gender) => {
+      const normalized = normalizeLabel(gender);
+      if (!normalized || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
 
-    let sanitized = uniqueNext;
+    const baseCandidate = uniqueNext.find(isBaseGenderLabel);
+    const baseLabel = baseCandidate ? getCanonicalBaseGender(baseCandidate) : "";
+    const hasTrans = uniqueNext.some(isTransLabel);
 
-    if (isBaseAdded) {
-      sanitized = uniqueNext.filter(
-        (gender) => gender === added || gender === "Trans" || !BASE_GENDERS.includes(gender)
-      );
-    }
+    const extras = uniqueNext.filter(
+      (gender) => !isBaseGenderLabel(gender) && !isTransLabel(gender)
+    );
 
-    const baseSelections = sanitized.filter((gender) => BASE_GENDERS.includes(gender));
-    if (baseSelections.length > 1) {
-      const keep = isBaseAdded ? added : baseSelections[0];
-      sanitized = sanitized.filter(
-        (gender) => gender === keep || !BASE_GENDERS.includes(gender)
-      );
-    }
-
+    const sanitized = [];
+    if (baseLabel) sanitized.push(baseLabel);
+    if (hasTrans) sanitized.push("Trans");
+    sanitized.push(...extras);
     return sanitized;
   };
 
   const handleGenderChange = (next) => {
     setForm((prev) => ({
       ...prev,
-      genders: sanitizeGenderSelection(next, prev.genders),
+      genders: sanitizeGenderSelection(next),
     }));
   };
 
@@ -791,25 +864,53 @@ function App() {
     };
   }, [filters.ageRange]);
 
+  const interestPopularity = useMemo(() => {
+    const counts = new Map();
+    pins.forEach((pin) => {
+      (pin.interest_tags || []).forEach((tag) => {
+        const normalized = normalizeLabel(tag);
+        if (!normalized) return;
+        counts.set(normalized, (counts.get(normalized) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [pins]);
+
+  const orderedInterestOptions = useMemo(() => {
+    const uniqueOptions = Array.from(new Set(bubbleOptions.interest_tags || []));
+    return uniqueOptions.sort((a, b) => {
+      const countA = interestPopularity.get(normalizeLabel(a)) || 0;
+      const countB = interestPopularity.get(normalizeLabel(b)) || 0;
+      if (countA !== countB) return countB - countA;
+      return a.localeCompare(b);
+    });
+  }, [bubbleOptions.interest_tags, interestPopularity]);
+
   const interestOptionsForForm = useMemo(() => {
     const selected = Array.isArray(form.interest_tags) ? form.interest_tags : [];
-    const combined = [...selected, ...bubbleOptions.interest_tags, ...customInterestOptions];
+    const selectedNormalized = new Set(selected.map((label) => normalizeLabel(label)));
+    const combined = [...selected, ...orderedInterestOptions, ...customInterestOptions];
     const seen = new Set();
 
     const deduped = combined.filter((label) => {
-      const key = (label || "").toLowerCase();
+      const key = normalizeLabel(label);
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
     return deduped.sort((a, b) => {
-      const aSelected = selected.some((value) => value.toLowerCase() === a.toLowerCase());
-      const bSelected = selected.some((value) => value.toLowerCase() === b.toLowerCase());
-      if (aSelected === bSelected) return a.localeCompare(b);
-      return aSelected ? -1 : 1;
+      const aKey = normalizeLabel(a);
+      const bKey = normalizeLabel(b);
+      const aSelected = selectedNormalized.has(aKey);
+      const bSelected = selectedNormalized.has(bKey);
+      if (aSelected !== bSelected) return aSelected ? -1 : 1;
+      const countA = interestPopularity.get(aKey) || 0;
+      const countB = interestPopularity.get(bKey) || 0;
+      if (countA !== countB) return countB - countA;
+      return a.localeCompare(b);
     });
-  }, [bubbleOptions.interest_tags, customInterestOptions, form.interest_tags]);
+  }, [customInterestOptions, form.interest_tags, interestPopularity, orderedInterestOptions]);
 
   const selectedBaseEmoji = useMemo(() => getBaseEmoji(form.icon), [form.icon]);
   const skinToneOptions = SKIN_TONE_GROUPS[selectedBaseEmoji];
@@ -1031,13 +1132,12 @@ function App() {
             options={interestOptionsForForm}
             multiple
             value={form.interest_tags}
-            onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
-            onAddOption={(option) => handleCustomOption("interest_tags", option)}
-            allowCustom
-            prioritizeSelected
-            alwaysShowAll
-            footnote="Custom interests are subject to moderation and may not appear until they are approved."
-          />
+          onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
+          onAddOption={(option) => handleCustomOption("interest_tags", option)}
+          allowCustom
+          prioritizeSelected
+          footnote="Custom interests are subject to moderation and may not appear until they are approved."
+        />
 
           <label className="label">
             Short note
@@ -1186,7 +1286,7 @@ function App() {
         <BubbleSelector
           label="Interests"
           helper="Show any"
-          options={bubbleOptions.interest_tags}
+          options={orderedInterestOptions}
           multiple
           value={filters.interest_tags}
           onChange={(value) => handleFilterChange("interest_tags", value)}
