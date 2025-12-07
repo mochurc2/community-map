@@ -1,9 +1,18 @@
 :root {
   color: #111827;
   background-color: #ffffff;
-  font-family: "Inter", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
   line-height: 1.6;
+}
+
+body,
+button,
+input,
+textarea,
+select,
+.maplibregl-ctrl,
+.maplibregl-popup {
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
 }
 
 a {
@@ -467,15 +476,20 @@ textarea {
 
 .label-heading {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
 }
 
 .helper-text {
   color: #6b7280;
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+.helper-text.label-helper {
+  margin: 0.15rem 0 0;
+  display: block;
 }
 
 .subtle-footnote {

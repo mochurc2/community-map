@@ -5,6 +5,54 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { getGenderAbbreviation } from "./pinUtils";
 
 const DEFAULT_EMOJI = "📍";
+const FEET_TO_METERS = 0.3048;
+const PENDING_RADIUS_FEET = 1500;
+const EARTH_RADIUS_METERS = 6378137;
+const CIRCLE_STEPS = 90;
+
+const toRadians = (degrees) => (degrees * Math.PI) / 180;
+const toDegrees = (radians) => (radians * 180) / Math.PI;
+
+const buildCircleFeatureCollection = (center, radiusFeet) => {
+  if (!center) return { type: "FeatureCollection", features: [] };
+
+  const radiusMeters = radiusFeet * FEET_TO_METERS;
+  const angularDistance = radiusMeters / EARTH_RADIUS_METERS;
+  const centerLat = toRadians(center.lat);
+  const centerLng = toRadians(center.lng);
+
+  const coordinates = [];
+  for (let step = 0; step <= CIRCLE_STEPS; step += 1) {
+    const bearing = (step / CIRCLE_STEPS) * 2 * Math.PI;
+    const pointLat = Math.asin(
+      Math.sin(centerLat) * Math.cos(angularDistance) +
+        Math.cos(centerLat) * Math.sin(angularDistance) * Math.cos(bearing)
+    );
+
+    const pointLng =
+      centerLng +
+      Math.atan2(
+        Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(centerLat),
+        Math.cos(angularDistance) - Math.sin(centerLat) * Math.sin(pointLat)
+      );
+
+    coordinates.push([((toDegrees(pointLng) + 540) % 360) - 180, toDegrees(pointLat)]);
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [coordinates],
+        },
+        properties: {},
+      },
+    ],
+  };
+};
 
 const emojiId = (emoji) =>
   `emoji-icon-${Array.from(emoji || DEFAULT_EMOJI)
@@ -169,6 +217,32 @@ function MapView({
         data: { type: "FeatureCollection", features: [] },
       });
 
+      map.addSource("pending-radius", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+
+      map.addLayer({
+        id: "pending-radius-fill",
+        type: "fill",
+        source: "pending-radius",
+        paint: {
+          "fill-color": "#bfdbfe",
+          "fill-opacity": 0.2,
+        },
+      });
+
+      map.addLayer({
+        id: "pending-radius-outline",
+        type: "line",
+        source: "pending-radius",
+        paint: {
+          "line-color": "#60a5fa",
+          "line-width": 2,
+          "line-dasharray": [2, 2],
+        },
+      });
+
       map.addLayer({
         id: "pending-pin-layer",
         type: "circle",
@@ -299,13 +373,16 @@ function MapView({
     if (!map) return;
 
     const pendingSource = map.getSource("pending-pin");
-    if (!pendingSource) return;
+    const radiusSource = map.getSource("pending-radius");
+    if (!pendingSource || !radiusSource) return;
 
     let cancelled = false;
 
     const updatePendingPin = async () => {
       if (!pendingLocation) {
-        pendingSource.setData({ type: "FeatureCollection", features: [] });
+        const empty = { type: "FeatureCollection", features: [] };
+        pendingSource.setData(empty);
+        radiusSource.setData(empty);
         return;
       }
 
@@ -313,6 +390,12 @@ function MapView({
       await ensureEmojiImage(iconToUse);
       if (cancelled) return;
 
+      const circleFeature = buildCircleFeatureCollection(
+        pendingLocation,
+        PENDING_RADIUS_FEET
+      );
+
+      radiusSource.setData(circleFeature);
       pendingSource.setData({
         type: "FeatureCollection",
         features: [

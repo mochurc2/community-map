@@ -8,7 +8,12 @@ import {
   getDefaultBubbleOptions,
   getDefaultStatusMap,
 } from "./bubbleOptions";
-import { buildContactLink, getGenderAbbreviation, getGenderList } from "./pinUtils";
+import {
+  buildContactLink,
+  getGenderAbbreviation,
+  getGenderList,
+  randomizeLocation,
+} from "./pinUtils";
 
 const MAX_VISIBLE_BUBBLES = 6;
 const EMOJI_CHOICES = [
@@ -277,8 +282,8 @@ function BubbleSelector({
     <label className="label">
       <div className="label-heading">
         <span>{label}</span>
-        {helper && <span className="helper-text">{helper}</span>}
       </div>
+      {helper && <p className="helper-text label-helper">{helper}</p>}
       <div className="bubble-grid">
         {displayOptions.map((option) => (
           <button
@@ -339,6 +344,7 @@ function App() {
   const [form, setForm] = useState(buildInitialFormState);
   const [submitMsg, setSubmitMsg] = useState(null);
   const [submitError, setSubmitError] = useState(null);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activePanel, setActivePanel] = useState(null);
   const [panelPlacement, setPanelPlacement] = useState("side");
@@ -445,11 +451,13 @@ function App() {
     (lngLat) => {
       setSelectedPin(null);
       setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
-      setSubmitMsg(null);
+      if (!hasSubmitted) {
+        setSubmitMsg(null);
+      }
       setSubmitError(null);
       autofillLocation(lngLat.lat, lngLat.lng);
     },
-    [autofillLocation]
+    [autofillLocation, hasSubmitted]
   );
 
   const handlePinSelect = useCallback((pin) => {
@@ -556,7 +564,7 @@ function App() {
     setSubmitError(null);
     setSubmitMsg(null);
 
-    const { lng, lat } = selectedLocation;
+    const randomizedLocation = randomizeLocation(selectedLocation, 500, 1500);
     const contactPayload = {};
     form.contact_channels.forEach((channel) => {
       const value = form.contact_methods[channel];
@@ -572,8 +580,8 @@ function App() {
     const isoCountry = (form.country || form.country_code || "").trim().toUpperCase();
 
     const { error } = await supabase.from("pins").insert({
-      lat,
-      lng,
+      lat: randomizedLocation.lat,
+      lng: randomizedLocation.lng,
       city: form.city || null,
       state_province: form.state_province || null,
       country: isoCountry || null,
@@ -604,6 +612,8 @@ function App() {
     } else {
       setSubmitMsg("Thanks! Your pin has been submitted for review.");
       setForm(buildInitialFormState());
+      setHasSubmitted(true);
+      setShowFullAddForm(false);
     }
 
     setSubmitting(false);
@@ -616,7 +626,7 @@ function App() {
       setPanelPlacement(placement);
 
       if (activePanel === "add") {
-        if (placement === "bottom") {
+        if (placement === "bottom" || hasSubmitted) {
           setShowFullAddForm(false);
         } else if (selectedLocation) {
           setShowFullAddForm(true);
@@ -627,7 +637,7 @@ function App() {
     handlePlacement();
     window.addEventListener("resize", handlePlacement);
     return () => window.removeEventListener("resize", handlePlacement);
-  }, [activePanel, selectedLocation]);
+  }, [activePanel, selectedLocation, hasSubmitted]);
 
   useEffect(() => {
     const updateHeight = () => {
@@ -724,7 +734,8 @@ function App() {
   const togglePanel = (panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
     if (panel === "add") {
-      const shouldExpand = panelPlacement !== "bottom" && Boolean(selectedLocation);
+      const shouldExpand =
+        panelPlacement !== "bottom" && Boolean(selectedLocation) && !hasSubmitted;
       setShowFullAddForm(shouldExpand);
     }
   };
@@ -825,14 +836,18 @@ function App() {
     <div className="panel-section">
       <div className="label location-label">
         <div className="label-heading">
-          <span>Location</span>
+          <span>Location *</span>
+          <p className="helper-text label-helper">
+            We randomize your pin within 1,500 ft of this spot to help keep your exact
+            location private.
+          </p>
         </div>
         <div className="location-chip-row">
           <span className="location-chip">{locationLabel}</span>
           <span className="location-chip subdued">{locationDetails}</span>
         </div>
       </div>
-      {panelPlacement === "bottom" && !showFullAddForm && (
+      {panelPlacement === "bottom" && !showFullAddForm && !hasSubmitted && (
         <button
           type="button"
           className="primary"
@@ -878,15 +893,20 @@ function App() {
           </p>
         )}
         {addPanelIntro}
+        {hasSubmitted && submitMsg && (
+          <p className="status success" style={{ marginTop: "0.35rem" }}>
+            {submitMsg}
+          </p>
+        )}
       </div>
 
-      {showFullAddForm && (
+      {showFullAddForm && !hasSubmitted && (
         <form onSubmit={handleSubmit} className="form-grid compact">
           <div className="label">
             <div className="label-heading">
-              <span>Icon</span>
-              <span className="helper-text">Pick an emoji for your pin (required)</span>
+              <span>Icon *</span>
             </div>
+            <p className="helper-text label-helper">Required. Pick an emoji for your pin.</p>
             <div className="emoji-scroll" role="listbox" aria-label="Pick an emoji">
               <div className="emoji-grid">
                 {EMOJI_CHOICES.map((emoji) => (
@@ -905,7 +925,7 @@ function App() {
           </div>
 
           <label className="label">
-            Nickname
+            Nickname *
             <input
               type="text"
               name="nickname"
@@ -919,7 +939,7 @@ function App() {
           </label>
 
           <label className="label">
-            Age
+            Age *
             <input
               type="number"
               name="age"
@@ -933,8 +953,8 @@ function App() {
           </label>
 
           <BubbleSelector
-            label="Gender"
-            helper="Select all that apply (required)"
+            label="Gender *"
+            helper="Required. Select all that apply."
             options={bubbleOptions.gender_identity}
             multiple
             value={form.genders}
@@ -1010,8 +1030,8 @@ function App() {
             <label className="label">
               <div className="label-heading">
                 <span>Delete pin after</span>
-                <span className="helper-text">We will remove at 11:59 PM on that date</span>
               </div>
+              <p className="helper-text label-helper">We will remove at 11:59 PM on that date.</p>
               <div className="input-with-icon">
                 <CalendarClock size={18} />
                 <input

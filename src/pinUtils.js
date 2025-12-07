@@ -82,3 +82,49 @@ export const buildContactLink = (channel, rawValue) => {
       return { label: channel, href: ensureProtocol(value) };
   }
 };
+
+const getSecureRandom = () => {
+  if (typeof crypto !== "undefined" && crypto?.getRandomValues) {
+    const buffer = new Uint32Array(1);
+    crypto.getRandomValues(buffer);
+    return buffer[0] / 0xffffffff;
+  }
+  return Math.random();
+};
+
+export const randomizeLocation = (
+  { lat, lng },
+  minDistanceFeet = 500,
+  maxDistanceFeet = 1500
+) => {
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    return { lat, lng };
+  }
+
+  const distanceFeet =
+    minDistanceFeet + getSecureRandom() * (maxDistanceFeet - minDistanceFeet);
+  const distanceMeters = distanceFeet * 0.3048;
+  const bearing = getSecureRandom() * 2 * Math.PI;
+  const earthRadiusMeters = 6378137;
+
+  const latRad = (lat * Math.PI) / 180;
+  const lngRad = (lng * Math.PI) / 180;
+  const angularDistance = distanceMeters / earthRadiusMeters;
+
+  const randomizedLat = Math.asin(
+    Math.sin(latRad) * Math.cos(angularDistance) +
+      Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearing)
+  );
+
+  const randomizedLng =
+    lngRad +
+    Math.atan2(
+      Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latRad),
+      Math.cos(angularDistance) - Math.sin(latRad) * Math.sin(randomizedLat)
+    );
+
+  return {
+    lat: (randomizedLat * 180) / Math.PI,
+    lng: (((randomizedLng * 180) / Math.PI + 540) % 360) - 180,
+  };
+};
