@@ -10,7 +10,6 @@ import {
 } from "./bubbleOptions";
 import {
   buildContactLink,
-  getGenderAbbreviation,
   getGenderList,
   randomizeLocation,
 } from "./pinUtils";
@@ -1201,13 +1200,14 @@ function App() {
   const selectedGenderList = visibleSelectedPin
     ? getGenderList(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
     : [];
-  const selectedGenderAbbr = visibleSelectedPin
-    ? getGenderAbbreviation(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
-    : "";
-  const pinAgeGenderLine = visibleSelectedPin
-    ? [visibleSelectedPin.age ? `${visibleSelectedPin.age}` : "", selectedGenderAbbr]
-      .filter(Boolean)
-      .join(" · ")
+  const pinLocationText = visibleSelectedPin
+    ? [
+        visibleSelectedPin.city,
+        visibleSelectedPin.state_province,
+        visibleSelectedPin.country || visibleSelectedPin.country_code,
+      ]
+        .filter(Boolean)
+        .join(", ")
     : "";
   const pinContactLinks = visibleSelectedPin
     ? Object.entries(visibleSelectedPin.contact_methods || {})
@@ -1229,6 +1229,14 @@ function App() {
           ))}
           {!visibleSelectedPin.age && selectedGenderList.length === 0 && (
             <span className="bubble static">No age or gender shared</span>
+          )}
+        </div>
+
+        <div className="pin-chip-row">
+          {pinLocationText ? (
+            <span className="bubble static">{pinLocationText}</span>
+          ) : (
+            <span className="bubble static">Location not shared</span>
           )}
         </div>
 
@@ -1363,12 +1371,7 @@ function App() {
             <div className="panel-top">
               <div className="panel-title">
                 <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
-                <div>
-                  <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
-                  {pinAgeGenderLine && (
-                    <p className="pin-subtitle">{pinAgeGenderLine}</p>
-                  )}
-                </div>
+                <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
               </div>
               <button
                 type="button"
@@ -1424,10 +1427,7 @@ function App() {
           <div className="panel-top">
             <div className="panel-title">
               <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
-              <div>
-                <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
-                {pinAgeGenderLine && <p className="pin-subtitle">{pinAgeGenderLine}</p>}
-              </div>
+              <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
             </div>
             <button
               type="button"
