@@ -641,6 +641,11 @@ function App() {
     return () => window.removeEventListener("resize", updateHeight);
   }, []);
 
+  const isInterestApproved = useCallback(
+    (label) => (bubbleStatusMap.interest_tags?.[label?.toLowerCase?.() || ""] || "approved") === "approved",
+    [bubbleStatusMap.interest_tags]
+  );
+
   const filteredPins = useMemo(() => {
     const matchesGenderSelection = (pin) => {
       if (filters.genders.length === 0) return true;
@@ -785,11 +790,6 @@ function App() {
       background: `linear-gradient(to right, #e5e7eb ${startPercent}%, #2563eb ${startPercent}%, #2563eb ${endPercent}%, #e5e7eb ${endPercent}%)`,
     };
   }, [filters.ageRange]);
-
-  const isInterestApproved = useCallback(
-    (label) => (bubbleStatusMap.interest_tags?.[label?.toLowerCase?.() || ""] || "approved") === "approved",
-    [bubbleStatusMap.interest_tags]
-  );
 
   const interestOptionsForForm = useMemo(() => {
     const selected = Array.isArray(form.interest_tags) ? form.interest_tags : [];
