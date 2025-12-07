@@ -203,6 +203,14 @@ function MapView({
           "text-offset": [1.2, 0],
           "text-max-width": 12,
           "text-optional": true,
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "symbol-sort-key": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false],
+            0,
+            1,
+          ],
         },
         paint: {
           "text-color": "#0f172a",
