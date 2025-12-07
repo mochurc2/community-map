@@ -1,49 +1,55 @@
-const GENDER_ABBREVIATIONS = {
-  man: "M",
-  male: "M",
-  m: "M",
-  woman: "F",
-  female: "F",
-  f: "F",
-  nonbinary: "NB",
-  "non-binary": "NB",
-  nb: "NB",
-  enby: "NB",
-  "trans masc": "TM",
-  "trans masculine": "TM",
-  "trans man": "TM",
-  "trans men": "TM",
-  tm: "TM",
-  "trans femme": "TF",
-  "trans feminine": "TF",
-  "trans woman": "TF",
-  "trans women": "TF",
-  tf: "TF",
-  trans: "T",
-};
-
 const normalize = (value) => value?.toString().trim().toLowerCase();
 
-export const getGenderAbbreviation = (genders, fallbackGender) => {
+const isMan = (value) => ["man", "men", "male", "m"].includes(value);
+const isWoman = (value) => ["woman", "women", "female", "f"].includes(value);
+const isNonBinary = (value) => ["nonbinary", "non-binary", "nb", "enby"].includes(value);
+
+const extractGenderDetails = (genders, fallbackGender) => {
   const list = Array.isArray(genders) ? genders : genders ? [genders] : [];
-  const candidates = [...list];
-  if (fallbackGender) candidates.push(fallbackGender);
+  const combined = fallbackGender ? [...list, fallbackGender] : list;
 
-  for (const value of candidates) {
-    const key = normalize(value);
-    if (!key) continue;
-    const abbr = GENDER_ABBREVIATIONS[key];
-    if (abbr) return abbr;
-    if (key.startsWith("trans masc")) return "TM";
-    if (key.startsWith("trans fem") || key.startsWith("trans wom")) return "TF";
-  }
+  let base = "";
+  let hasTrans = false;
 
-  return "";
+  combined.forEach((value) => {
+    const normalized = normalize(value);
+    if (!normalized) return;
+
+    if (normalized.startsWith("trans")) {
+      hasTrans = true;
+      if (normalized.includes("man")) base = base || "man";
+      if (normalized.includes("wom")) base = base || "woman";
+      if (normalized.includes("non")) base = base || "non-binary";
+      return;
+    }
+
+    if (!base && isMan(normalized)) base = "man";
+    if (!base && isWoman(normalized)) base = "woman";
+    if (!base && isNonBinary(normalized)) base = "non-binary";
+  });
+
+  return { base, hasTrans, fallbackList: combined.filter(Boolean) };
+};
+
+export const getGenderAbbreviation = (genders, fallbackGender) => {
+  const { base, hasTrans } = extractGenderDetails(genders, fallbackGender);
+
+  if (base === "non-binary") return "NB";
+  if (base === "man") return hasTrans ? "TM" : "M";
+  if (base === "woman") return hasTrans ? "TW" : "W";
+  return hasTrans ? "T" : "";
 };
 
 export const getGenderList = (genders, fallbackGender) => {
-  if (Array.isArray(genders) && genders.length > 0) return genders;
-  if (fallbackGender) return [fallbackGender];
+  const { base, hasTrans, fallbackList } = extractGenderDetails(genders, fallbackGender);
+
+  if (base) {
+    const baseLabel = base === "man" ? "Man" : base === "woman" ? "Woman" : "Non-binary";
+    const prefix = hasTrans ? "Trans " : "";
+    return [`${prefix}${baseLabel}`];
+  }
+
+  if (fallbackList.length > 0) return [fallbackList[0]];
   return [];
 };
 
