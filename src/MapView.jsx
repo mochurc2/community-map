@@ -152,7 +152,6 @@ function MapView({
     map.on("load", async () => {
       map.addSource("pins", {
         type: "geojson",
-        promoteId: "id",
         data: {
           type: "FeatureCollection",
           features: [],
@@ -183,9 +182,7 @@ function MapView({
         layout: {
           "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(DEFAULT_EMOJI)],
           "icon-size": 0.68,
-          "icon-allow-overlap": false,
-          "icon-padding": 4,
-          "icon-optional": true,
+          "icon-allow-overlap": true,
         },
         paint: {
           "icon-halo-color": "#ffffff",
@@ -201,25 +198,13 @@ function MapView({
           "text-field": ["get", "labelText"],
           "text-size": 13,
           "text-font": ["Inter Regular", "Open Sans Regular", "Arial Unicode MS Regular"],
-          "text-variable-anchor": [
-            "top",
-            "bottom",
-            "left",
-            "right",
-            "top-left",
-            "top-right",
-            "bottom-left",
-            "bottom-right",
-          ],
+          "text-variable-anchor": ["left", "right"],
           "text-justify": "auto",
-          "text-radial-offset": 1.1,
-          "text-offset": [0, 0],
+          "text-offset": [1.2, 0],
           "text-max-width": 12,
           "text-optional": true,
-          "text-allow-overlap": false,
-          "text-ignore-placement": false,
-          "symbol-spacing": 12,
-          "symbol-avoid-edges": true,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
           "symbol-sort-key": [
             "case",
             ["boolean", ["feature-state", "selected"], false],
