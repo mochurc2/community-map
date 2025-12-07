@@ -21,10 +21,12 @@ function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setLabel(option.label);
     setStatus(normalizeStatus(option.status));
   }, [option.label, option.status]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const save = async () => {
     if (!label.trim()) return;
@@ -421,7 +423,7 @@ function ModerationPage() {
         await moderationClient.from("pins").update({ interest_tags: filtered }).eq("id", pin.id);
       }
     },
-    [moderationClient]
+    []
   );
 
   const applyPendingChanges = useCallback(
