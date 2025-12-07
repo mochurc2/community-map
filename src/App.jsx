@@ -173,6 +173,10 @@ const defaultExpiryDate = () => {
   return now.toISOString().split("T")[0];
 };
 
+const MIN_AGE = 18;
+const MAX_AGE = 100;
+const BASE_GENDERS = ["Man", "Woman", "Nonbinary"];
+
 const buildInitialFormState = () => ({
   icon: "",
   nickname: "",
@@ -309,7 +313,7 @@ function App() {
     genders: [],
     seeking: [],
     interest_tags: [],
-    ageRange: [18, 100],
+    ageRange: [MIN_AGE, MAX_AGE],
   });
   const titleCardRef = useRef(null);
 
@@ -653,6 +657,37 @@ function App() {
 
   const closePanel = () => setActivePanel(null);
 
+  const sanitizeGenderSelection = (next, previous) => {
+    const uniqueNext = Array.from(new Set(next));
+    const added = uniqueNext.find((gender) => !previous.includes(gender));
+    const isBaseAdded = added && BASE_GENDERS.includes(added);
+
+    let sanitized = uniqueNext;
+
+    if (isBaseAdded) {
+      sanitized = uniqueNext.filter(
+        (gender) => gender === added || gender === "Trans" || !BASE_GENDERS.includes(gender)
+      );
+    }
+
+    const baseSelections = sanitized.filter((gender) => BASE_GENDERS.includes(gender));
+    if (baseSelections.length > 1) {
+      const keep = isBaseAdded ? added : baseSelections[0];
+      sanitized = sanitized.filter(
+        (gender) => gender === keep || !BASE_GENDERS.includes(gender)
+      );
+    }
+
+    return sanitized;
+  };
+
+  const handleGenderChange = (next) => {
+    setForm((prev) => ({
+      ...prev,
+      genders: sanitizeGenderSelection(next, prev.genders),
+    }));
+  };
+
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
@@ -671,7 +706,16 @@ function App() {
   };
 
   const clearFilters = () =>
-    setFilters({ genders: [], seeking: [], interest_tags: [], ageRange: [18, 100] });
+    setFilters({ genders: [], seeking: [], interest_tags: [], ageRange: [MIN_AGE, MAX_AGE] });
+
+  const ageRangeStyle = useMemo(() => {
+    const [minAge, maxAge] = filters.ageRange;
+    const startPercent = ((minAge - MIN_AGE) / (MAX_AGE - MIN_AGE)) * 100;
+    const endPercent = ((maxAge - MIN_AGE) / (MAX_AGE - MIN_AGE)) * 100;
+    return {
+      background: `linear-gradient(to right, #e5e7eb ${startPercent}%, #2563eb ${startPercent}%, #2563eb ${endPercent}%, #e5e7eb ${endPercent}%)`,
+    };
+  }, [filters.ageRange]);
 
   const approvedPinsCount = pins.length;
   const locationLabel = selectedLocation
@@ -800,7 +844,7 @@ function App() {
             options={bubbleOptions.gender_identity}
             multiple
             value={form.genders}
-            onChange={(value) => setForm((f) => ({ ...f, genders: value }))}
+            onChange={handleGenderChange}
           />
 
           <BubbleSelector
@@ -944,19 +988,21 @@ function App() {
             <span>Age range</span>
             <span className="helper-text">{filters.ageRange[0]}–{filters.ageRange[1]}</span>
           </div>
-          <div className="age-slider-row">
+          <div className="age-range-slider">
+            <div className="age-range-track" style={ageRangeStyle} aria-hidden="true" />
             <input
               type="range"
-              min={18}
-              max={100}
+              min={MIN_AGE}
+              max={MAX_AGE}
               value={filters.ageRange[0]}
               onChange={(e) => handleAgeRangeChange(0, e.target.value)}
             />
             <input
               type="range"
-              min={18}
-              max={100}
+              min={MIN_AGE}
+              max={MAX_AGE}
               value={filters.ageRange[1]}
+              className="upper-thumb"
               onChange={(e) => handleAgeRangeChange(1, e.target.value)}
             />
           </div>
