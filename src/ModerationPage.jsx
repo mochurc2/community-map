@@ -10,15 +10,26 @@ import {
 import { supabase, supabaseAdmin } from "./supabaseClient";
 const moderationClient = supabaseAdmin || supabase;
 
+const normalizeStatus = (value) => {
+  if (value === "pending" || value === "rejected") return value;
+  return "approved";
+};
+
 function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
   const [label, setLabel] = useState(option.label);
+  const [status, setStatus] = useState(normalizeStatus(option.status));
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setLabel(option.label);
+    setStatus(normalizeStatus(option.status));
+  }, [option.label, option.status]);
 
   const save = async () => {
     if (!label.trim()) return;
     setBusy(true);
-    await onSave(field, option, label.trim());
+    await onSave(field, option, label.trim(), status);
     setBusy(false);
     setEditing(false);
   };
@@ -40,6 +51,21 @@ function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
             onChange={(e) => setLabel(e.target.value)}
             aria-label={`${field} bubble`}
           />
+          <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+            <label className="helper-text" style={{ fontWeight: 700 }}>
+              Status
+            </label>
+            <select
+              className="input"
+              value={status}
+              onChange={(e) => setStatus(normalizeStatus(e.target.value))}
+              style={{ maxWidth: 180 }}
+            >
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
           <div className="mod-bubble-actions">
             <button type="button" onClick={save} disabled={busy}>
               Save
@@ -55,11 +81,12 @@ function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
       ) : (
         <button
           type="button"
-          className="bubble mod-chip"
-          onClick={() => setEditing(true)}
-          aria-label={`Edit ${option.label}`}
-        >
+            className="bubble mod-chip"
+            onClick={() => setEditing(true)}
+            aria-label={`Edit ${option.label}`}
+          >
           <span>{option.label}</span>
+          <span className={`status-pill status-${status}`}>{status}</span>
         </button>
       )}
     </div>
@@ -122,6 +149,7 @@ function ModerationPage() {
             id: `default-${field}-${idx}`,
             label,
             source: "default",
+            status: "approved",
           })),
         ])
       ),
@@ -141,7 +169,12 @@ function ModerationPage() {
 
       rows?.forEach((row) => {
         if (grouped[row.field]) {
-          grouped[row.field].push({ id: row.id, label: row.label, source: "remote" });
+          grouped[row.field].push({
+            id: row.id,
+            label: row.label,
+            source: "remote",
+            status: normalizeStatus(row.status),
+          });
         }
       });
 
@@ -280,6 +313,7 @@ function ModerationPage() {
       id: `draft-${field}-${Date.now()}`,
       label,
       source: "draft",
+      status: "approved",
     };
 
     setDraftBubbleOptions((current) => ({
@@ -290,11 +324,13 @@ function ModerationPage() {
     setNewBubbleInputs((current) => ({ ...current, [field]: "" }));
   };
 
-  const handleSaveBubble = (field, option, label) => {
+  const handleSaveBubble = (field, option, label, status) => {
     setBubbleError(null);
     setDraftBubbleOptions((current) => ({
       ...current,
-      [field]: current[field].map((opt) => (opt.id === option.id ? { ...opt, label } : opt)),
+      [field]: current[field].map((opt) =>
+        opt.id === option.id ? { ...opt, label, status: normalizeStatus(status) } : opt
+      ),
     }));
   };
 
@@ -329,17 +365,22 @@ function ModerationPage() {
       draftOptions.forEach((opt) => {
         if (serverMap.has(opt.id)) {
           const serverOpt = serverMap.get(opt.id);
-          if (serverOpt.label !== opt.label) {
+          if (serverOpt.label !== opt.label || normalizeStatus(serverOpt.status) !== normalizeStatus(opt.status)) {
             changes.push({
               type: "update",
               field,
               id: opt.id,
-              from: serverOpt.label,
-              to: opt.label,
+              from: { label: serverOpt.label, status: normalizeStatus(serverOpt.status) },
+              to: { label: opt.label, status: normalizeStatus(opt.status) },
             });
           }
         } else if (!serverLabels.has(opt.label.toLowerCase())) {
-          changes.push({ type: "add", field, label: opt.label });
+          changes.push({
+            type: "add",
+            field,
+            label: opt.label,
+            status: normalizeStatus(opt.status),
+          });
         }
       });
 
@@ -353,13 +394,43 @@ function ModerationPage() {
     return changes;
   }, [draftBubbleOptions, serverBubblesByField]);
 
+  const syncInterestTagsForLabel = useCallback(
+    async (label, replacement = null) => {
+      if (!label) return;
+      const lowerLabel = label.toLowerCase();
+      const { data: pinsToUpdate, error: fetchPinsError } = await moderationClient
+        .from("pins")
+        .select("id, interest_tags")
+        .contains("interest_tags", [label]);
+
+      if (fetchPinsError) {
+        console.error(fetchPinsError);
+        return;
+      }
+
+      for (const pin of pinsToUpdate || []) {
+        const currentTags = Array.isArray(pin.interest_tags) ? pin.interest_tags : [];
+        const filtered = currentTags.filter((tag) => tag && tag.toLowerCase() !== lowerLabel);
+        if (replacement) {
+          const hasReplacement = filtered.some((tag) => tag.toLowerCase() === replacement.toLowerCase());
+          if (!hasReplacement) {
+            filtered.push(replacement);
+          }
+        }
+
+        await moderationClient.from("pins").update({ interest_tags: filtered }).eq("id", pin.id);
+      }
+    },
+    [moderationClient]
+  );
+
   const applyPendingChanges = useCallback(
     async (changes) => {
       if (!changes || changes.length === 0) return;
       const summary = changes
         .map((change) => {
           if (change.type === "update") {
-            return `${change.field}: ${change.from} → ${change.to}`;
+            return `${change.field}: ${change.from.label} (${change.from.status}) → ${change.to.label} (${change.to.status})`;
           }
           return `${change.type} ${change.field}: ${change.label}`;
         })
@@ -373,13 +444,25 @@ function ModerationPage() {
       try {
         for (const change of changes) {
           if (change.type === "add") {
-            await addBubbleOption(change.field, change.label);
+            await addBubbleOption(change.field, change.label, change.status || "approved");
           }
           if (change.type === "update") {
-            await updateBubbleOption(change.id, change.to);
+            await updateBubbleOption(change.id, change.to.label, change.to.status);
+
+            if (change.field === "interest_tags") {
+              if (normalizeStatus(change.to.status) === "rejected") {
+                await syncInterestTagsForLabel(change.from.label);
+              } else if (change.from.label !== change.to.label) {
+                await syncInterestTagsForLabel(change.from.label, change.to.label);
+              }
+            }
           }
           if (change.type === "delete") {
             await deleteBubbleOption(change.id);
+
+            if (change.field === "interest_tags") {
+              await syncInterestTagsForLabel(change.label);
+            }
           }
         }
 
@@ -391,7 +474,7 @@ function ModerationPage() {
         setSavingChanges(false);
       }
     },
-    [refreshBubbleOptions]
+    [refreshBubbleOptions, syncInterestTagsForLabel]
   );
 
   const pinGroups = useMemo(
@@ -534,29 +617,19 @@ function ModerationPage() {
               </div>
             </div>
 
-            {pin.status === "pending" && (
-              <div
-                style={{
-                  marginTop: "0.75rem",
-                  display: "flex",
-                  gap: "0.5rem",
-                  fontSize: "0.95rem",
-                }}
-              >
+            <div className="pin-status-row">
+              {["approved", "pending", "rejected"].map((status) => (
                 <button
-                  onClick={() => updateStatus(pin.id, "approved")}
-                  style={{ padding: "0.55rem 0.9rem", background: "#16a34a" }}
+                  key={status}
+                  onClick={() => updateStatus(pin.id, status)}
+                  className={`status-button status-${status} ${pin.status === status ? "active" : ""}`}
                 >
-                  Approve
+                  {status === "approved" && "Approve"}
+                  {status === "pending" && "Mark pending"}
+                  {status === "rejected" && "Reject"}
                 </button>
-                <button
-                  onClick={() => updateStatus(pin.id, "rejected")}
-                  style={{ padding: "0.55rem 0.9rem", background: "#b91c1c" }}
-                >
-                  Reject
-                </button>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         ))}
       </div>

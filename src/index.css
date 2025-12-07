@@ -478,6 +478,12 @@ textarea {
   font-weight: 500;
 }
 
+.subtle-footnote {
+  margin: 0.35rem 0 0;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
 .bubble-grid {
   display: flex;
   flex-wrap: wrap;
@@ -977,6 +983,72 @@ textarea {
 .pending-add {
   background: #ecfdf3;
   color: #16a34a;
+}
+
+.pin-status-row {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.status-button {
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  font-weight: 700;
+  text-transform: capitalize;
+  border-color: #e5e7eb;
+  background: #f8fafc;
+}
+
+.status-button.active {
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+  color: #0f172a;
+}
+
+.status-approved {
+  background: #ecfdf3;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.status-approved.active {
+  background: #16a34a;
+  color: #fff;
+  border-color: #15803d;
+}
+
+.status-pending {
+  background: #eef2ff;
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
+
+.status-pending.active {
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4338ca;
+}
+
+.status-rejected {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecdd3;
+}
+
+.status-rejected.active {
+  background: #dc2626;
+  color: #fff;
+  border-color: #b91c1c;
+}
+
+.status-pill {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  border: 1px solid transparent;
 }
 
 .pending-update {
