@@ -5,7 +5,6 @@
 create extension if not exists "uuid-ossp";
 create extension if not exists pgcrypto;
 
--- Pins submitted by the community
 create table if not exists public.pins (
   id uuid primary key default gen_random_uuid(),
   lat double precision not null,
@@ -30,9 +29,6 @@ create table if not exists public.pins (
   approved_at timestamptz
 );
 
-create index if not exists pins_status_idx on public.pins (status);
-create index if not exists pins_approved_idx on public.pins (approved);
-
 -- Backfill columns for deployments created before this revision
 alter table public.pins add column if not exists country_code text;
 alter table public.pins add column if not exists icon text;
@@ -41,6 +37,13 @@ alter table public.pins add column if not exists age int;
 alter table public.pins add column if not exists genders text[] not null default '{}';
 alter table public.pins add column if not exists contact_methods jsonb not null default '{}';
 alter table public.pins add column if not exists expires_at timestamptz;
+alter table public.pins
+  add column if not exists status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected'));
+alter table public.pins add column if not exists approved boolean not null default false;
+
+create index if not exists pins_status_idx on public.pins (status);
+create index if not exists pins_approved_idx on public.pins (approved);
 
 -- Bubble options for selectable chips on the submission form
 create table if not exists public.bubble_options (
