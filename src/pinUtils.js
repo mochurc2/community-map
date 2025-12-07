@@ -186,43 +186,63 @@ export const buildContactLink = (channel, rawValue) => {
 
   switch (channel) {
     case "Email":
-      return { label: channel, href: `mailto:${value}`, displayText: `Email: ${value}` };
+      return { label: channel, href: `mailto:${value}`, displayText: `mailto:${value}` };
     case "Instagram": {
       const handle = stripAt(value);
-      return { label: channel, href: `https://instagram.com/${handle}`, displayText: "Instagram" };
+      return {
+        label: channel,
+        href: `https://instagram.com/${handle}`,
+        displayText: `https://instagram.com/${handle}`,
+      };
     }
     case "X/Twitter": {
       const handle = stripAt(value);
-      return { label: channel, href: `https://twitter.com/${handle}`, displayText: "X/Twitter" };
+      return {
+        label: channel,
+        href: `https://twitter.com/${handle}`,
+        displayText: `https://twitter.com/${handle}`,
+      };
     }
     case "Reddit": {
       const handle = normalizeRedditHandle(value);
-      return { label: channel, href: `https://reddit.com/u/${handle}`, displayText: "Reddit" };
+      return {
+        label: channel,
+        href: `https://reddit.com/u/${handle}`,
+        displayText: `https://reddit.com/u/${handle}`,
+      };
     }
     case "Discord":
       return { label: channel, displayText: `Discord: ${value}` };
     case "Tumblr": {
       const handle = stripAt(value).replace(/\.tumblr\.com$/i, "");
-      return { label: channel, href: `https://${handle}.tumblr.com`, displayText: "Tumblr" };
+      return {
+        label: channel,
+        href: `https://${handle}.tumblr.com`,
+        displayText: `https://${handle}.tumblr.com`,
+      };
     }
     case "Youtube": {
       const { normalized } = isValidUrl(value);
       const href = normalized || ensureProtocol(value);
-      return { label: channel, href, displayText: "Youtube" };
+      return { label: channel, href, displayText: href };
     }
     case "Website": {
       const { normalized } = isValidUrl(value);
       const href = normalized || ensureProtocol(value);
-      return { label: channel, href, displayText: "Website" };
+      return { label: channel, href, displayText: href };
     }
     case "OnlyFans": {
       const handle = stripAt(value);
-      return { label: channel, href: `https://onlyfans.com/${handle}`, displayText: "OnlyFans" };
+      return {
+        label: channel,
+        href: `https://onlyfans.com/${handle}`,
+        displayText: `https://onlyfans.com/${handle}`,
+      };
     }
     default: {
       const { normalized } = isValidUrl(value);
       const href = normalized || ensureProtocol(value);
-      return { label: channel, href, displayText: channel };
+      return { label: channel, href, displayText: href };
     }
   }
 };
