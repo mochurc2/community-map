@@ -10,6 +10,7 @@
   --subtext-color: #6b7280;
   --chip-font-size: 0.95rem;
   --chip-font-weight: 500;
+  --app-viewport-height: 100vh;
 }
 
 body,
@@ -42,8 +43,8 @@ body {
 }
 
 #root {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
 }
 
 h1,
@@ -177,17 +178,18 @@ textarea {
 
 .app-shell {
   position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
   background: #ffffff;
   color: #0f172a;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .map-wrapper {
   position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
 }
 
 .map-container {
@@ -220,8 +222,8 @@ textarea {
 .map-placeholder {
   display: grid;
   place-items: center;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
   padding: 2rem;
   color: #111827;
   background: #f8fafc;
@@ -352,21 +354,19 @@ textarea {
 .floating-panel.bottom {
   left: 50%;
   transform: translateX(-50%);
-  bottom: 18px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
   width: calc(100% - 32px);
-  max-height: 70vh;
-  max-height: 70dvh;
+  max-height: min(70vh, 70dvh, calc(var(--app-viewport-height) - 48px));
 }
 
 .floating-panel.bottom.expanded {
   top: 120px;
-  bottom: 18px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
   max-height: none;
 }
 
 .floating-panel.bottom .panel-body-wrapper {
-  max-height: calc(100vh - 220px);
-  max-height: calc(100dvh - 220px);
+  max-height: calc(var(--app-viewport-height) - 220px);
 }
 
 .panel-top {

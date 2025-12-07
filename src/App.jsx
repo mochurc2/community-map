@@ -335,6 +335,26 @@ function App() {
   const titleCardRef = useRef(null);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const updateViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      root.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+    };
+
+    updateViewportHeight();
+
+    window.visualViewport?.addEventListener("resize", updateViewportHeight);
+    window.visualViewport?.addEventListener("scroll", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", updateViewportHeight);
+      window.visualViewport?.removeEventListener("scroll", updateViewportHeight);
+      window.removeEventListener("resize", updateViewportHeight);
+    };
+  }, []);
+
+  useEffect(() => {
     async function fetchPins() {
       setLoadingPins(true);
       const nowIso = new Date().toISOString();
