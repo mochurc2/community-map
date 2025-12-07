@@ -211,8 +211,9 @@ function MapView({
         layout: {
           "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(DEFAULT_EMOJI)],
           "icon-size": 0.68,
-          "icon-allow-overlap": false,
-          "icon-padding": 4,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-padding": 0,
           "icon-optional": true,
         },
         paint: {
@@ -244,10 +245,10 @@ function MapView({
           "text-offset": [0, 0],
           "text-max-width": 12,
           "text-optional": true,
-          "text-allow-overlap": false,
-          "text-ignore-placement": false,
-          "symbol-spacing": 12,
-          "symbol-avoid-edges": true,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+          "symbol-spacing": 1,
+          "symbol-avoid-edges": false,
           "symbol-sort-key": [
             "case",
             ["boolean", ["feature-state", "selected"], false],
