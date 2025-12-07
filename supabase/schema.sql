@@ -26,6 +26,7 @@ create table if not exists public.pins (
   approved boolean not null default false,
   submitted_at timestamptz not null default now(),
   expires_at timestamptz,
+  never_delete boolean not null default false,
   approved_at timestamptz
 );
 
@@ -37,6 +38,7 @@ alter table public.pins add column if not exists age int;
 alter table public.pins add column if not exists genders text[] not null default '{}';
 alter table public.pins add column if not exists contact_methods jsonb not null default '{}';
 alter table public.pins add column if not exists expires_at timestamptz;
+alter table public.pins add column if not exists never_delete boolean not null default false;
 alter table public.pins
   add column if not exists status text not null default 'pending'
     check (status in ('pending', 'approved', 'rejected'));
