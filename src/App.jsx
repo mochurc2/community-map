@@ -1116,12 +1116,13 @@ function App() {
             <span className="eyebrow">House rules</span>
             <ul className="list">
               <li>You must be 18 or older to use this map.</li>
-              <li>Share truthful information and stay respectful.</li>
+              <li>Share truthful information only about yourself and stay respectful.</li>
               <li>
                 Protect your privacy—only share what you are comfortable with and be
                 mindful of the randomized pin placement.
               </li>
               <li>Do not use this site for stalking, harassment, or other harm.</li>
+              <li>No explicit sexual content and no advertising or soliciting paid sexual services.</li>
               <li>
                 By browsing or posting, you agree to these guidelines and take
                 responsibility for your own safety.
