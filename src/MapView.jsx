@@ -195,6 +195,7 @@ function MapView({
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
   const clusterIndexRef = useRef(null);
+  const pinFeaturesRef = useRef([]);
   const displayedStateRef = useRef(new Map());
   const animationFrameRef = useRef(null);
   const clusterMetaRef = useRef(new Map());
@@ -361,14 +362,35 @@ function MapView({
   const recomputeLayout = useCallback(() => {
     const map = mapRef.current;
     const clusterIndex = clusterIndexRef.current;
-    if (!map || !clusterIndex) return;
+    if (!map) return;
 
     const zoom = Math.max(0, Math.min(CLUSTER_MAX_ZOOM, Math.round(map.getZoom())));
     const bounds = map.getBounds();
-    const clusters = clusterIndex.getClusters(
-      [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
-      zoom
-    );
+
+    let clusters =
+      clusterIndex?.getClusters(
+        [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
+        zoom
+      ) || [];
+
+    if (clusters.length === 0 && pinFeaturesRef.current.length > 0) {
+      const west = bounds.getWest();
+      const east = bounds.getEast();
+      const south = bounds.getSouth();
+      const north = bounds.getNorth();
+      const crossesDateLine = east < west;
+
+      clusters = pinFeaturesRef.current.filter((feature) => {
+        const [lng, lat] = feature.geometry.coordinates;
+        const inLat = lat >= south && lat <= north;
+        const inLng = crossesDateLine
+          ? lng >= west || lng <= east
+          : lng >= west && lng <= east;
+        return inLat && inLng;
+      });
+    }
+
+    if (clusters.length === 0) return;
 
     const targets = [];
     const itemsWithScreen = [];
@@ -842,6 +864,7 @@ function MapView({
       });
       clusterIndex.load(pinFeatures);
       clusterIndexRef.current = clusterIndex;
+      pinFeaturesRef.current = pinFeatures;
       recomputeLayout();
     };
 
