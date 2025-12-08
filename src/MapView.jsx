@@ -564,7 +564,25 @@ function MapView({
       properties: item.properties,
     }));
 
-    startAnimation(finalized);
+    const featureCollection = {
+      type: "FeatureCollection",
+      features: finalized.map((item) => ({
+        type: "Feature",
+        id: item.key,
+        geometry: { type: "Point", coordinates: item.lngLat },
+        properties: {
+          ...item.properties,
+          alpha: item.alpha,
+          labelAlpha: item.labelAlpha,
+          scale: item.scale,
+        },
+      })),
+    };
+
+    source.setData(featureCollection);
+    displayedStateRef.current = new Map(
+      finalized.map((item) => [item.key, { ...item, properties: item.properties }])
+    );
   }, [computeLabelVisibility, selectedPinId, startAnimation]);
 
   useEffect(() => {
