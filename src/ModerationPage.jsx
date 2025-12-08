@@ -466,7 +466,7 @@ function ModerationPage() {
               to: { label: opt.label, status: normalizeStatus(opt.status) },
             });
           }
-        } else if (!serverLabels.has(opt.label.toLowerCase())) {
+        } else if (!serverLabels.has(opt.label.toLowerCase()) && opt.source !== "default") {
           changes.push({
             type: "add",
             field,
@@ -1107,7 +1107,7 @@ function ModerationPage() {
               <div>
                 <p className="eyebrow">Pending changes</p>
                 <p className="muted" style={{ marginTop: "0.2rem" }}>
-                  Confirm below to sync to Supabase. Default bubbles that are not yet stored will be added automatically.
+                  Confirm below to sync to Supabase. Built-in defaults stay local and are not auto-saved.
                 </p>
               </div>
               {pendingChanges.length === 0 ? (
