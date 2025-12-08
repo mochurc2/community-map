@@ -318,6 +318,10 @@ function App() {
   const [pins, setPins] = useState([]);
   const [pinsError, setPinsError] = useState(null);
   const [loadingPins, setLoadingPins] = useState(true);
+  const [pendingPinsCount, setPendingPinsCount] = useState(null);
+  const [pendingPinsLoading, setPendingPinsLoading] = useState(true);
+  const [pendingPinsError, setPendingPinsError] = useState(null);
+  const [pendingPins, setPendingPins] = useState([]);
 
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
@@ -369,6 +373,35 @@ function App() {
     };
   }, []);
 
+  const refreshPendingPins = useCallback(async () => {
+    if (!supabase) return;
+    setPendingPinsLoading(true);
+    setPendingPinsError(null);
+    try {
+      const { data, error } = await supabase
+        .from("pending_pin_locations")
+        .select("pin_id, lat, lng");
+      if (error) {
+        throw error;
+      }
+      const sanitized = (data || [])
+        .filter((pin) => typeof pin.lat === "number" && typeof pin.lng === "number")
+        .map((pin) => ({
+          id: pin.pin_id,
+          lat: pin.lat,
+          lng: pin.lng,
+        }));
+      setPendingPins(sanitized);
+      setPendingPinsCount(sanitized.length);
+    } catch (err) {
+      console.error(err);
+      setPendingPins([]);
+      setPendingPinsError(err.message);
+    } finally {
+      setPendingPinsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     async function fetchPins() {
       setLoadingPins(true);
@@ -397,6 +430,7 @@ function App() {
     }
 
     fetchPins();
+    refreshPendingPins();
     fetchBubbleOptions()
       .then(({ options, statusMap }) => {
         setBubbleOptions(options);
@@ -406,7 +440,7 @@ function App() {
         setBubbleOptions(getDefaultBubbleOptions());
         setBubbleStatusMap(getDefaultStatusMap());
       });
-  }, []);
+  }, [refreshPendingPins]);
 
   const autofillLocation = useCallback(async (lat, lng) => {
     try {
@@ -672,6 +706,7 @@ function App() {
       setHasSubmitted(true);
       setShowFullAddForm(false);
       setSelectedLocation(null);
+      refreshPendingPins();
     }
 
     setSubmitting(false);
@@ -753,6 +788,13 @@ function App() {
     (label) => (bubbleStatusMap.interest_tags?.[label?.toLowerCase?.() || ""] || "approved") === "approved",
     [bubbleStatusMap.interest_tags]
   );
+
+  const filtersActive =
+    filters.genders.length > 0 ||
+    filters.seeking.length > 0 ||
+    filters.interest_tags.length > 0 ||
+    filters.ageRange[0] !== MIN_AGE ||
+    filters.ageRange[1] !== MAX_AGE;
 
   const filteredPins = useMemo(() => {
     const matchesGenderSelection = (pin) => {
@@ -1034,6 +1076,11 @@ function App() {
   const hasSkinToneOptions = Boolean(skinToneOptions?.length > 1);
 
   const approvedPinsCount = pins.length;
+  const pendingPinsLabel = pendingPinsLoading
+    ? "Loading pending pins..."
+    : pendingPinsError
+      ? "Pending count unavailable"
+      : `${typeof pendingPinsCount === "number" ? pendingPinsCount : 0} Pins pending!`;
   const locationLabel = selectedLocation
     ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
     : "None yet";
@@ -1076,8 +1123,9 @@ function App() {
       <div className="panel-section">
         <div className="title-meta">
           <span className="pill">
-            {loadingPins ? "Loading pins…" : `${approvedPinsCount} Pins on the map!`}
+            {loadingPins ? "Loading pins..." : `${approvedPinsCount} Pins on the map!`}
           </span>
+          <span className="pill">{pendingPinsLabel}</span>
           {pinsError && <span className="pill error">Error loading pins</span>}
         </div>
         <div className="panel-stack">
@@ -1583,6 +1631,7 @@ function App() {
     <div className="app-shell">
       <MapView
         pins={filteredPins}
+        pendingPins={filtersActive ? [] : pendingPins}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
         pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}
