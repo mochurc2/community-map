@@ -432,6 +432,58 @@ textarea {
   gap: 0.65rem;
 }
 
+.info-panel-body .panel-section {
+  gap: 0.9rem;
+}
+
+.info-panel-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.info-panel-stack .panel-subsection {
+  display: flex;
+  flex-direction: column;
+}
+
+.info-panel-stack .panel-subsection + .panel-subsection {
+  margin-top: 1.1rem;
+  padding-top: 0.1rem;
+}
+
+.info-panel-stack .eyebrow {
+  display: block;
+  margin: 0 0 0.4rem;
+}
+
+.panel-copy {
+  color: #374151;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.panel-copy.list {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.panel-copy.list li + li {
+  margin-top: 0.25rem;
+}
+
+.panel-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.panel-button-row .tiny-button {
+  padding: 0.5rem 0.95rem;
+}
+
 .panel-lead {
   font-weight: 700;
   color: #0f172a;
@@ -1260,20 +1312,6 @@ textarea {
 .feedback-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.feedback-subsection {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.policy-link-row {
-  display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
