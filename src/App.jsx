@@ -1065,7 +1065,7 @@ function App() {
     ? "Loading pending pins..."
     : pendingPinsError
       ? "Pending count unavailable"
-      : `${typeof pendingPinsCount === "number" ? pendingPinsCount : 0} pending review`;
+      : `${typeof pendingPinsCount === "number" ? pendingPinsCount : 0} Pins pending!`;
   const locationLabel = selectedLocation
     ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
     : "None yet";
