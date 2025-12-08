@@ -1,20 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import Supercluster from "supercluster";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { getGenderAbbreviation } from "./pinUtils";
 
 const DEFAULT_EMOJI = "\uD83D\uDE42"; // 🙂
-const PENDING_REVIEW_EMOJI = "\u23F3"; // hourglass
 const FEET_TO_METERS = 0.3048;
 const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
 const CIRCLE_STEPS = 90;
 const MAP_CLICK_TARGET_ZOOM = 15.5;
 const PLUS_CLUSTER_EMOJI = "\u2795"; // heavy plus sign
-const CLUSTER_RADIUS = 70;
-const CLUSTER_MAX_ZOOM = 18;
 const HONEYCOMB_MAX_CLUSTER_PINS = 30;
 const HONEYCOMB_SAMPLE_PINS = 18;
 const HONEYCOMB_SPACING_PX = 30;
@@ -179,7 +175,6 @@ const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 
 function MapView({
   pins,
-  pendingPins = [],
   onMapClick,
   onPinSelect,
   pendingLocation,
@@ -194,11 +189,9 @@ function MapView({
   const [mapError, setMapError] = useState(null);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
-  const clusterIndexRef = useRef(null);
   const pinFeaturesRef = useRef([]);
   const displayedStateRef = useRef(new Map());
   const animationFrameRef = useRef(null);
-  const clusterMetaRef = useRef(new Map());
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -362,9 +355,6 @@ function MapView({
   const recomputeLayout = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
-
-    const source = map.getSource("pins");
-    if (!source) return;
 
     const bounds = map.getBounds();
     const west = bounds.getWest();
@@ -564,25 +554,7 @@ function MapView({
       properties: item.properties,
     }));
 
-    const featureCollection = {
-      type: "FeatureCollection",
-      features: finalized.map((item) => ({
-        type: "Feature",
-        id: item.key,
-        geometry: { type: "Point", coordinates: item.lngLat },
-        properties: {
-          ...item.properties,
-          alpha: item.alpha,
-          labelAlpha: item.labelAlpha,
-          scale: item.scale,
-        },
-      })),
-    };
-
-    source.setData(featureCollection);
-    displayedStateRef.current = new Map(
-      finalized.map((item) => [item.key, { ...item, properties: item.properties }])
-    );
+    startAnimation(finalized);
   }, [computeLabelVisibility, selectedPinId, startAnimation]);
 
   useEffect(() => {
@@ -679,60 +651,6 @@ function MapView({
       map.setPaintProperty("pins-emoji", "icon-size-transition", { duration: 220 });
       map.setPaintProperty("pin-labels", "text-opacity-transition", { duration: 180 });
 
-      map.addSource("pending-review-pins", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-
-      map.addLayer({
-        id: "pending-review-layer",
-        type: "circle",
-        source: "pending-review-pins",
-        paint: {
-          "circle-radius": 11,
-          "circle-color": "#ffffff",
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#d1d5db",
-        },
-      });
-
-      map.addLayer({
-        id: "pending-review-emoji",
-        type: "symbol",
-        source: "pending-review-pins",
-        layout: {
-          "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(PENDING_REVIEW_EMOJI)],
-          "icon-size": 0.68,
-          "icon-allow-overlap": true,
-        },
-        paint: {
-          "icon-halo-color": "#ffffff",
-          "icon-halo-width": 1,
-        },
-      });
-
-      map.addLayer({
-        id: "pending-review-labels",
-        type: "symbol",
-        source: "pending-review-pins",
-        layout: {
-          "text-field": ["get", "labelText"],
-          "text-size": 13,
-          "text-font": ["Inter Regular", "Open Sans Regular", "Arial Unicode MS Regular"],
-          "text-variable-anchor": ["left", "right"],
-          "text-justify": "auto",
-          "text-offset": [1.2, 0],
-          "text-max-width": 12,
-          "text-optional": true,
-        },
-        paint: {
-          "text-color": "#0f172a",
-          "text-halo-color": "#ffffff",
-          "text-halo-width": 0.5,
-          "text-opacity": 0.92,
-        },
-      });
-
       map.addSource("pending-pin", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -792,7 +710,6 @@ function MapView({
       });
 
       await ensureEmojiImage(DEFAULT_EMOJI);
-      await ensureEmojiImage(PENDING_REVIEW_EMOJI);
       await ensureEmojiImage(PLUS_CLUSTER_EMOJI);
       setMapLoaded(true);
     });
@@ -809,16 +726,20 @@ function MapView({
 
       if (features?.length) {
         const target = features[0];
-        const rootClusterId = target.properties?.rootClusterId;
         const clusterSize = Number(target.properties?.clusterSize || 0);
 
         const clusterCenter = target.properties?.clusterCenterLngLat;
-        const clusterKey = rootClusterId ?? null;
 
         if (clusterCenter && clusterSize > 1) {
+          const baseZoom = map.getZoom();
+          const zoomBoost = Math.min(4, 0.8 + Math.log2(clusterSize + 1));
+          const targetZoom = Math.min(
+            Math.max(baseZoom + zoomBoost, MAP_CLICK_TARGET_ZOOM),
+            19
+          );
           map.easeTo({
             center: clusterCenter,
-            zoom: map.getZoom() + 1.2,
+            zoom: targetZoom,
             duration: 520,
           });
           return;
@@ -848,7 +769,6 @@ function MapView({
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      clusterIndexRef.current = null;
       displayedStateRef.current = new Map();
       setMapLoaded(false);
     };
@@ -886,7 +806,7 @@ function MapView({
       const map = mapRef.current;
       if (!map) return;
 
-      const emojisToLoad = new Set([DEFAULT_EMOJI, PLUS_CLUSTER_EMOJI, PENDING_REVIEW_EMOJI]);
+      const emojisToLoad = new Set([DEFAULT_EMOJI, PLUS_CLUSTER_EMOJI]);
       (pins || []).forEach((p) => {
         if (p.icon) emojisToLoad.add(p.icon);
       });
@@ -894,62 +814,42 @@ function MapView({
       await Promise.all(Array.from(emojisToLoad).map((emoji) => ensureEmojiImage(emoji)));
       if (cancelled) return;
 
-      const approvedFeatures = (pins || [])
-        .map((p) => {
-          const lng = Number(p.lng);
-          const lat = Number(p.lat);
-          if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
-          return {
-            type: "Feature",
-            id: p.id,
-            geometry: {
-              type: "Point",
-              coordinates: [lng, lat],
-            },
-            properties: {
-              id: p.id,
-              city: p.city,
-              gender_identity: p.gender_identity,
-              note: p.note,
-              iconImageId: emojiId(p.icon || DEFAULT_EMOJI),
-              nickname: p.nickname,
-              age: p.age,
-              genders: p.genders,
-              seeking: p.seeking,
-              interest_tags: p.interest_tags,
-              contact_methods: p.contact_methods,
-              icon: p.icon,
-              labelText: buildPinLabelText(p),
-              isPending: false,
-            },
-          };
-        })
-        .filter(Boolean);
-
-      const pendingFeatures = (pendingPins || [])
+      const featureList = (pins || [])
         .map((pin) => {
           const lng = Number(pin.lng);
           const lat = Number(pin.lat);
           if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+          const status = String(pin.status || "").toLowerCase();
+          const isPending = status === "pending";
+          const pinId = pin.id ?? `${lng}-${lat}`;
           return {
             type: "Feature",
-            id: `pending-${pin.id ?? `${lat}-${lng}`}`,
+            id: pinId,
             geometry: {
               type: "Point",
               coordinates: [lng, lat],
             },
             properties: {
-              id: pin.id ?? `${lat}-${lng}`,
-              iconImageId: emojiId(PENDING_REVIEW_EMOJI),
-              labelText: "Pending",
-              isPending: true,
+              id: pinId,
+              city: pin.city,
+              gender_identity: pin.gender_identity,
+              note: pin.note,
+              iconImageId: emojiId(pin.icon || DEFAULT_EMOJI),
+              nickname: pin.nickname,
+              age: pin.age,
+              genders: pin.genders,
+              seeking: pin.seeking,
+              interest_tags: pin.interest_tags,
+              contact_methods: pin.contact_methods,
+              icon: pin.icon,
+              labelText: buildPinLabelText(pin),
+              isPending,
+              status: status || "approved",
             },
           };
         })
         .filter(Boolean);
-
-      const allFeatures = [...approvedFeatures, ...pendingFeatures];
-      pinFeaturesRef.current = allFeatures;
+      pinFeaturesRef.current = featureList;
 
       if (cancelled) return;
 
@@ -957,16 +857,10 @@ function MapView({
       if (baseSource) {
         baseSource.setData({
           type: "FeatureCollection",
-          features: allFeatures,
+          features: featureList,
         });
       }
 
-      const clusterIndex = new Supercluster({
-        radius: CLUSTER_RADIUS,
-        maxZoom: CLUSTER_MAX_ZOOM,
-      });
-      clusterIndex.load(allFeatures);
-      clusterIndexRef.current = clusterIndex;
       recomputeLayout();
     };
 
@@ -975,31 +869,7 @@ function MapView({
     return () => {
       cancelled = true;
     };
-  }, [pins, pendingPins, mapLoaded, ensureEmojiImage, recomputeLayout]);
-
-  useEffect(() => {
-    if (!mapLoaded) return;
-    let cancelled = false;
-
-    const updatePendingReviewPins = async () => {
-      const map = mapRef.current;
-      if (!map) return;
-
-      const source = map.getSource("pending-review-pins");
-      if (!source) return;
-
-      // Pending pins are now included in the clustered source; keep this
-      // layer empty to avoid double-rendering while preserving the layer slot.
-      const empty = { type: "FeatureCollection", features: [] };
-      source.setData(empty);
-    };
-
-    updatePendingReviewPins();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingPins, mapLoaded, ensureEmojiImage]);
+  }, [pins, mapLoaded, ensureEmojiImage, recomputeLayout]);
 
   useEffect(() => {
     if (!mapLoaded) return;

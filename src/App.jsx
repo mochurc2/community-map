@@ -315,7 +315,7 @@ function App() {
     return <ConfigErrorNotice message={supabaseConfigError.message} />;
   }
 
-  const [pins, setPins] = useState([]);
+  const [approvedPins, setApprovedPins] = useState([]);
   const [pinsError, setPinsError] = useState(null);
   const [loadingPins, setLoadingPins] = useState(true);
   const [pendingPinsCount, setPendingPinsCount] = useState(null);
@@ -379,18 +379,23 @@ function App() {
     setPendingPinsError(null);
     try {
       const { data, error } = await supabase
-        .from("pending_pin_locations")
-        .select("pin_id, lat, lng");
+        .from("pins")
+        .select(
+          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at, never_delete, status"
+        )
+        .eq("status", "pending");
+
       if (error) {
         throw error;
       }
+
       const sanitized = (data || [])
         .filter((pin) => typeof pin.lat === "number" && typeof pin.lng === "number")
         .map((pin) => ({
-          id: pin.pin_id,
-          lat: pin.lat,
-          lng: pin.lng,
+          ...pin,
+          status: pin.status || "pending",
         }));
+
       setPendingPins(sanitized);
       setPendingPinsCount(sanitized.length);
     } catch (err) {
@@ -409,7 +414,7 @@ function App() {
       const { data, error } = await supabase
         .from("pins")
         .select(
-          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at, never_delete"
+          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at, never_delete, status"
         )
         .eq("status", "approved")
         .or(`never_delete.eq.true,expires_at.is.null,expires_at.gt.${nowIso}`);
@@ -424,7 +429,11 @@ function App() {
           setPinsError(error.message);
         }
       } else {
-        setPins(data || []);
+        const sanitized = (data || []).map((pin) => ({
+          ...pin,
+          status: pin.status || "approved",
+        }));
+        setApprovedPins(sanitized);
       }
       setLoadingPins(false);
     }
@@ -802,12 +811,10 @@ function App() {
     [bubbleStatusMap.interest_tags]
   );
 
-  const filtersActive =
-    filters.genders.length > 0 ||
-    filters.seeking.length > 0 ||
-    filters.interest_tags.length > 0 ||
-    filters.ageRange[0] !== MIN_AGE ||
-    filters.ageRange[1] !== MAX_AGE;
+  const allPins = useMemo(
+    () => [...approvedPins, ...pendingPins],
+    [approvedPins, pendingPins]
+  );
 
   const filteredPins = useMemo(() => {
     const matchesGenderSelection = (pin) => {
@@ -909,14 +916,14 @@ function App() {
       );
     };
 
-    return pins.filter(
+    return allPins.filter(
       (pin) =>
         matchesGenderSelection(pin) &&
         matchesSeekingSelection(pin) &&
         matchesInterestSelection(pin) &&
         matchesAgeRange(pin)
     );
-  }, [filters.ageRange, filters.genders, filters.interest_tags, filters.seeking, isInterestApproved, pins]);
+  }, [allPins, filters.ageRange, filters.genders, filters.interest_tags, filters.seeking, isInterestApproved]);
 
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
@@ -1015,7 +1022,7 @@ function App() {
 
   const interestPopularity = useMemo(() => {
     const counts = new Map();
-    pins.forEach((pin) => {
+    allPins.forEach((pin) => {
       (pin.interest_tags || []).forEach((tag) => {
         const normalized = normalizeLabel(tag);
         if (!normalized) return;
@@ -1023,7 +1030,7 @@ function App() {
       });
     });
     return counts;
-  }, [pins]);
+  }, [allPins]);
 
   const orderedInterestOptions = useMemo(() => {
     const uniqueOptions = Array.from(new Set(bubbleOptions.interest_tags || []));
@@ -1037,7 +1044,7 @@ function App() {
 
   const contactPopularity = useMemo(() => {
     const counts = new Map();
-    pins.forEach((pin) => {
+    allPins.forEach((pin) => {
       Object.entries(pin.contact_methods || {}).forEach(([channel, value]) => {
         if (!value) return;
         const normalized = normalizeLabel(channel);
@@ -1046,7 +1053,7 @@ function App() {
       });
     });
     return counts;
-  }, [pins]);
+  }, [allPins]);
 
   const orderedContactOptions = useMemo(() => {
     const uniqueOptions = Array.from(new Set(bubbleOptions.contact_methods || []));
@@ -1088,7 +1095,7 @@ function App() {
   const skinToneOptions = SKIN_TONE_GROUPS[selectedBaseEmoji];
   const hasSkinToneOptions = Boolean(skinToneOptions?.length > 1);
 
-  const approvedPinsCount = pins.length;
+  const approvedPinsCount = approvedPins.length;
   const pendingPinsLabel = pendingPinsLoading
     ? "Loading pending pins..."
     : pendingPinsError
@@ -1642,7 +1649,6 @@ function App() {
     <div className="app-shell">
       <MapView
         pins={filteredPins}
-        pendingPins={filtersActive ? [] : pendingPins}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
         pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}
