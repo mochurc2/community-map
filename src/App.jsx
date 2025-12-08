@@ -773,15 +773,28 @@ function App() {
   }, [activePanel, selectedLocation, hasSubmitted]);
 
   useEffect(() => {
+    const node = titleCardRef.current;
+    if (!node) return;
+
+    const root = document.documentElement;
     const updateHeight = () => {
-      if (!titleCardRef.current) return;
-      const rect = titleCardRef.current.getBoundingClientRect();
-      setTitleCardHeight(rect.height);
+      const rect = node.getBoundingClientRect();
+      const nextHeight = rect.height;
+      setTitleCardHeight(nextHeight);
+      root.style.setProperty("--title-card-height", `${nextHeight}px`);
     };
 
     updateHeight();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => updateHeight()) : null;
+    resizeObserver?.observe(node);
     window.addEventListener("resize", updateHeight);
-    return () => window.removeEventListener("resize", updateHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateHeight);
+      resizeObserver?.disconnect();
+    };
   }, []);
 
   const isInterestApproved = useCallback(
@@ -1640,8 +1653,8 @@ function App() {
         selectedPinId={visibleSelectedPin?.id}
       />
 
-      <div className="overlay-rail" ref={titleCardRef}>
-        <div className="title-card">
+      <div className="overlay-rail">
+        <div className="title-card" ref={titleCardRef}>
           <div className="title-row">
             <Scissors className="title-icon" aria-hidden />
             <div className="title-text">

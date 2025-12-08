@@ -10,6 +10,8 @@
   --subtext-color: #6b7280;
   --chip-font-size: 0.95rem;
   --chip-font-weight: 500;
+  --title-card-height: 220px;
+  --panel-stack-spacing: 48px;
   --app-viewport-height: 100vh;
 }
 
@@ -343,12 +345,15 @@ textarea {
   position: relative;
   top: auto;
   right: auto;
-  max-height: none;
   width: 100%;
+  max-height: max(
+    0px,
+    calc(var(--app-viewport-height) - var(--title-card-height) - var(--panel-stack-spacing))
+  );
 }
 
 .floating-panel.side .panel-body-wrapper {
-  max-height: 70vh;
+  max-height: 100%;
 }
 
 .floating-panel.bottom {
@@ -396,6 +401,7 @@ textarea {
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
+  min-height: 0;
   min-width: 0;
   width: 100%;
 }
@@ -410,6 +416,7 @@ textarea {
   display: flex;
   overflow-y: auto;
   overflow-x: hidden;
+  min-height: 0;
   min-width: 0;
   width: 100%;
 }
