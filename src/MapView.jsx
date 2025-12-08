@@ -398,8 +398,8 @@ function MapView({
 
     clusters.forEach((feature) => {
       if (feature.properties.cluster) {
-        const clusterId = feature.properties.cluster_id;
-        const count = feature.properties.point_count;
+      const clusterId = feature.properties.cluster_id;
+      const count = feature.properties.point_count;
         const center = feature.geometry.coordinates;
         const leaves =
           count <= HONEYCOMB_MAX_CLUSTER_PINS
@@ -742,12 +742,11 @@ function MapView({
         const rootClusterId = target.properties?.rootClusterId;
         const clusterSize = Number(target.properties?.clusterSize || 0);
 
-        const clusterKey =
-          rootClusterId === null || rootClusterId === undefined
-            ? null
-            : Number(rootClusterId);
+        const clusterKey = Number.isFinite(Number(rootClusterId))
+          ? Number(rootClusterId)
+          : null;
 
-        if (clusterKey && clusterSize > 1 && clusterIndexRef.current) {
+        if (clusterKey !== null && clusterSize > 1 && clusterIndexRef.current) {
           const expansionZoom = clusterIndexRef.current.getClusterExpansionZoom(clusterKey);
           const center =
             clusterMetaRef.current.get(clusterKey)?.center ||
@@ -824,7 +823,7 @@ function MapView({
       const map = mapRef.current;
       if (!map) return;
 
-      const emojisToLoad = new Set([DEFAULT_EMOJI, PLUS_CLUSTER_EMOJI]);
+      const emojisToLoad = new Set([DEFAULT_EMOJI, PLUS_CLUSTER_EMOJI, PENDING_REVIEW_EMOJI]);
       (pins || []).forEach((p) => {
         if (p.icon) emojisToLoad.add(p.icon);
       });
@@ -832,7 +831,7 @@ function MapView({
       await Promise.all(Array.from(emojisToLoad).map((emoji) => ensureEmojiImage(emoji)));
       if (cancelled) return;
 
-      const pinFeatures = (pins || []).map((p) => ({
+      const approvedFeatures = (pins || []).map((p) => ({
         type: "Feature",
         id: p.id,
         geometry: {
@@ -853,8 +852,27 @@ function MapView({
           contact_methods: p.contact_methods,
           icon: p.icon,
           labelText: buildPinLabelText(p),
+          isPending: false,
         },
       }));
+
+      const pendingFeatures = (pendingPins || []).map((pin) => ({
+        type: "Feature",
+        id: `pending-${pin.id ?? `${pin.lat}-${pin.lng}`}`,
+        geometry: {
+          type: "Point",
+          coordinates: [pin.lng, pin.lat],
+        },
+        properties: {
+          id: pin.id ?? `${pin.lat}-${pin.lng}`,
+          iconImageId: emojiId(PENDING_REVIEW_EMOJI),
+          labelText: "Pending",
+          isPending: true,
+        },
+      }));
+
+      const allFeatures = [...approvedFeatures, ...pendingFeatures];
+      pinFeaturesRef.current = allFeatures;
 
       if (cancelled) return;
 
@@ -862,9 +880,8 @@ function MapView({
         radius: CLUSTER_RADIUS,
         maxZoom: CLUSTER_MAX_ZOOM,
       });
-      clusterIndex.load(pinFeatures);
+      clusterIndex.load(allFeatures);
       clusterIndexRef.current = clusterIndex;
-      pinFeaturesRef.current = pinFeatures;
       recomputeLayout();
     };
 
@@ -873,7 +890,7 @@ function MapView({
     return () => {
       cancelled = true;
     };
-  }, [pins, mapLoaded, ensureEmojiImage, recomputeLayout]);
+  }, [pins, pendingPins, mapLoaded, ensureEmojiImage, recomputeLayout]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -886,26 +903,10 @@ function MapView({
       const source = map.getSource("pending-review-pins");
       if (!source) return;
 
-      await ensureEmojiImage(PENDING_REVIEW_EMOJI);
-      if (cancelled) return;
-
-      const features = (pendingPins || []).map((pin) => ({
-        type: "Feature",
-        id: pin.id ?? `${pin.lat}-${pin.lng}`,
-        geometry: {
-          type: "Point",
-          coordinates: [pin.lng, pin.lat],
-        },
-        properties: {
-          iconImageId: emojiId(PENDING_REVIEW_EMOJI),
-          labelText: "Pending",
-        },
-      }));
-
-      source.setData({
-        type: "FeatureCollection",
-        features,
-      });
+      // Pending pins are now included in the clustered source; keep this
+      // layer empty to avoid double-rendering while preserving the layer slot.
+      const empty = { type: "FeatureCollection", features: [] };
+      source.setData(empty);
     };
 
     updatePendingReviewPins();
