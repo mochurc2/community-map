@@ -379,11 +379,10 @@ function App() {
     setPendingPinsError(null);
     try {
       const { data, error } = await supabase
-        .from("pins")
+        .from("pending_pin_locations")
         .select(
-          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at, never_delete, status"
-        )
-        .eq("status", "pending");
+          "pin_id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods"
+        );
 
       if (error) {
         throw error;
@@ -392,8 +391,27 @@ function App() {
       const sanitized = (data || [])
         .filter((pin) => typeof pin.lat === "number" && typeof pin.lng === "number")
         .map((pin) => ({
-          ...pin,
-          status: pin.status || "pending",
+          id: pin.pin_id,
+          lat: pin.lat,
+          lng: pin.lng,
+          city: pin.city,
+          state_province: pin.state_province,
+          country: pin.country,
+          country_code: pin.country_code,
+          icon: pin.icon,
+          nickname: pin.nickname,
+          age: pin.age,
+          genders: Array.isArray(pin.genders) ? pin.genders : pin.genders ? [pin.genders] : [],
+          gender_identity: pin.gender_identity,
+          seeking: Array.isArray(pin.seeking) ? pin.seeking : pin.seeking ? [pin.seeking] : [],
+          interest_tags: Array.isArray(pin.interest_tags)
+            ? pin.interest_tags
+            : pin.interest_tags
+              ? [pin.interest_tags]
+              : [],
+          note: pin.note,
+          contact_methods: pin.contact_methods || {},
+          status: "pending",
         }));
 
       setPendingPins(sanitized);
