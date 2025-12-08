@@ -1,17 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
-import ConfigErrorNotice from "./ConfigErrorNotice";
-import { supabase, supabaseConfigError } from "./supabaseClient";
-import MapView from "./MapView";
-import PolicyModal from "./PolicyModal";
-import privacyPolicyContent from "../PrivacyPolicy.md?raw";
-import termsContent from "../ToS.md?raw";
-import {
-  ensurePendingBubbleOption,
-  fetchBubbleOptions,
-  getDefaultBubbleOptions,
-  getDefaultStatusMap,
-} from "./bubbleOptions";
+import Supercluster from "supercluster";
 import {
   buildContactLink,
   getGenderList,
@@ -380,9 +367,7 @@ function App() {
     try {
       const { data, error } = await supabase
         .from("pending_pin_locations")
-        .select(
-          "pin_id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods"
-        );
+        .select("pin_id, lat, lng, status");
 
       if (error) {
         throw error;
@@ -394,24 +379,7 @@ function App() {
           id: pin.pin_id,
           lat: pin.lat,
           lng: pin.lng,
-          city: pin.city,
-          state_province: pin.state_province,
-          country: pin.country,
-          country_code: pin.country_code,
-          icon: pin.icon,
-          nickname: pin.nickname,
-          age: pin.age,
-          genders: Array.isArray(pin.genders) ? pin.genders : pin.genders ? [pin.genders] : [],
-          gender_identity: pin.gender_identity,
-          seeking: Array.isArray(pin.seeking) ? pin.seeking : pin.seeking ? [pin.seeking] : [],
-          interest_tags: Array.isArray(pin.interest_tags)
-            ? pin.interest_tags
-            : pin.interest_tags
-              ? [pin.interest_tags]
-              : [],
-          note: pin.note,
-          contact_methods: pin.contact_methods || {},
-          status: "pending",
+          status: pin.status || "pending",
         }));
 
       setPendingPins(sanitized);
@@ -536,6 +504,9 @@ function App() {
   );
 
   const handlePinSelect = useCallback((pin) => {
+    if (pin.status === "pending") {
+      return;
+    }
     setSelectedPin(pin);
     setSelectedLocation(null);
     setActivePanel(null);
@@ -942,6 +913,23 @@ function App() {
         matchesAgeRange(pin)
     );
   }, [allPins, filters.ageRange, filters.genders, filters.interest_tags, filters.seeking, isInterestApproved]);
+
+  const clusterer = useMemo(() => {
+    const clusterer = new Supercluster({
+      radius: 60,
+      maxZoom: 15,
+    });
+    const points = filteredPins.map((pin) => ({
+      type: "Feature",
+      properties: { ...pin, cluster: false },
+      geometry: {
+        type: "Point",
+        coordinates: [pin.lng, pin.lat],
+      },
+    }));
+    clusterer.load(points);
+    return clusterer;
+  }, [filteredPins]);
 
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
@@ -1667,6 +1655,7 @@ function App() {
     <div className="app-shell">
       <MapView
         pins={filteredPins}
+        clusterer={clusterer}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
         pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}

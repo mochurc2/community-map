@@ -9,7 +9,6 @@ const FEET_TO_METERS = 0.3048;
 const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
 const CIRCLE_STEPS = 90;
-const MAP_CLICK_TARGET_ZOOM = 15.5;
 const PLUS_CLUSTER_EMOJI = "\u2795"; // heavy plus sign
 const HONEYCOMB_MAX_CLUSTER_PINS = 30;
 const HONEYCOMB_SAMPLE_PINS = 18;
@@ -30,6 +29,9 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
 const buildPinLabelText = (pin) => {
+  if (!pin || pin.status === "pending") {
+    return "";
+  }
   const genderAbbr = getGenderAbbreviation(pin.genders, pin.gender_identity);
   const ageText = pin.age ? `${pin.age}` : "";
   const detailLine = [ageText, genderAbbr].filter(Boolean).join(" · ");
@@ -174,7 +176,7 @@ const renderEmojiImage = async (emoji) => {
 const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 
 function MapView({
-  pins,
+  clusterer,
   onMapClick,
   onPinSelect,
   pendingLocation,
@@ -189,7 +191,6 @@ function MapView({
   const [mapError, setMapError] = useState(null);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
-  const pinFeaturesRef = useRef([]);
   const displayedStateRef = useRef(new Map());
   const animationFrameRef = useRef(null);
 
@@ -354,32 +355,20 @@ function MapView({
 
   const recomputeLayout = useCallback(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !clusterer) return;
 
     const bounds = map.getBounds();
     const west = bounds.getWest();
     const east = bounds.getEast();
     const south = bounds.getSouth();
     const north = bounds.getNorth();
-    const crossesDateLine = east < west;
+    const zoom = Math.floor(map.getZoom());
 
-    let visible = pinFeaturesRef.current
-      .map((feature) => {
-        const [lng, lat] = feature.geometry.coordinates;
-        const inLat = lat >= south && lat <= north;
-        const inLng = crossesDateLine ? lng >= west || lng <= east : lng >= west && lng <= east;
-        if (!inLat || !inLng) return null;
-        const screen = map.project({ lng, lat });
-        return { feature, screen };
-      })
-      .filter(Boolean);
-
-    if (visible.length === 0) {
-      visible = pinFeaturesRef.current.map((feature) => {
-        const [lng, lat] = feature.geometry.coordinates;
-        return { feature, screen: map.project({ lng, lat }) };
-      });
-    }
+    const visible = clusterer.getClusters([west, south, east, north], zoom).map((feature) => {
+      const [lng, lat] = feature.geometry.coordinates;
+      const screen = map.project({ lng, lat });
+      return { feature, screen };
+    });
 
     const cellSize = PIN_BASE_RADIUS * 2 + 6;
     const grid = new Map();
@@ -442,6 +431,8 @@ function MapView({
         const { feature, screen } = members[0];
         const [lng, lat] = feature.geometry.coordinates;
         const isSelected = feature.properties.id === selectedPinId;
+        const isPending = feature.properties.status === "pending";
+
         const soloItem = {
           key: `pin-${feature.properties.id}`,
           lngLat: [lng, lat],
@@ -449,15 +440,19 @@ function MapView({
           scale: isSelected ? 1.08 : 1,
           labelAlpha: 1,
           properties: {
-            ...feature.properties,
             pinId: feature.properties.id,
+            isCluster: feature.properties.cluster,
+            cluster_id: feature.properties.cluster_id,
             isClusterMember: false,
             rootClusterId: null,
             clusterSize: 1,
             isPlus: false,
             isSelected,
-            clusterCenterLngLat: [lng, lat],
+            clusterCenterLngLat: JSON.stringify([lng, lat]),
             labelOffset: [1.2, 0],
+            iconImageId: emojiId(isPending ? DEFAULT_EMOJI : feature.properties.icon),
+            labelText: buildPinLabelText(feature.properties),
+            raw: JSON.stringify(feature.properties),
           },
           screen,
         };
@@ -475,14 +470,21 @@ function MapView({
       centerScreen.y /= members.length;
       const centerLngLat = map.unproject(centerScreen);
 
-      const sortedMembers = [...members].sort((a, b) =>
-        String(a.feature.properties.id || "").localeCompare(String(b.feature.properties.id || ""))
+      const allLeaves = members.flatMap((m) =>
+        m.feature.properties.cluster
+          ? clusterer.getLeaves(m.feature.properties.cluster_id, Infinity)
+          : [m.feature]
       );
 
-      const includePlus = members.length > HONEYCOMB_MAX_CLUSTER_PINS;
+      const sortedLeaves = [...allLeaves].sort((a, b) =>
+        String(a.properties.id || "").localeCompare(String(b.properties.id || ""))
+      );
+
+      const totalSize = allLeaves.length;
+      const includePlus = totalSize > HONEYCOMB_MAX_CLUSTER_PINS;
       const subset = includePlus
-        ? sortedMembers.slice(0, Math.min(HONEYCOMB_SAMPLE_PINS, sortedMembers.length))
-        : sortedMembers;
+        ? sortedLeaves.slice(0, Math.min(HONEYCOMB_SAMPLE_PINS, sortedLeaves.length))
+        : sortedLeaves;
 
       const offsets = buildHoneycombOffsets(subset.length + (includePlus ? 1 : 0), HONEYCOMB_SPACING_PX);
       let offsetIndex = 0;
@@ -503,12 +505,13 @@ function MapView({
             iconImageId: emojiId(PLUS_CLUSTER_EMOJI),
             labelText: "",
             isPlus: true,
+            isCluster: true,
             isClusterMember: true,
             rootClusterId: clusterKey,
-            clusterSize: members.length,
+            clusterSize: totalSize,
             pinId: null,
             isSelected: false,
-            clusterCenterLngLat: [centerLngLat.lng, centerLngLat.lat],
+            clusterCenterLngLat: JSON.stringify([centerLngLat.lng, centerLngLat.lat]),
             labelOffset: [1.2, 0],
           },
           screen: { x: centerScreen.x + plusPos.offset.x, y: centerScreen.y + plusPos.offset.y },
@@ -516,27 +519,31 @@ function MapView({
         itemsWithScreen.push(plusItem);
       }
 
-      subset.forEach((member) => {
+      subset.forEach((leaf) => {
         const offset = offsets[offsetIndex];
         offsetIndex += 1;
         const pos = offsetToLngLat(map, [centerLngLat.lng, centerLngLat.lat], offset);
-        const isSelected = member.feature.properties.id === selectedPinId;
+        const isSelected = leaf.properties.id === selectedPinId;
+        const isPending = leaf.properties.status === "pending";
         const memberItem = {
-          key: `${clusterKey}-${member.feature.properties.id}`,
+          key: `${clusterKey}-${leaf.properties.id}`,
           lngLat: [pos.lng, pos.lat],
           alpha: 1,
           scale: isSelected ? 1.08 : 1,
           labelAlpha: 1,
           properties: {
-            ...member.feature.properties,
-            pinId: member.feature.properties.id,
+            pinId: leaf.properties.id,
+            isCluster: false,
             isClusterMember: true,
             rootClusterId: clusterKey,
-            clusterSize: members.length,
+            clusterSize: totalSize,
             isPlus: false,
             isSelected,
-            clusterCenterLngLat: [centerLngLat.lng, centerLngLat.lat],
+            clusterCenterLngLat: JSON.stringify([centerLngLat.lng, centerLngLat.lat]),
             labelOffset: [1.2, 0],
+            iconImageId: emojiId(isPending ? DEFAULT_EMOJI : leaf.properties.icon),
+            labelText: buildPinLabelText(leaf.properties),
+            raw: JSON.stringify(leaf.properties),
           },
           screen: { x: centerScreen.x + offset.x, y: centerScreen.y + offset.y },
         };
@@ -555,7 +562,7 @@ function MapView({
     }));
 
     startAnimation(finalized);
-  }, [computeLabelVisibility, selectedPinId, startAnimation]);
+  }, [clusterer, computeLabelVisibility, selectedPinId, startAnimation]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
@@ -721,41 +728,40 @@ function MapView({
 
     map.on("click", (e) => {
       const features = map.queryRenderedFeatures(e.point, {
-        layers: ["pins-layer", "pins-emoji", "pin-labels"],
+        layers: ["pins-layer", "pins-emoji"],
       });
 
       if (features?.length) {
         const target = features[0];
-        const clusterSize = Number(target.properties?.clusterSize || 0);
+        const { properties } = target;
 
-        const clusterCenter = target.properties?.clusterCenterLngLat;
+        if (properties.isCluster || properties.isPlus) {
+          const clusterCenter = JSON.parse(properties.clusterCenterLngLat);
+          let zoom;
 
-        if (clusterCenter && clusterSize > 1) {
-          const baseZoom = map.getZoom();
-          const zoomBoost = Math.min(4, 0.8 + Math.log2(clusterSize + 1));
-          const targetZoom = Math.min(
-            Math.max(baseZoom + zoomBoost, MAP_CLICK_TARGET_ZOOM),
-            19
-          );
+          const superclusterId = properties.cluster_id;
+          if (superclusterId) {
+            zoom = clusterer.getClusterExpansionZoom(superclusterId);
+          } else {
+            // Fallback for screen-space clusters
+            const currentZoom = map.getZoom();
+            const zoomBoost = Math.min(4, 1 + Math.log2(properties.clusterSize || 1));
+            zoom = Math.min(currentZoom + zoomBoost, 19);
+          }
+
           map.easeTo({
             center: clusterCenter,
-            zoom: targetZoom,
+            zoom,
             duration: 520,
           });
           return;
         }
-
-        if (onPinSelectRef.current) {
-          onPinSelectRef.current(target.properties);
+        
+        if (onPinSelectRef.current && properties.raw) {
+          onPinSelectRef.current(JSON.parse(properties.raw));
         }
         return;
       }
-
-      const zoomTarget = map.getZoom();
-      map.flyTo({
-        center: [e.lngLat.lng, e.lngLat.lat],
-        zoom: zoomTarget >= MAP_CLICK_TARGET_ZOOM ? zoomTarget : MAP_CLICK_TARGET_ZOOM,
-      });
 
       if (onMapClickRef.current) {
         onMapClickRef.current(e.lngLat);
@@ -772,7 +778,21 @@ function MapView({
       displayedStateRef.current = new Map();
       setMapLoaded(false);
     };
-  }, [ensureEmojiImage]);
+  }, [clusterer, ensureEmojiImage]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapLoaded || !map) return;
+
+    const iconsToLoad = new Set([DEFAULT_EMOJI, PLUS_CLUSTER_EMOJI]);
+    clusterer?.points.forEach((p) => {
+      if (p.properties.icon) iconsToLoad.add(p.properties.icon);
+    });
+
+    Promise.all(Array.from(iconsToLoad).map((emoji) => ensureEmojiImage(emoji))).then(() => {
+      recomputeLayout();
+    });
+  }, [clusterer, mapLoaded, ensureEmojiImage, recomputeLayout]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -797,79 +817,6 @@ function MapView({
     if (!mapLoaded) return;
     recomputeLayout();
   }, [selectedPinId, mapLoaded, recomputeLayout]);
-
-  useEffect(() => {
-    if (!mapLoaded) return;
-    let cancelled = false;
-
-    const updatePins = async () => {
-      const map = mapRef.current;
-      if (!map) return;
-
-      const emojisToLoad = new Set([DEFAULT_EMOJI, PLUS_CLUSTER_EMOJI]);
-      (pins || []).forEach((p) => {
-        if (p.icon) emojisToLoad.add(p.icon);
-      });
-
-      await Promise.all(Array.from(emojisToLoad).map((emoji) => ensureEmojiImage(emoji)));
-      if (cancelled) return;
-
-      const featureList = (pins || [])
-        .map((pin) => {
-          const lng = Number(pin.lng);
-          const lat = Number(pin.lat);
-          if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
-          const status = String(pin.status || "").toLowerCase();
-          const isPending = status === "pending";
-          const pinId = pin.id ?? `${lng}-${lat}`;
-          return {
-            type: "Feature",
-            id: pinId,
-            geometry: {
-              type: "Point",
-              coordinates: [lng, lat],
-            },
-            properties: {
-              id: pinId,
-              city: pin.city,
-              gender_identity: pin.gender_identity,
-              note: pin.note,
-              iconImageId: emojiId(pin.icon || DEFAULT_EMOJI),
-              nickname: pin.nickname,
-              age: pin.age,
-              genders: pin.genders,
-              seeking: pin.seeking,
-              interest_tags: pin.interest_tags,
-              contact_methods: pin.contact_methods,
-              icon: pin.icon,
-              labelText: buildPinLabelText(pin),
-              isPending,
-              status: status || "approved",
-            },
-          };
-        })
-        .filter(Boolean);
-      pinFeaturesRef.current = featureList;
-
-      if (cancelled) return;
-
-      const baseSource = map.getSource("pins");
-      if (baseSource) {
-        baseSource.setData({
-          type: "FeatureCollection",
-          features: featureList,
-        });
-      }
-
-      recomputeLayout();
-    };
-
-    updatePins();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pins, mapLoaded, ensureEmojiImage, recomputeLayout]);
 
   useEffect(() => {
     if (!mapLoaded) return;
