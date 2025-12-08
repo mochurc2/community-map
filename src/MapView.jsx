@@ -831,50 +831,72 @@ function MapView({
       await Promise.all(Array.from(emojisToLoad).map((emoji) => ensureEmojiImage(emoji)));
       if (cancelled) return;
 
-      const approvedFeatures = (pins || []).map((p) => ({
-        type: "Feature",
-        id: p.id,
-        geometry: {
-          type: "Point",
-          coordinates: [p.lng, p.lat],
-        },
-        properties: {
-          id: p.id,
-          city: p.city,
-          gender_identity: p.gender_identity,
-          note: p.note,
-          iconImageId: emojiId(p.icon || DEFAULT_EMOJI),
-          nickname: p.nickname,
-          age: p.age,
-          genders: p.genders,
-          seeking: p.seeking,
-          interest_tags: p.interest_tags,
-          contact_methods: p.contact_methods,
-          icon: p.icon,
-          labelText: buildPinLabelText(p),
-          isPending: false,
-        },
-      }));
+      const approvedFeatures = (pins || [])
+        .map((p) => {
+          const lng = Number(p.lng);
+          const lat = Number(p.lat);
+          if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+          return {
+            type: "Feature",
+            id: p.id,
+            geometry: {
+              type: "Point",
+              coordinates: [lng, lat],
+            },
+            properties: {
+              id: p.id,
+              city: p.city,
+              gender_identity: p.gender_identity,
+              note: p.note,
+              iconImageId: emojiId(p.icon || DEFAULT_EMOJI),
+              nickname: p.nickname,
+              age: p.age,
+              genders: p.genders,
+              seeking: p.seeking,
+              interest_tags: p.interest_tags,
+              contact_methods: p.contact_methods,
+              icon: p.icon,
+              labelText: buildPinLabelText(p),
+              isPending: false,
+            },
+          };
+        })
+        .filter(Boolean);
 
-      const pendingFeatures = (pendingPins || []).map((pin) => ({
-        type: "Feature",
-        id: `pending-${pin.id ?? `${pin.lat}-${pin.lng}`}`,
-        geometry: {
-          type: "Point",
-          coordinates: [pin.lng, pin.lat],
-        },
-        properties: {
-          id: pin.id ?? `${pin.lat}-${pin.lng}`,
-          iconImageId: emojiId(PENDING_REVIEW_EMOJI),
-          labelText: "Pending",
-          isPending: true,
-        },
-      }));
+      const pendingFeatures = (pendingPins || [])
+        .map((pin) => {
+          const lng = Number(pin.lng);
+          const lat = Number(pin.lat);
+          if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+          return {
+            type: "Feature",
+            id: `pending-${pin.id ?? `${lat}-${lng}`}`,
+            geometry: {
+              type: "Point",
+              coordinates: [lng, lat],
+            },
+            properties: {
+              id: pin.id ?? `${lat}-${lng}`,
+              iconImageId: emojiId(PENDING_REVIEW_EMOJI),
+              labelText: "Pending",
+              isPending: true,
+            },
+          };
+        })
+        .filter(Boolean);
 
       const allFeatures = [...approvedFeatures, ...pendingFeatures];
       pinFeaturesRef.current = allFeatures;
 
       if (cancelled) return;
+
+      const baseSource = map.getSource("pins");
+      if (baseSource) {
+        baseSource.setData({
+          type: "FeatureCollection",
+          features: allFeatures,
+        });
+      }
 
       const clusterIndex = new Supercluster({
         radius: CLUSTER_RADIUS,
