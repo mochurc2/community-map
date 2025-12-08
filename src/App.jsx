@@ -802,6 +802,13 @@ function App() {
     [bubbleStatusMap.interest_tags]
   );
 
+  const filtersActive =
+    filters.genders.length > 0 ||
+    filters.seeking.length > 0 ||
+    filters.interest_tags.length > 0 ||
+    filters.ageRange[0] !== MIN_AGE ||
+    filters.ageRange[1] !== MAX_AGE;
+
   const filteredPins = useMemo(() => {
     const matchesGenderSelection = (pin) => {
       if (filters.genders.length === 0) return true;
@@ -1637,7 +1644,7 @@ function App() {
     <div className="app-shell">
       <MapView
         pins={filteredPins}
-        pendingPins={pendingPins}
+        pendingPins={filtersActive ? [] : pendingPins}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
         pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}
