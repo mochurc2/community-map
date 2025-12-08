@@ -14,6 +14,7 @@ const CIRCLE_STEPS = 90;
 const MAP_CLICK_TARGET_ZOOM = 15.5;
 const PLUS_CLUSTER_EMOJI = "➕";
 const CLUSTER_RADIUS = 70;
+const CLUSTER_MAX_ZOOM = 18;
 const HONEYCOMB_MAX_CLUSTER_PINS = 30;
 const HONEYCOMB_SAMPLE_PINS = 18;
 const HONEYCOMB_SPACING_PX = 30;
@@ -362,7 +363,7 @@ function MapView({
     const clusterIndex = clusterIndexRef.current;
     if (!map || !clusterIndex) return;
 
-    const zoom = Math.max(0, Math.round(map.getZoom()));
+    const zoom = Math.max(0, Math.min(CLUSTER_MAX_ZOOM, Math.round(map.getZoom())));
     const bounds = map.getBounds();
     const clusters = clusterIndex.getClusters(
       [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
@@ -837,7 +838,7 @@ function MapView({
 
       const clusterIndex = new Supercluster({
         radius: CLUSTER_RADIUS,
-        maxZoom: 18,
+        maxZoom: CLUSTER_MAX_ZOOM,
       });
       clusterIndex.load(pinFeatures);
       clusterIndexRef.current = clusterIndex;
