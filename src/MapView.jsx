@@ -361,9 +361,12 @@ function MapView({
 
   const recomputeLayout = useCallback(() => {
     const map = mapRef.current;
-    const clusterIndex = clusterIndexRef.current;
     if (!map) return;
 
+    const source = map.getSource("pins");
+    if (!source) return;
+
+    const clusterIndex = clusterIndexRef.current;
     const zoom = Math.max(0, Math.min(CLUSTER_MAX_ZOOM, Math.round(map.getZoom())));
     const bounds = map.getBounds();
 
@@ -373,24 +376,70 @@ function MapView({
         zoom
       ) || [];
 
-    if (clusters.length === 0 && pinFeaturesRef.current.length > 0) {
+    const fallbackVisible = () => {
+      if (!pinFeaturesRef.current.length) return false;
       const west = bounds.getWest();
       const east = bounds.getEast();
       const south = bounds.getSouth();
       const north = bounds.getNorth();
       const crossesDateLine = east < west;
 
-      clusters = pinFeaturesRef.current.filter((feature) => {
+      const visibleFeatures = pinFeaturesRef.current.filter((feature) => {
         const [lng, lat] = feature.geometry.coordinates;
         const inLat = lat >= south && lat <= north;
-        const inLng = crossesDateLine
-          ? lng >= west || lng <= east
-          : lng >= west && lng <= east;
+        const inLng = crossesDateLine ? lng >= west || lng <= east : lng >= west && lng <= east;
         return inLat && inLng;
       });
-    }
 
-    if (clusters.length === 0) return;
+      if (visibleFeatures.length === 0) return false;
+
+      const itemsWithScreen = visibleFeatures.map((feat) => {
+        const [lng, lat] = feat.geometry.coordinates;
+        const screen = map.project({ lng, lat });
+        return {
+          key: `base-${feat.properties.id}`,
+          lngLat: [lng, lat],
+          alpha: 1,
+          scale: 1,
+          labelAlpha: 1,
+          properties: {
+            ...feat.properties,
+            pinId: feat.properties.id,
+            isClusterMember: false,
+            rootClusterId: null,
+            clusterSize: 1,
+            isPlus: false,
+            isSelected: false,
+            labelOffset: [1.2, 0],
+          },
+          screen,
+        };
+      });
+
+      const acceptedLabels = computeLabelVisibility(itemsWithScreen);
+      const features = itemsWithScreen.map((item) => ({
+        type: "Feature",
+        id: item.key,
+        geometry: { type: "Point", coordinates: item.lngLat },
+        properties: {
+          ...item.properties,
+          alpha: item.alpha,
+          labelAlpha: acceptedLabels.has(item.key) ? item.labelAlpha : 0,
+          scale: item.scale,
+        },
+      }));
+
+      source.setData({ type: "FeatureCollection", features });
+      displayedStateRef.current = new Map(
+        itemsWithScreen.map((item) => [item.key, { ...item, labelAlpha: acceptedLabels.has(item.key) ? item.labelAlpha : 0 }])
+      );
+      return true;
+    };
+
+    if (clusters.length === 0) {
+      fallbackVisible();
+      return;
+    }
 
     const targets = [];
     const itemsWithScreen = [];
