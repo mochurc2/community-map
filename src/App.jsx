@@ -318,6 +318,9 @@ function App() {
   const [pins, setPins] = useState([]);
   const [pinsError, setPinsError] = useState(null);
   const [loadingPins, setLoadingPins] = useState(true);
+  const [pendingPinsCount, setPendingPinsCount] = useState(null);
+  const [pendingPinsLoading, setPendingPinsLoading] = useState(true);
+  const [pendingPinsError, setPendingPinsError] = useState(null);
 
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
@@ -396,7 +399,30 @@ function App() {
       setLoadingPins(false);
     }
 
+    async function fetchPendingPinsCount() {
+      setPendingPinsLoading(true);
+      setPendingPinsError(null);
+      try {
+        const { count, error } = await supabase
+          .from("pins")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "pending");
+
+        if (error) {
+          throw error;
+        }
+
+        setPendingPinsCount(count ?? 0);
+      } catch (err) {
+        console.error(err);
+        setPendingPinsError(err.message);
+      } finally {
+        setPendingPinsLoading(false);
+      }
+    }
+
     fetchPins();
+    fetchPendingPinsCount();
     fetchBubbleOptions()
       .then(({ options, statusMap }) => {
         setBubbleOptions(options);
@@ -672,6 +698,7 @@ function App() {
       setHasSubmitted(true);
       setShowFullAddForm(false);
       setSelectedLocation(null);
+      setPendingPinsCount((prev) => (typeof prev === "number" ? prev + 1 : prev));
     }
 
     setSubmitting(false);
@@ -1034,6 +1061,11 @@ function App() {
   const hasSkinToneOptions = Boolean(skinToneOptions?.length > 1);
 
   const approvedPinsCount = pins.length;
+  const pendingPinsLabel = pendingPinsLoading
+    ? "Loading pending pins..."
+    : pendingPinsError
+      ? "Pending count unavailable"
+      : `${typeof pendingPinsCount === "number" ? pendingPinsCount : 0} pending review`;
   const locationLabel = selectedLocation
     ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
     : "None yet";
@@ -1076,8 +1108,9 @@ function App() {
       <div className="panel-section">
         <div className="title-meta">
           <span className="pill">
-            {loadingPins ? "Loading pins…" : `${approvedPinsCount} Pins on the map!`}
+            {loadingPins ? "Loading pins..." : `${approvedPinsCount} Pins on the map!`}
           </span>
+          <span className="pill">{pendingPinsLabel}</span>
           {pinsError && <span className="pill error">Error loading pins</span>}
         </div>
         <div className="panel-stack">
