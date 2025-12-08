@@ -321,6 +321,7 @@ function App() {
   const [pendingPinsCount, setPendingPinsCount] = useState(null);
   const [pendingPinsLoading, setPendingPinsLoading] = useState(true);
   const [pendingPinsError, setPendingPinsError] = useState(null);
+  const [pendingPins, setPendingPins] = useState([]);
 
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
@@ -370,6 +371,24 @@ function App() {
       window.visualViewport?.removeEventListener("scroll", updateViewportHeight);
       window.removeEventListener("resize", updateViewportHeight);
     };
+  }, []);
+
+  const refreshPendingPins = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from("pins").select("id, lat, lng").eq("status", "pending");
+      if (error) {
+        throw error;
+      }
+      const sanitized = (data || []).filter((pin) => typeof pin.lat === "number" && typeof pin.lng === "number").map((pin) => ({
+        id: pin.id,
+        lat: pin.lat,
+        lng: pin.lng,
+      }));
+      setPendingPins(sanitized);
+    } catch (err) {
+      console.error(err);
+      setPendingPins([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -423,6 +442,7 @@ function App() {
 
     fetchPins();
     fetchPendingPinsCount();
+    refreshPendingPins();
     fetchBubbleOptions()
       .then(({ options, statusMap }) => {
         setBubbleOptions(options);
@@ -432,7 +452,7 @@ function App() {
         setBubbleOptions(getDefaultBubbleOptions());
         setBubbleStatusMap(getDefaultStatusMap());
       });
-  }, []);
+  }, [refreshPendingPins]);
 
   const autofillLocation = useCallback(async (lat, lng) => {
     try {
@@ -699,6 +719,7 @@ function App() {
       setShowFullAddForm(false);
       setSelectedLocation(null);
       setPendingPinsCount((prev) => (typeof prev === "number" ? prev + 1 : prev));
+      refreshPendingPins();
     }
 
     setSubmitting(false);
@@ -1616,6 +1637,7 @@ function App() {
     <div className="app-shell">
       <MapView
         pins={filteredPins}
+        pendingPins={pendingPins}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
         pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}

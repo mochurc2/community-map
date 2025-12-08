@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { getGenderAbbreviation } from "./pinUtils";
 
 const DEFAULT_EMOJI = "📍";
+const PENDING_REVIEW_EMOJI = "❗";
 const FEET_TO_METERS = 0.3048;
 const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
@@ -82,6 +83,7 @@ const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
 
 function MapView({
   pins,
+  pendingPins = [],
   onMapClick,
   onPinSelect,
   pendingLocation,
@@ -213,6 +215,60 @@ function MapView({
         },
       });
 
+      map.addSource("pending-review-pins", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+
+      map.addLayer({
+        id: "pending-review-layer",
+        type: "circle",
+        source: "pending-review-pins",
+        paint: {
+          "circle-radius": 11,
+          "circle-color": "#ffffff",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#d1d5db",
+        },
+      });
+
+      map.addLayer({
+        id: "pending-review-emoji",
+        type: "symbol",
+        source: "pending-review-pins",
+        layout: {
+          "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(PENDING_REVIEW_EMOJI)],
+          "icon-size": 0.68,
+          "icon-allow-overlap": true,
+        },
+        paint: {
+          "icon-halo-color": "#ffffff",
+          "icon-halo-width": 1,
+        },
+      });
+
+      map.addLayer({
+        id: "pending-review-labels",
+        type: "symbol",
+        source: "pending-review-pins",
+        layout: {
+          "text-field": ["get", "labelText"],
+          "text-size": 13,
+          "text-font": ["Inter Regular", "Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-variable-anchor": ["left", "right"],
+          "text-justify": "auto",
+          "text-offset": [1.2, 0],
+          "text-max-width": 12,
+          "text-optional": true,
+        },
+        paint: {
+          "text-color": "#0f172a",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 0.5,
+          "text-opacity": 0.92,
+        },
+      });
+
       map.addSource("pending-pin", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -272,6 +328,7 @@ function MapView({
       });
 
       await ensureEmojiImage(DEFAULT_EMOJI);
+      await ensureEmojiImage(PENDING_REVIEW_EMOJI);
       setMapLoaded(true);
     });
 
@@ -373,6 +430,46 @@ function MapView({
       cancelled = true;
     };
   }, [pins, mapLoaded, ensureEmojiImage]);
+
+  useEffect(() => {
+    if (!mapLoaded) return;
+    let cancelled = false;
+
+    const updatePendingReviewPins = async () => {
+      const map = mapRef.current;
+      if (!map) return;
+
+      const source = map.getSource("pending-review-pins");
+      if (!source) return;
+
+      await ensureEmojiImage(PENDING_REVIEW_EMOJI);
+      if (cancelled) return;
+
+      const features = (pendingPins || []).map((pin) => ({
+        type: "Feature",
+        id: pin.id ?? `${pin.lat}-${pin.lng}`,
+        geometry: {
+          type: "Point",
+          coordinates: [pin.lng, pin.lat],
+        },
+        properties: {
+          iconImageId: emojiId(PENDING_REVIEW_EMOJI),
+          labelText: "Pending",
+        },
+      }));
+
+      source.setData({
+        type: "FeatureCollection",
+        features,
+      });
+    };
+
+    updatePendingReviewPins();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingPins, mapLoaded, ensureEmojiImage]);
 
   useEffect(() => {
     if (!mapLoaded) return;
