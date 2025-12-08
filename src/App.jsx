@@ -374,6 +374,8 @@ function App() {
   }, []);
 
   const refreshPendingPins = useCallback(async () => {
+    setPendingPinsLoading(true);
+    setPendingPinsError(null);
     try {
       const { data, error } = await supabase.from("pins").select("id, lat, lng").eq("status", "pending");
       if (error) {
@@ -385,9 +387,13 @@ function App() {
         lng: pin.lng,
       }));
       setPendingPins(sanitized);
+      setPendingPinsCount(sanitized.length);
     } catch (err) {
       console.error(err);
       setPendingPins([]);
+      setPendingPinsError(err.message);
+    } finally {
+      setPendingPinsLoading(false);
     }
   }, []);
 
@@ -418,30 +424,7 @@ function App() {
       setLoadingPins(false);
     }
 
-    async function fetchPendingPinsCount() {
-      setPendingPinsLoading(true);
-      setPendingPinsError(null);
-      try {
-        const { count, error } = await supabase
-          .from("pins")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "pending");
-
-        if (error) {
-          throw error;
-        }
-
-        setPendingPinsCount(count ?? 0);
-      } catch (err) {
-        console.error(err);
-        setPendingPinsError(err.message);
-      } finally {
-        setPendingPinsLoading(false);
-      }
-    }
-
     fetchPins();
-    fetchPendingPinsCount();
     refreshPendingPins();
     fetchBubbleOptions()
       .then(({ options, statusMap }) => {
@@ -718,7 +701,6 @@ function App() {
       setHasSubmitted(true);
       setShowFullAddForm(false);
       setSelectedLocation(null);
-      setPendingPinsCount((prev) => (typeof prev === "number" ? prev + 1 : prev));
       refreshPendingPins();
     }
 
