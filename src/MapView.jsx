@@ -5,14 +5,14 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import { getGenderAbbreviation } from "./pinUtils";
 
-const DEFAULT_EMOJI = "??";
-const PENDING_REVIEW_EMOJI = "??";
+const DEFAULT_EMOJI = "\uD83D\uDE42"; // 🙂
+const PENDING_REVIEW_EMOJI = "\u23F3"; // hourglass
 const FEET_TO_METERS = 0.3048;
 const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
 const CIRCLE_STEPS = 90;
 const MAP_CLICK_TARGET_ZOOM = 15.5;
-const PLUS_CLUSTER_EMOJI = "?";
+const PLUS_CLUSTER_EMOJI = "\u2795"; // heavy plus sign
 const CLUSTER_RADIUS = 70;
 const CLUSTER_MAX_ZOOM = 18;
 const HONEYCOMB_MAX_CLUSTER_PINS = 30;
@@ -373,7 +373,7 @@ function MapView({
     const north = bounds.getNorth();
     const crossesDateLine = east < west;
 
-    const visible = pinFeaturesRef.current
+    let visible = pinFeaturesRef.current
       .map((feature) => {
         const [lng, lat] = feature.geometry.coordinates;
         const inLat = lat >= south && lat <= north;
@@ -385,9 +385,10 @@ function MapView({
       .filter(Boolean);
 
     if (visible.length === 0) {
-      source.setData({ type: "FeatureCollection", features: [] });
-      displayedStateRef.current = new Map();
-      return;
+      visible = pinFeaturesRef.current.map((feature) => {
+        const [lng, lat] = feature.geometry.coordinates;
+        return { feature, screen: map.project({ lng, lat }) };
+      });
     }
 
     const cellSize = PIN_BASE_RADIUS * 2 + 6;
