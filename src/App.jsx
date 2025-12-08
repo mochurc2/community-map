@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
 import ConfigErrorNotice from "./ConfigErrorNotice";
-import { supabase, supabaseConfigError } from "./supabaseClient";
+import { supabase, supabaseAdmin, supabaseConfigError } from "./supabaseClient";
 import MapView from "./MapView";
 import PolicyModal from "./PolicyModal";
 import privacyPolicyContent from "../PrivacyPolicy.md?raw";
@@ -373,11 +373,17 @@ function App() {
     };
   }, []);
 
+  const pendingPinsClient = supabaseAdmin || supabase;
+
   const refreshPendingPins = useCallback(async () => {
+    if (!pendingPinsClient) return;
     setPendingPinsLoading(true);
     setPendingPinsError(null);
     try {
-      const { data, error } = await supabase.from("pins").select("id, lat, lng").eq("status", "pending");
+      const { data, error } = await pendingPinsClient
+        .from("pins")
+        .select("id, lat, lng")
+        .eq("status", "pending");
       if (error) {
         throw error;
       }
@@ -395,7 +401,7 @@ function App() {
     } finally {
       setPendingPinsLoading(false);
     }
-  }, []);
+  }, [pendingPinsClient]);
 
   useEffect(() => {
     async function fetchPins() {
