@@ -5,14 +5,14 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import { getGenderAbbreviation } from "./pinUtils";
 
-const DEFAULT_EMOJI = "📍";
-const PENDING_REVIEW_EMOJI = "❗";
+const DEFAULT_EMOJI = "??";
+const PENDING_REVIEW_EMOJI = "??";
 const FEET_TO_METERS = 0.3048;
 const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
 const CIRCLE_STEPS = 90;
 const MAP_CLICK_TARGET_ZOOM = 15.5;
-const PLUS_CLUSTER_EMOJI = "➕";
+const PLUS_CLUSTER_EMOJI = "?";
 const CLUSTER_RADIUS = 70;
 const CLUSTER_MAX_ZOOM = 18;
 const HONEYCOMB_MAX_CLUSTER_PINS = 30;
@@ -366,199 +366,201 @@ function MapView({
     const source = map.getSource("pins");
     if (!source) return;
 
-    const clusterIndex = clusterIndexRef.current;
-    const zoom = Math.max(0, Math.min(CLUSTER_MAX_ZOOM, Math.round(map.getZoom())));
     const bounds = map.getBounds();
+    const west = bounds.getWest();
+    const east = bounds.getEast();
+    const south = bounds.getSouth();
+    const north = bounds.getNorth();
+    const crossesDateLine = east < west;
 
-    let clusters =
-      clusterIndex?.getClusters(
-        [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
-        zoom
-      ) || [];
-
-    const fallbackVisible = () => {
-      if (!pinFeaturesRef.current.length) return false;
-      const west = bounds.getWest();
-      const east = bounds.getEast();
-      const south = bounds.getSouth();
-      const north = bounds.getNorth();
-      const crossesDateLine = east < west;
-
-      const visibleFeatures = pinFeaturesRef.current.filter((feature) => {
+    const visible = pinFeaturesRef.current
+      .map((feature) => {
         const [lng, lat] = feature.geometry.coordinates;
         const inLat = lat >= south && lat <= north;
         const inLng = crossesDateLine ? lng >= west || lng <= east : lng >= west && lng <= east;
-        return inLat && inLng;
-      });
-
-      if (visibleFeatures.length === 0) return false;
-
-      const itemsWithScreen = visibleFeatures.map((feat) => {
-        const [lng, lat] = feat.geometry.coordinates;
+        if (!inLat || !inLng) return null;
         const screen = map.project({ lng, lat });
-        return {
-          key: `base-${feat.properties.id}`,
+        return { feature, screen };
+      })
+      .filter(Boolean);
+
+    if (visible.length === 0) {
+      source.setData({ type: "FeatureCollection", features: [] });
+      displayedStateRef.current = new Map();
+      return;
+    }
+
+    const cellSize = PIN_BASE_RADIUS * 2 + 6;
+    const grid = new Map();
+    const parent = new Map();
+    const find = (id) => {
+      let p = parent.get(id) ?? id;
+      if (p !== id) {
+        p = find(p);
+        parent.set(id, p);
+      }
+      return p;
+    };
+    const unite = (a, b) => {
+      const ra = find(a);
+      const rb = find(b);
+      if (ra !== rb) parent.set(ra, rb);
+    };
+
+    visible.forEach(({ screen }, idx) => {
+      const gx = Math.floor(screen.x / cellSize);
+      const gy = Math.floor(screen.y / cellSize);
+      const key = `${gx}:${gy}`;
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(idx);
+      parent.set(idx, idx);
+    });
+
+    const thresholdSq = Math.pow(PIN_BASE_RADIUS * 2 + 4, 2);
+    visible.forEach(({ screen }, idx) => {
+      const gx = Math.floor(screen.x / cellSize);
+      const gy = Math.floor(screen.y / cellSize);
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const bucket = grid.get(`${gx + dx}:${gy + dy}`);
+          if (!bucket) continue;
+          bucket.forEach((j) => {
+            if (j === idx) return;
+            const other = visible[j].screen;
+            const distSq = Math.pow(screen.x - other.x, 2) + Math.pow(screen.y - other.y, 2);
+            if (distSq <= thresholdSq) {
+              unite(idx, j);
+            }
+          });
+        }
+      }
+    });
+
+    const groups = new Map();
+    visible.forEach((entry, idx) => {
+      const root = find(idx);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push({ ...entry, idx });
+    });
+
+    let clusterCounter = 0;
+    const itemsWithScreen = [];
+
+    groups.forEach((members) => {
+      if (members.length === 1) {
+        const { feature, screen } = members[0];
+        const [lng, lat] = feature.geometry.coordinates;
+        const isSelected = feature.properties.id === selectedPinId;
+        const soloItem = {
+          key: `pin-${feature.properties.id}`,
           lngLat: [lng, lat],
           alpha: 1,
-          scale: 1,
+          scale: isSelected ? 1.08 : 1,
           labelAlpha: 1,
           properties: {
-            ...feat.properties,
-            pinId: feat.properties.id,
+            ...feature.properties,
+            pinId: feature.properties.id,
             isClusterMember: false,
             rootClusterId: null,
             clusterSize: 1,
             isPlus: false,
-            isSelected: false,
+            isSelected,
+            clusterCenterLngLat: [lng, lat],
             labelOffset: [1.2, 0],
           },
           screen,
         };
-      });
-
-      const acceptedLabels = computeLabelVisibility(itemsWithScreen);
-      const features = itemsWithScreen.map((item) => ({
-        type: "Feature",
-        id: item.key,
-        geometry: { type: "Point", coordinates: item.lngLat },
-        properties: {
-          ...item.properties,
-          alpha: item.alpha,
-          labelAlpha: acceptedLabels.has(item.key) ? item.labelAlpha : 0,
-          scale: item.scale,
-        },
-      }));
-
-      source.setData({ type: "FeatureCollection", features });
-      displayedStateRef.current = new Map(
-        itemsWithScreen.map((item) => [item.key, { ...item, labelAlpha: acceptedLabels.has(item.key) ? item.labelAlpha : 0 }])
-      );
-      return true;
-    };
-
-    if (clusters.length === 0) {
-      fallbackVisible();
-      return;
-    }
-
-    const targets = [];
-    const itemsWithScreen = [];
-    clusterMetaRef.current.clear();
-
-    clusters.forEach((feature) => {
-      if (feature.properties.cluster) {
-      const clusterId = feature.properties.cluster_id;
-      const count = feature.properties.point_count;
-        const center = feature.geometry.coordinates;
-        const leaves =
-          count <= HONEYCOMB_MAX_CLUSTER_PINS
-            ? clusterIndex.getLeaves(clusterId, count, 0)
-            : clusterIndex.getLeaves(clusterId, HONEYCOMB_SAMPLE_PINS, 0);
-
-        leaves.sort((a, b) => String(a.properties.id || "").localeCompare(String(b.properties.id || "")));
-
-        const includePlus = count > HONEYCOMB_MAX_CLUSTER_PINS;
-        const offsets = buildHoneycombOffsets(
-          leaves.length + (includePlus ? 1 : 0),
-          HONEYCOMB_SPACING_PX
-        );
-
-        let offsetIndex = 0;
-
-        if (includePlus) {
-          const plusPosition = offsetToLngLat(map, center, offsets[offsetIndex]);
-          offsetIndex += 1;
-
-          const plusItem = {
-            key: `cluster-${clusterId}-plus`,
-            lngLat: [plusPosition.lng, plusPosition.lat],
-            alpha: 1,
-            scale: 1,
-            labelAlpha: 0,
-            properties: {
-              iconImageId: emojiId(PLUS_CLUSTER_EMOJI),
-              labelText: "",
-              isPlus: true,
-              isClusterMember: true,
-              rootClusterId: clusterId,
-              clusterSize: count,
-              pinId: null,
-              labelOffset: [1.2, 0],
-            },
-          };
-
-          itemsWithScreen.push({
-            ...plusItem,
-            screen: map.project(plusPosition),
-          });
-          targets.push(plusItem);
-        }
-
-        leaves.forEach((leaf) => {
-          const pos = offsetToLngLat(map, center, offsets[offsetIndex]);
-          offsetIndex += 1;
-          const isSelected = leaf.properties.id === selectedPinId;
-
-          const memberItem = {
-            key: `cluster-${clusterId}-${leaf.properties.id}`,
-            lngLat: [pos.lng, pos.lat],
-            alpha: 1,
-            scale: isSelected ? 1.08 : 1,
-            labelAlpha: 1,
-            properties: {
-              ...leaf.properties,
-              pinId: leaf.properties.id,
-              isClusterMember: true,
-              rootClusterId: clusterId,
-              clusterSize: count,
-              isPlus: false,
-              isSelected,
-              labelOffset: [1.2, 0],
-            },
-          };
-
-          itemsWithScreen.push({
-            ...memberItem,
-            screen: map.project(pos),
-          });
-          targets.push(memberItem);
-        });
-
-        clusterMetaRef.current.set(clusterId, { center, count });
+        itemsWithScreen.push(soloItem);
         return;
       }
 
-      const [lng, lat] = feature.geometry.coordinates;
-      const isSelected = feature.properties.id === selectedPinId;
-      const soloItem = {
-        key: `pin-${feature.properties.id}`,
-        lngLat: [lng, lat],
-        alpha: 1,
-        scale: isSelected ? 1.08 : 1,
-        labelAlpha: 1,
-        properties: {
-          ...feature.properties,
-          pinId: feature.properties.id,
-          isClusterMember: false,
-          rootClusterId: null,
-          clusterSize: 1,
-          isPlus: false,
-          isSelected,
-          labelOffset: [1.2, 0],
-        },
-      };
+      const clusterKey = `scr-${clusterCounter}`;
+      clusterCounter += 1;
+      const centerScreen = members.reduce(
+        (acc, m) => ({ x: acc.x + m.screen.x, y: acc.y + m.screen.y }),
+        { x: 0, y: 0 }
+      );
+      centerScreen.x /= members.length;
+      centerScreen.y /= members.length;
+      const centerLngLat = map.unproject(centerScreen);
 
-      itemsWithScreen.push({
-        ...soloItem,
-        screen: map.project({ lng, lat }),
+      const sortedMembers = [...members].sort((a, b) =>
+        String(a.feature.properties.id || "").localeCompare(String(b.feature.properties.id || ""))
+      );
+
+      const includePlus = members.length > HONEYCOMB_MAX_CLUSTER_PINS;
+      const subset = includePlus
+        ? sortedMembers.slice(0, Math.min(HONEYCOMB_SAMPLE_PINS, sortedMembers.length))
+        : sortedMembers;
+
+      const offsets = buildHoneycombOffsets(subset.length + (includePlus ? 1 : 0), HONEYCOMB_SPACING_PX);
+      let offsetIndex = 0;
+
+      if (includePlus) {
+        const plusPos = {
+          lngLat: offsetToLngLat(map, [centerLngLat.lng, centerLngLat.lat], offsets[offsetIndex]),
+          offset: offsets[offsetIndex],
+        };
+        offsetIndex += 1;
+        const plusItem = {
+          key: `${clusterKey}-plus`,
+          lngLat: [plusPos.lngLat.lng, plusPos.lngLat.lat],
+          alpha: 1,
+          scale: 1,
+          labelAlpha: 0,
+          properties: {
+            iconImageId: emojiId(PLUS_CLUSTER_EMOJI),
+            labelText: "",
+            isPlus: true,
+            isClusterMember: true,
+            rootClusterId: clusterKey,
+            clusterSize: members.length,
+            pinId: null,
+            isSelected: false,
+            clusterCenterLngLat: [centerLngLat.lng, centerLngLat.lat],
+            labelOffset: [1.2, 0],
+          },
+          screen: { x: centerScreen.x + plusPos.offset.x, y: centerScreen.y + plusPos.offset.y },
+        };
+        itemsWithScreen.push(plusItem);
+      }
+
+      subset.forEach((member) => {
+        const offset = offsets[offsetIndex];
+        offsetIndex += 1;
+        const pos = offsetToLngLat(map, [centerLngLat.lng, centerLngLat.lat], offset);
+        const isSelected = member.feature.properties.id === selectedPinId;
+        const memberItem = {
+          key: `${clusterKey}-${member.feature.properties.id}`,
+          lngLat: [pos.lng, pos.lat],
+          alpha: 1,
+          scale: isSelected ? 1.08 : 1,
+          labelAlpha: 1,
+          properties: {
+            ...member.feature.properties,
+            pinId: member.feature.properties.id,
+            isClusterMember: true,
+            rootClusterId: clusterKey,
+            clusterSize: members.length,
+            isPlus: false,
+            isSelected,
+            clusterCenterLngLat: [centerLngLat.lng, centerLngLat.lat],
+            labelOffset: [1.2, 0],
+          },
+          screen: { x: centerScreen.x + offset.x, y: centerScreen.y + offset.y },
+        };
+        itemsWithScreen.push(memberItem);
       });
-      targets.push(soloItem);
     });
 
     const acceptedLabels = computeLabelVisibility(itemsWithScreen);
-    const finalized = targets.map((item) => ({
-      ...item,
+    const finalized = itemsWithScreen.map((item) => ({
+      key: item.key,
+      lngLat: item.lngLat,
+      alpha: item.alpha,
+      scale: item.scale,
       labelAlpha: acceptedLabels.has(item.key) ? item.labelAlpha ?? 1 : 0,
+      properties: item.properties,
     }));
 
     startAnimation(finalized);
@@ -791,21 +793,14 @@ function MapView({
         const rootClusterId = target.properties?.rootClusterId;
         const clusterSize = Number(target.properties?.clusterSize || 0);
 
-        const clusterKey = Number.isFinite(Number(rootClusterId))
-          ? Number(rootClusterId)
-          : null;
+        const clusterCenter = target.properties?.clusterCenterLngLat;
+        const clusterKey = rootClusterId ?? null;
 
-        if (clusterKey !== null && clusterSize > 1 && clusterIndexRef.current) {
-          const expansionZoom = clusterIndexRef.current.getClusterExpansionZoom(clusterKey);
-          const center =
-            clusterMetaRef.current.get(clusterKey)?.center ||
-            target.geometry?.coordinates ||
-            [e.lngLat.lng, e.lngLat.lat];
-
+        if (clusterCenter && clusterSize > 1) {
           map.easeTo({
-            center,
-            zoom: Math.max(expansionZoom, map.getZoom() + 0.5),
-            duration: 600,
+            center: clusterCenter,
+            zoom: map.getZoom() + 1.2,
+            duration: 520,
           });
           return;
         }
