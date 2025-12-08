@@ -9,6 +9,7 @@ const FEET_TO_METERS = 0.3048;
 const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
 const CIRCLE_STEPS = 90;
+const MAP_CLICK_TARGET_ZOOM = 15.5;
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
@@ -291,6 +292,12 @@ function MapView({
         }
         return;
       }
+
+      const zoomTarget = map.getZoom();
+      map.flyTo({
+        center: [e.lngLat.lng, e.lngLat.lat],
+        zoom: zoomTarget >= MAP_CLICK_TARGET_ZOOM ? zoomTarget : MAP_CLICK_TARGET_ZOOM,
+      });
 
       if (onMapClickRef.current) {
         onMapClickRef.current(e.lngLat);
