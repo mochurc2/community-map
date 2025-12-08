@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
 import ConfigErrorNotice from "./ConfigErrorNotice";
-import { supabase, supabaseAdmin, supabaseConfigError } from "./supabaseClient";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 import MapView from "./MapView";
 import PolicyModal from "./PolicyModal";
 import privacyPolicyContent from "../PrivacyPolicy.md?raw";
@@ -373,25 +373,24 @@ function App() {
     };
   }, []);
 
-  const pendingPinsClient = supabaseAdmin || supabase;
-
   const refreshPendingPins = useCallback(async () => {
-    if (!pendingPinsClient) return;
+    if (!supabase) return;
     setPendingPinsLoading(true);
     setPendingPinsError(null);
     try {
-      const { data, error } = await pendingPinsClient
-        .from("pins")
-        .select("id, lat, lng")
-        .eq("status", "pending");
+      const { data, error } = await supabase
+        .from("pending_pin_locations")
+        .select("pin_id, lat, lng");
       if (error) {
         throw error;
       }
-      const sanitized = (data || []).filter((pin) => typeof pin.lat === "number" && typeof pin.lng === "number").map((pin) => ({
-        id: pin.id,
-        lat: pin.lat,
-        lng: pin.lng,
-      }));
+      const sanitized = (data || [])
+        .filter((pin) => typeof pin.lat === "number" && typeof pin.lng === "number")
+        .map((pin) => ({
+          id: pin.pin_id,
+          lat: pin.lat,
+          lng: pin.lng,
+        }));
       setPendingPins(sanitized);
       setPendingPinsCount(sanitized.length);
     } catch (err) {
@@ -401,7 +400,7 @@ function App() {
     } finally {
       setPendingPinsLoading(false);
     }
-  }, [pendingPinsClient]);
+  }, []);
 
   useEffect(() => {
     async function fetchPins() {
