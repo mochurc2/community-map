@@ -1434,17 +1434,54 @@ textarea {
   gap: 0.65rem;
   max-height: 80vh;
   overflow: hidden;
+  pointer-events: auto;
 }
 
 .policy-content {
   max-height: calc(80vh - 140px);
   overflow: auto;
+  display: grid;
+  gap: 0.65rem;
 }
 
-.policy-content pre {
+.policy-content h2,
+.policy-content h3,
+.policy-content h4,
+.policy-heading,
+.policy-subheading {
   margin: 0;
-  white-space: pre-wrap;
-  font-family: inherit;
+  color: #0f172a;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.policy-heading {
+  font-size: 1.2rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.25rem;
+}
+
+.policy-subheading {
+  font-size: 1.05rem;
+}
+
+.policy-paragraph {
+  margin: 0;
+  color: #1f2937;
+  line-height: 1.6;
+  font-size: 0.97rem;
+}
+
+.policy-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+  color: #1f2937;
+  font-size: 0.97rem;
+}
+
+.policy-list li {
   line-height: 1.5;
 }
 

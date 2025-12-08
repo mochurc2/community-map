@@ -1,5 +1,5 @@
 # Privacy Policy
-**Last updated: [fill in]**
+**Last updated: December 7, 2025**
 
 This Privacy Policy explains what data HairFetishMap (“the Site,” “we,” “us”) collects, how it is used, and your rights.
 
