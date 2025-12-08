@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import PolicyModal from "./PolicyModal";
+import privacyPolicyContent from "../PrivacyPolicy.md?raw";
+import termsContent from "../ToS.md?raw";
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
@@ -10,8 +13,7 @@ function EntryGate({ onComplete }) {
   const [turnstileReady, setTurnstileReady] = useState(
     () => typeof window !== "undefined" && Boolean(window.turnstile)
   );
-  const [showTos, setShowTos] = useState(false);
-  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [policyModal, setPolicyModal] = useState(null);
   const widgetContainerRef = useRef(null);
   const widgetIdRef = useRef(null);
   const [token, setToken] = useState("");
@@ -105,8 +107,9 @@ function EntryGate({ onComplete }) {
     }
   };
 
-  const closeTos = () => setShowTos(false);
-  const closePrivacy = () => setShowPrivacy(false);
+  const closePolicy = () => setPolicyModal(null);
+  const policyTitle = policyModal === "tos" ? "Terms of Service" : "Privacy Policy";
+  const policyContent = policyModal === "tos" ? termsContent : privacyPolicyContent;
 
   return (
     <div className="gate-overlay" role="dialog" aria-modal="true" aria-label="Safety gate">
@@ -139,11 +142,11 @@ function EntryGate({ onComplete }) {
             />
             <span>
               I agree to the{" "}
-              <button type="button" className="inline-link" onClick={() => setShowTos(true)}>
+              <button type="button" className="inline-link" onClick={() => setPolicyModal("tos")}>
                 Terms of Service
               </button>{" "}
               and{" "}
-              <button type="button" className="inline-link" onClick={() => setShowPrivacy(true)}>
+              <button type="button" className="inline-link" onClick={() => setPolicyModal("privacy")}>
                 Privacy Policy
               </button>
               .
@@ -173,34 +176,8 @@ function EntryGate({ onComplete }) {
         </form>
       </div>
 
-      {(showTos || showPrivacy) && (
-        <div className="gate-modal" role="dialog" aria-modal="true">
-          <div className="gate-modal-backdrop" onClick={showTos ? closeTos : closePrivacy} />
-          <div className="gate-modal-card">
-            <div className="modal-header">
-              <h3>{showTos ? "Terms of Service" : "Privacy Policy"}</h3>
-              <button type="button" className="close-button" onClick={showTos ? closeTos : closePrivacy}>
-                X
-              </button>
-            </div>
-            <div className="modal-body">
-              <p className="muted">
-                Placeholder content for the {showTos ? "Terms of Service" : "Privacy Policy"}. Replace this
-                text with the finalized policy language when it is ready.
-              </p>
-              <ul className="list">
-                <li>Describe the purpose of the site and permitted uses.</li>
-                <li>Explain how user data is collected, stored, and shared.</li>
-                <li>Include moderation rules, prohibited behavior, and liability notes.</li>
-              </ul>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="primary" onClick={showTos ? closeTos : closePrivacy}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+      {policyModal && (
+        <PolicyModal title={policyTitle} content={policyContent} onClose={closePolicy} />
       )}
     </div>
   );

@@ -1264,6 +1264,12 @@ textarea {
   flex-wrap: wrap;
 }
 
+.policy-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .gate-overlay {
   position: fixed;
   inset: 0;
@@ -1396,6 +1402,50 @@ textarea {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+}
+
+.policy-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 90;
+}
+
+.policy-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.policy-card {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.25);
+  padding: 1rem 1.15rem;
+  display: grid;
+  gap: 0.65rem;
+  max-height: 80vh;
+  overflow: hidden;
+}
+
+.policy-content {
+  max-height: calc(80vh - 140px);
+  overflow: auto;
+}
+
+.policy-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  line-height: 1.5;
 }
 
 @media (max-width: 640px) {

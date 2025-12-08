@@ -3,6 +3,9 @@ import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
 import ConfigErrorNotice from "./ConfigErrorNotice";
 import { supabase, supabaseConfigError } from "./supabaseClient";
 import MapView from "./MapView";
+import PolicyModal from "./PolicyModal";
+import privacyPolicyContent from "../PrivacyPolicy.md?raw";
+import termsContent from "../ToS.md?raw";
 import {
   ensurePendingBubbleOption,
   fetchBubbleOptions,
@@ -343,6 +346,7 @@ function App() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackError, setFeedbackError] = useState(null);
   const [feedbackStatus, setFeedbackStatus] = useState(null);
+  const [policyModal, setPolicyModal] = useState(null);
   const titleCardRef = useRef(null);
 
   useEffect(() => {
@@ -875,6 +879,9 @@ function App() {
     setFeedbackPrompt(null);
   };
 
+  const openPolicy = (type) => setPolicyModal(type);
+  const closePolicy = () => setPolicyModal(null);
+
   const togglePanel = (panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
     if (panel === "add") {
@@ -1120,6 +1127,20 @@ function App() {
                 responsibility for your own safety.
               </li>
             </ul>
+          </div>
+          <div className="panel-subsection">
+            <span className="eyebrow">Policies</span>
+            <p className="muted">
+              Review the Terms of Service and Privacy Policy before using the site.
+            </p>
+            <div className="policy-link-row">
+              <button type="button" className="tiny-button" onClick={() => openPolicy("tos")}>
+                View Terms of Service
+              </button>
+              <button type="button" className="tiny-button" onClick={() => openPolicy("privacy")}>
+                View Privacy Policy
+              </button>
+            </div>
           </div>
           <div className="panel-subsection feedback-subsection">
             <div>
@@ -1452,6 +1473,8 @@ function App() {
       .map(([channel, value]) => buildContactLink(channel, value))
       .filter(Boolean)
     : [];
+  const policyTitle = policyModal === "tos" ? "Terms of Service" : "Privacy Policy";
+  const policyContent = policyModal === "tos" ? termsContent : privacyPolicyContent;
 
   const reportPinButton =
     visibleSelectedPin && visibleSelectedPin.id
@@ -1708,6 +1731,10 @@ function App() {
 
           {pinInfoPanel}
         </div>
+      )}
+
+      {policyModal && (
+        <PolicyModal title={policyTitle} content={policyContent} onClose={closePolicy} />
       )}
 
       {feedbackPrompt && (
