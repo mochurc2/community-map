@@ -416,6 +416,7 @@ function MapView({
   const isMapMovingRef = useRef(false);
   const lastGoodNodesRef = useRef([]);
   const lastGoodLabelsRef = useRef([]);
+  const lastGoodSignatureRef = useRef("");
   const pinOffsetCacheRef = useRef(new Map());
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
@@ -906,9 +907,12 @@ function MapView({
         iteration += 1;
       }
 
-      if (nodes.length === 0 && lastGoodNodesRef.current.length > 0) {
-        applyVisualNodes(lastGoodNodesRef.current);
-        applyLabelNodes(lastGoodLabelsRef.current);
+      if (nodes.length === 0) {
+        if (lastGoodNodesRef.current.length > 0 && lastGoodSignatureRef.current === dataSignatureRef.current) {
+          applyVisualNodes(lastGoodNodesRef.current);
+          applyLabelNodes(lastGoodLabelsRef.current);
+          lastGoodSignatureRef.current = dataSignatureRef.current;
+        }
         return;
       }
 
@@ -964,6 +968,7 @@ function MapView({
 
       lastGoodNodesRef.current = nodes;
       lastGoodLabelsRef.current = deduped;
+      lastGoodSignatureRef.current = dataSignatureRef.current;
       applyLabelNodes(
         deduped.map((label) => ({
           ...label,
@@ -975,6 +980,7 @@ function MapView({
       if (lastGoodNodesRef.current.length > 0) {
         applyVisualNodes(lastGoodNodesRef.current);
         applyLabelNodes(lastGoodLabelsRef.current);
+        lastGoodSignatureRef.current = dataSignatureRef.current;
       }
     }
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
@@ -1104,7 +1110,11 @@ function MapView({
       scheduleLayout();
     });
 
-    map.on("idle", scheduleLayout);
+    map.on("idle", () => {
+      isMapMovingRef.current = false;
+      setIsInteracting(false);
+      scheduleLayout();
+    });
     map.on("resize", scheduleLayout);
 
     map.on("click", (e) => {
@@ -1139,6 +1149,11 @@ function MapView({
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (signature !== dataSignatureRef.current) {
       dataAnimationUntilRef.current = now + 650;
+    }
+    if (signature !== dataSignatureRef.current) {
+      lastGoodNodesRef.current = [];
+      lastGoodLabelsRef.current = [];
+      lastGoodSignatureRef.current = "";
     }
     dataSignatureRef.current = signature;
     scheduledLayoutRef.current = false;
@@ -1178,7 +1193,29 @@ function MapView({
     if (labelNodes.length === 0 && lastGoodLabelsRef.current.length > 0) {
       applyLabelNodes(lastGoodLabelsRef.current);
     }
-  }, [applyLabelNodes, applyVisualNodes, combinedPins.length, isInteracting, labelNodes.length, mapLoaded, visualNodes.length]);
+    const selectedExists =
+      selectedPinId !== null &&
+      selectedPinId !== undefined &&
+      (visualNodes.length ? visualNodes : lastGoodNodesRef.current).some((n) => n.pin?.id === selectedPinId);
+    if (!selectedExists && lastGoodNodesRef.current.length > 0) {
+      applyVisualNodes(
+        lastGoodNodesRef.current.map((node) =>
+          selectedPinId !== null && selectedPinId !== undefined && node.pin?.id === selectedPinId
+            ? { ...node, isSelected: true }
+            : node
+        )
+      );
+    }
+  }, [
+    applyLabelNodes,
+    applyVisualNodes,
+    combinedPins.length,
+    isInteracting,
+    labelNodes.length,
+    mapLoaded,
+    selectedPinId,
+    visualNodes.length,
+  ]);
 
   useEffect(() => {
     if (!mapLoaded) return;
