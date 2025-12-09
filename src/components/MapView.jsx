@@ -18,7 +18,7 @@ import {
   LABEL_VERTICAL_GAP,
   ANIMATION_TIMING,
   CLICK_TO_SPLIT_DELTA,
-} from "./mapConstants";
+} from "../mapConstants";
 
 const DEFAULT_EMOJI = "🙂";
 const PENDING_REVIEW_EMOJI = "❗";
