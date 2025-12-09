@@ -8,6 +8,7 @@ import {
   updateBubbleOption,
 } from "./bubbleOptions";
 import ConfigErrorNotice from "./ConfigErrorNotice";
+import { tokens, helpers } from "./styles/tokens";
 import { supabase, supabaseAdmin, supabaseConfigError } from "./supabaseClient";
 const moderationClient = supabaseAdmin || supabase;
 
@@ -54,8 +55,8 @@ function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
             onChange={(e) => setLabel(e.target.value)}
             aria-label={`${field} bubble`}
           />
-          <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
-            <label className="helper-text" style={{ fontWeight: 700 }}>
+          <div className="flex-center">
+            <label className="helper-text font-bold">
               Status
             </label>
             <select
@@ -70,7 +71,7 @@ function ModerationBubbleEditor({ option, field, onSave, onDelete }) {
             </select>
           </div>
           <div className="mod-bubble-actions">
-            <button type="button" onClick={save} disabled={busy}>
+            <button type="button" className="primary" onClick={save} disabled={busy}>
               Save
             </button>
             <button type="button" className="ghost-button" onClick={() => setEditing(false)} disabled={busy}>
@@ -619,8 +620,8 @@ function ModerationPage() {
             Sign in with the Supabase moderator account to manage submissions and bubble options.
           </p>
 
-          <form onSubmit={handleLogin} style={{ marginTop: "1rem", display: "grid", gap: "0.75rem" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontWeight: 600 }}>
+          <form onSubmit={handleLogin} className="flex-col gap-lg" style={{ marginTop: "1rem" }}>
+            <label className="flex-col gap-sm font-semibold">
               Email
               <input
                 type="email"
@@ -631,7 +632,7 @@ function ModerationPage() {
                 required
               />
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontWeight: 600 }}>
+            <label className="flex-col gap-sm font-semibold">
               Password
               <input
                 type="password"
@@ -642,12 +643,12 @@ function ModerationPage() {
                 required
               />
             </label>
-            {authError && <p style={{ color: "#b91c1c", margin: 0 }}>{authError}</p>}
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            {authError && <p className="m-0" style={{ color: tokens.colors.status.error.text }}>{authError}</p>}
+            <div className="flex-row">
               <button type="submit" disabled={authLoading}>
                 {authLoading ? "Signing in…" : "Sign in"}
               </button>
-              <Link to="/" className="link" style={{ color: "#4f46e5", fontWeight: 700 }}>
+              <Link to="/" className="link font-bold" style={{ color: tokens.colors.status.info.text }}>
                 ← Back to map
               </Link>
             </div>
@@ -671,47 +672,41 @@ function ModerationPage() {
     }
 
     return (
-      <div style={{ display: "grid", gap: "0.75rem" }}>
+      <div style={{ display: "grid", gap: tokens.spacing.lg }}>
         {list.map((pin) => (
           <div
             key={pin.id}
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: "16px",
-              padding: "1rem 1.1rem",
-              background: "#fff",
-              boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-            }}
+            style={helpers.card}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+            <div className="flex-between gap-md">
               <div>
-                <p style={{ margin: 0, fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                <p className="m-0 font-bold flex-center">
                   <span>{pin.icon || "📍"}</span>
                   <span>{pin.nickname || "No nickname"}</span>
                 </p>
-                <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                <p className="detail-text">
                   {pin.city || "Unknown location"} {pin.state_province && `(${pin.state_province})`} {pin.country || pin.country_code}
                   {" "}
-                  <span style={{ fontWeight: 500, color: "#6b7280" }}>
+                  <span className="font-medium text-muted">
                     ({pin.lat?.toFixed(4)}, {pin.lng?.toFixed(4)})
                   </span>
                 </p>
-                <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                <p className="detail-text">
                   Gender: {pin.genders?.length ? pin.genders.join(", ") : pin.gender_identity || "unspecified"}
                   {pin.seeking && pin.seeking.length > 0 && <> — Interested in: {pin.seeking.join(", ")}</>}
                 </p>
                 {pin.interest_tags && pin.interest_tags.length > 0 && (
-                  <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                  <p className="detail-text">
                     Interests: {pin.interest_tags.join(", ")}
                   </p>
                 )}
                 {pin.note && (
-                  <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                  <p className="detail-text">
                     Note: {pin.note}
                   </p>
                 )}
                 {pin.contact_methods && Object.keys(pin.contact_methods).length > 0 && (
-                  <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                  <p className="detail-text">
                     Contact: {Object.entries(pin.contact_methods)
                       .map(([key, val]) => `${key}: ${val}`)
                       .join(" · ")}
@@ -778,20 +773,14 @@ function ModerationPage() {
           return (
             <div
               key={msg.id}
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: "16px",
-                padding: "1rem 1.1rem",
-                background: "#fff",
-                boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
-              }}
+              style={helpers.card}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+              <div className="flex-between gap-lg">
                 <div>
-                  <p style={{ margin: 0, fontWeight: 700 }}>
+                  <p className="m-0 font-bold">
                     {msg.kind === "pin_report" ? "Pin report" : "Site feedback"}
                   </p>
-                  <p style={{ margin: "0.2rem 0 0", color: "#4b5563" }}>
+                  <p className="text-muted" style={{ marginTop: tokens.spacing.xxs }}>
                     Received {new Date(msg.created_at).toLocaleString()}
                   </p>
                 </div>
@@ -803,8 +792,8 @@ function ModerationPage() {
                 </span>
               </div>
 
-              <p style={{ margin: "0.75rem 0 0.35rem", fontSize: "0.98rem", color: "#111827" }}>{msg.message}</p>
-              <p style={{ margin: 0, color: "#4b5563", fontSize: "0.95rem" }}>
+              <p className="text-base" style={{ margin: "0.75rem 0 0.35rem" }}>{msg.message}</p>
+              <p className="m-0 text-base text-muted">
                 Contact: {msg.contact_info || "Not provided"}
               </p>
 
@@ -813,36 +802,36 @@ function ModerationPage() {
                   style={{
                     marginTop: "0.65rem",
                     padding: "0.75rem",
-                    borderRadius: 12,
+                    borderRadius: "12px",
                     border: "1px solid #e5e7eb",
                     background: "#f9fafb",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+                  <div className="flex-between gap-md">
                     <div>
-                      <p style={{ margin: 0, fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      <p className="m-0 font-bold flex-center">
                         <span>{pin.icon || "📍"}</span>
                         <span>{pin.nickname || "No nickname"}</span>
                       </p>
-                      <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                      <p className="detail-text">
                         {pin.city || "Unknown location"} {pin.state_province && `(${pin.state_province})`} {pin.country || pin.country_code}
                       </p>
-                      <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                      <p className="detail-text">
                         Gender: {pin.genders?.length ? pin.genders.join(", ") : pin.gender_identity || "unspecified"}
                         {pin.seeking && pin.seeking.length > 0 && <> — Interested in: {pin.seeking.join(", ")}</>}
                       </p>
                       {pin.interest_tags && pin.interest_tags.length > 0 && (
-                        <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                        <p className="detail-text">
                           Interests: {pin.interest_tags.join(", ")}
                         </p>
                       )}
                       {pin.note && (
-                        <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                        <p className="detail-text">
                           Note: {pin.note}
                         </p>
                       )}
                       {pin.contact_methods && Object.keys(pin.contact_methods).length > 0 && (
-                        <p style={{ margin: "0.25rem 0", fontSize: "0.95rem", color: "#374151" }}>
+                        <p className="detail-text">
                           Contact: {Object.entries(pin.contact_methods)
                             .map(([key, val]) => `${key}: ${val}`)
                             .join(" · ")}
@@ -933,19 +922,19 @@ function ModerationPage() {
           gap: "1.25rem",
         }}
       >
-        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <header className="flex-between">
           <div>
-            <p style={{ margin: 0, fontWeight: 700, color: "#4f46e5" }}>Moderation</p>
+            <p className="m-0 font-bold" style={{ color: "#4f46e5" }}>Moderation</p>
             <h1 style={{ margin: "0.2rem 0 0" }}>Pins & messages</h1>
-            <p style={{ margin: "0.4rem 0 0", color: "#4b5563" }}>
+            <p className="text-muted" style={{ margin: "0.4rem 0 0" }}>
               Review submissions, visitor reports, and keep the bubble library up to date.
             </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div className="flex-row gap-lg">
             <button type="button" className="ghost-button" onClick={handleLogout}>
               Sign out
             </button>
-            <Link to="/" className="link" style={{ color: "#0f172a", fontWeight: 700 }}>
+            <Link to="/" className="link font-bold">
               ← Back to map
             </Link>
           </div>
@@ -957,7 +946,7 @@ function ModerationPage() {
           ))}
         </div>
 
-        {error && <p style={{ color: "#b91c1c", margin: 0 }}>Error: {error}</p>}
+        {error && <p className="m-0" style={{ color: tokens.colors.status.error.text }}>Error: {error}</p>}
 
         {activeTab === "messages" && (
           <section style={{ display: "grid", gap: "0.75rem" }}>
@@ -968,7 +957,7 @@ function ModerationPage() {
                   Feedback, site issues, and pin reports submitted from the map.
                 </p>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div className="flex-wrap">
                 {messageFilters.map((filter) => (
                   <button
                     key={filter.id}
@@ -1003,7 +992,7 @@ function ModerationPage() {
               alignItems: "center",
               gap: "0.75rem",
               padding: "0.9rem 1rem",
-              borderRadius: 12,
+              borderRadius: "12px",
               border: "1px solid #fecaca",
               background: "#fef2f2",
             }}
@@ -1148,7 +1137,7 @@ function ModerationPage() {
           <section
             style={{
               padding: "1.25rem 1.1rem",
-              borderRadius: 16,
+              borderRadius: "16px",
               background: "#fff",
               border: "1px solid #e5e7eb",
               boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
