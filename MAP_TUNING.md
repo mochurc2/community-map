@@ -7,5 +7,6 @@ Adjust the clustering, layout, and animation feel in `src/mapConstants.js`:
 - `CLICK_TO_SPLIT_DELTA`: zoom increment when the user taps a cluster or `+`.
 - `ANIMATION_TIMING`: ms for enter/exit/move/label fades.
 - `LABEL_*` values: padding, gap, and max label width for decluttering. To pull labels closer, lower `LABEL_HORIZONTAL_GAP` / `LABEL_VERTICAL_GAP` and `LABEL_MARGIN` (but keep enough to avoid icon overlap).
+- Honeycomb placement is “sticky”: pins try to re-use their previous hex slot and new pins fill the nearest free slot. Extra offset capacity (visible pins + 8) helps new pins attach on the correct side without shuffling existing pins.
 
 Interaction zoom targets live in `src/MapView.jsx` (`MAP_CLICK_TARGET_ZOOM`) if deeper zoom-on-click is desired.

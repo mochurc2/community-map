@@ -27,6 +27,50 @@ const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
 const CIRCLE_STEPS = 90;
 const MAP_CLICK_TARGET_ZOOM = 15.5;
+const CITY_OVERVIEW_ZOOM = 12.3;
+const easeOutHeavy = (t) => 1 - Math.pow(1 - t, 3);
+const easeInOut = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+const smoothDuration = (currentZoom, targetZoom) => {
+  const delta = Math.abs((targetZoom || 0) - (currentZoom || 0));
+  const base = 450;
+  const perStep = 180;
+  return Math.min(1400, base + delta * perStep);
+};
+const centerThenZoom = (map, center, targetZoom, animationFrameRef) => {
+  if (!map) return;
+  if (animationFrameRef.current) {
+    cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+  }
+
+  const startCenter = map.getCenter();
+  const startZoom = map.getZoom();
+  const totalDuration = smoothDuration(startZoom, targetZoom);
+  const start = typeof performance !== "undefined" ? performance.now() : Date.now();
+
+  const step = () => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const t = Math.min(1, (now - start) / totalDuration);
+    const panT = Math.min(1, t / 0.35); // faster pan
+    const zoomT = easeInOut(t);
+    const panEase = easeOutHeavy(panT);
+
+    const nextLng = startCenter.lng + (center[0] - startCenter.lng) * panEase;
+    const nextLat = startCenter.lat + (center[1] - startCenter.lat) * panEase;
+    const nextZoom = startZoom + (targetZoom - startZoom) * zoomT;
+
+    map.jumpTo({ center: [nextLng, nextLat], zoom: nextZoom });
+
+    if (t < 1) {
+      animationFrameRef.current = requestAnimationFrame(step);
+    } else {
+      animationFrameRef.current = null;
+      map.jumpTo({ center, zoom: targetZoom });
+    }
+  };
+
+  animationFrameRef.current = requestAnimationFrame(step);
+};
 const LABEL_FONT_PRIMARY = '600 13px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 const LABEL_FONT_SECONDARY = '12px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 
@@ -113,7 +157,7 @@ class UnionFind {
   union(a, b) {
     const rootA = this.find(a);
     const rootB = this.find(b);
-    if (rootA === rootB) return;
+    if (rootA === rootB) return false;
     if (this.rank[rootA] < this.rank[rootB]) {
       this.parent[rootA] = rootB;
     } else if (this.rank[rootA] > this.rank[rootB]) {
@@ -122,6 +166,7 @@ class UnionFind {
       this.parent[rootB] = rootA;
       this.rank[rootA] += 1;
     }
+    return true;
   }
 }
 
@@ -138,7 +183,8 @@ const generateHoneycombOffsets = (count) => {
   const offsets = [{ dx: 0, dy: 0 }];
   if (count === 1) return offsets;
 
-  const spacing = PIN_DIAMETER * 1.05;
+  // Compact spacing to keep pins touching without overlap.
+  const spacing = PIN_DIAMETER * 1.02 + CLUSTER_COLLISION_PADDING * 0.3;
   const a = spacing / Math.sqrt(3);
   let ring = 1;
 
@@ -167,6 +213,63 @@ const boxesOverlap = (a, b) =>
 const buildClusterKey = (items) => {
   const ids = items.map((item) => item.__key).sort();
   return `${ids[0]}-${items.length}-${ids[ids.length - 1]}`;
+};
+
+// Simple Hungarian/Munkres for square cost matrix
+const hungarian = (matrix) => {
+  const n = matrix.length;
+  const u = Array(n + 1).fill(0);
+  const v = Array(n + 1).fill(0);
+  const p = Array(n + 1).fill(0);
+  const way = Array(n + 1).fill(0);
+
+  for (let i = 1; i <= n; i += 1) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = Array(n + 1).fill(Infinity);
+    const used = Array(n + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = Infinity;
+      let j1 = 0;
+      for (let j = 1; j <= n; j += 1) {
+        if (used[j]) continue;
+        const cur = matrix[i0 - 1][j - 1] - u[i0] - v[j];
+        if (cur < minv[j]) {
+          minv[j] = cur;
+          way[j] = j0;
+        }
+        if (minv[j] < delta) {
+          delta = minv[j];
+          j1 = j;
+        }
+      }
+      for (let j = 0; j <= n; j += 1) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0 !== 0);
+  }
+
+  const assignment = Array(n).fill(-1);
+  for (let j = 1; j <= n; j += 1) {
+    if (p[j] > 0 && p[j] <= n) {
+      assignment[p[j] - 1] = j - 1;
+    }
+  }
+  return assignment;
 };
 
 const formatLabelText = (pin) => {
@@ -227,10 +330,11 @@ const buildLabelBoxes = (candidates, obstacles, ctx, bounds) => {
 
   sorted.forEach((candidate) => {
     const { width, height } = measureLabel(ctx, candidate.text);
+    const centerOffset = PIN_RADIUS * 0.35;
     const left =
       candidate.side === "left"
-        ? candidate.x - LABEL_HORIZONTAL_GAP - width
-        : candidate.x + LABEL_HORIZONTAL_GAP;
+        ? candidate.x - centerOffset - LABEL_HORIZONTAL_GAP - width
+        : candidate.x + centerOffset + LABEL_HORIZONTAL_GAP;
     const top = candidate.y - height / 2;
     const box = {
       key: candidate.key,
@@ -264,7 +368,13 @@ const buildLabelBoxes = (candidates, obstacles, ctx, bounds) => {
         const key = `${gx}:${gy}`;
         const bucket = grid.get(key);
         if (!bucket) continue;
-        if (bucket.some((boxB) => boxesOverlap(box, boxB))) {
+        if (
+          bucket.some(
+            (boxB) =>
+              boxB.pinKey !== candidate.pinKey &&
+              boxesOverlap(box, boxB)
+          )
+        ) {
           return;
         }
       }
@@ -285,6 +395,7 @@ function MapView({
   pendingLocation,
   pendingIcon,
   selectedPinId,
+  enableAddMode = false,
 }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -302,7 +413,9 @@ function MapView({
   const isMapMovingRef = useRef(false);
   const lastGoodNodesRef = useRef([]);
   const lastGoodLabelsRef = useRef([]);
+  const pinOffsetCacheRef = useRef(new Map());
   const dataSignatureRef = useRef("");
+  const animationFrameRef = useRef(null);
   const dataAnimationUntilRef = useRef(0);
 
   useEffect(() => {
@@ -371,221 +484,572 @@ function MapView({
   }, [pins, pendingPins]);
 
   const applyVisualNodes = useCallback((nextNodes) => {
-    setVisualNodes((prev) => {
-      const prevMap = new Map(prev.map((node) => [node.key, node]));
-      const merged = nextNodes.map((node) => {
-        const previous = prevMap.get(node.key);
-        prevMap.delete(node.key);
-        return previous
-          ? { ...previous, ...node, phase: "active" }
-          : { ...node, phase: "enter" };
-      });
-
-      prevMap.forEach((node) => {
-        merged.push({ ...node, phase: "exit" });
-      });
-
-      return merged;
-    });
+    setVisualNodes(nextNodes.map((node) => ({ ...node, phase: "active" })));
   }, []);
 
   const applyLabelNodes = useCallback((nextLabels) => {
-    setLabelNodes((prev) => {
-      const prevMap = new Map(prev.map((label) => [label.key, label]));
-      const merged = nextLabels.map((label) => {
-        const previous = prevMap.get(label.key);
-        prevMap.delete(label.key);
-        return previous ? { ...previous, ...label, phase: "active" } : { ...label, phase: "enter" };
-      });
-
-      prevMap.forEach((label) => merged.push({ ...label, phase: "exit" }));
-      return merged;
-    });
+    setLabelNodes(nextLabels.map((label) => ({ ...label, phase: "active" })));
   }, []);
 
   const computeLayout = useCallback(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const ctx = measureContextRef.current;
+    try {
+      const map = mapRef.current;
+      if (!map) return;
+      const ctx = measureContextRef.current;
 
-    const container = map.getContainer();
-    const bounds = {
-      width: container?.clientWidth || 0,
-      height: container?.clientHeight || 0,
-    };
-    if (bounds.width < 10 || bounds.height < 10) return;
+      const container = map.getContainer();
+      const bounds = {
+        width: container?.clientWidth || 0,
+        height: container?.clientHeight || 0,
+      };
+      if (bounds.width < 10 || bounds.height < 10) return;
 
-    const projected = [];
+      const projected = [];
 
-    combinedPins.forEach((pin) => {
-      if (typeof pin.lat !== "number" || typeof pin.lng !== "number") return;
-      const { x, y } = map.project([pin.lng, pin.lat]);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      const labelText = formatLabelText(pin);
-      projected.push({
-        ...pin,
-        x,
-        y,
-        labelText,
-        isSelected: selectedPinId !== null && selectedPinId !== undefined && pin.id === selectedPinId,
+      combinedPins.forEach((pin) => {
+        if (typeof pin.lat !== "number" || typeof pin.lng !== "number") return;
+        const { x, y } = map.project([pin.lng, pin.lat]);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        const labelText = formatLabelText(pin);
+        projected.push({
+          ...pin,
+          __idx: projected.length,
+          x,
+          y,
+          labelText,
+          isSelected: selectedPinId !== null && selectedPinId !== undefined && pin.id === selectedPinId,
+        });
       });
-    });
 
-    if (projected.length === 0) {
-      if (combinedPins.length === 0) {
-        applyVisualNodes([]);
-        applyLabelNodes([]);
-        lastGoodNodesRef.current = [];
-        lastGoodLabelsRef.current = [];
-      }
-      return;
-    }
-
-    const cellSize = PIN_DIAMETER + CLUSTER_COLLISION_PADDING;
-    const grid = new Map();
-    projected.forEach((pin, index) => {
-      const gx = Math.floor(pin.x / cellSize);
-      const gy = Math.floor(pin.y / cellSize);
-      const key = `${gx}:${gy}`;
-      if (!grid.has(key)) grid.set(key, []);
-      grid.get(key).push(index);
-    });
-
-    const uf = new UnionFind(projected.length);
-
-    projected.forEach((pin, index) => {
-      const gx = Math.floor(pin.x / cellSize);
-      const gy = Math.floor(pin.y / cellSize);
-      for (let dx = -1; dx <= 1; dx += 1) {
-        for (let dy = -1; dy <= 1; dy += 1) {
-          const bucket = grid.get(`${gx + dx}:${gy + dy}`);
-          if (!bucket) continue;
-          bucket.forEach((other) => {
-            if (other === index) return;
-            const neighbor = projected[other];
-            const distSq = (pin.x - neighbor.x) ** 2 + (pin.y - neighbor.y) ** 2;
-            const collideDist = PIN_DIAMETER + CLUSTER_COLLISION_PADDING;
-            if (distSq <= collideDist * collideDist) {
-              uf.union(index, other);
-            }
-          });
+      if (projected.length === 0) {
+        if (combinedPins.length === 0) {
+          applyVisualNodes([]);
+          applyLabelNodes([]);
+          lastGoodNodesRef.current = [];
+          lastGoodLabelsRef.current = [];
         }
+        return;
       }
-    });
 
-    const clustersMap = new Map();
-    projected.forEach((pin, index) => {
-      const root = uf.find(index);
-      if (!clustersMap.has(root)) clustersMap.set(root, []);
-      clustersMap.get(root).push(pin);
-    });
+      const cellSize = PIN_DIAMETER + CLUSTER_COLLISION_PADDING;
+      const grid = new Map();
+      projected.forEach((pin, index) => {
+        const gx = Math.floor(pin.x / cellSize);
+        const gy = Math.floor(pin.y / cellSize);
+        const key = `${gx}:${gy}`;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(index);
+      });
 
-    const clusters = Array.from(clustersMap.values());
+<<<<<<< ours
+      const uf = new UnionFind(projected.length);
+=======
     const nodes = [];
+    const maxIterations = 6;
+    let iteration = 0;
+    while (iteration < maxIterations) {
+      const clusters = buildClusters();
+      nodes.length = 0;
 
-    clusters.forEach((clusterPins) => {
-      const centerX = clusterPins.reduce((sum, pin) => sum + pin.x, 0) / clusterPins.length;
-      const centerY = clusterPins.reduce((sum, pin) => sum + pin.y, 0) / clusterPins.length;
-      const centerLngLat = map.unproject([centerX, centerY]);
-      const clusterKey = buildClusterKey(clusterPins);
+      clusters.forEach(({ root, pins: clusterPins }) => {
+        const centerX = clusterPins.reduce((sum, pin) => sum + pin.x, 0) / clusterPins.length;
+        const centerY = clusterPins.reduce((sum, pin) => sum + pin.y, 0) / clusterPins.length;
+        const centerLngLat = map.unproject([centerX, centerY]);
+        const clusterKey = buildClusterKey(clusterPins);
 
-      const sortedPins = [...clusterPins].sort((a, b) => {
-        if (a.__order !== b.__order) return a.__order - b.__order;
-        return a.__key.localeCompare(b.__key);
-      });
-
-      const usingPlus = clusterPins.length > HONEYCOMB_MAX;
-      const visiblePinCount = usingPlus
-        ? Math.min(LARGE_CLUSTER_SAMPLE, HONEYCOMB_MAX - 1, clusterPins.length)
-        : clusterPins.length;
-      const offsets = generateHoneycombOffsets(visiblePinCount + (usingPlus ? 1 : 0));
-
-      if (usingPlus) {
-        nodes.push({
-          key: `${clusterKey}-plus`,
-          x: centerX,
-          y: centerY,
-          isPlus: true,
-          clusterSize: clusterPins.length,
-          center: centerLngLat,
-          labelText: `${clusterPins.length} pins`,
-          category: "cluster",
-          sortOrder: -1,
-        });
-      }
-
-      const pinList = sortedPins.slice(0, visiblePinCount);
-      pinList.forEach((pin, idx) => {
-        const offset = offsets[usingPlus ? idx + 1 : idx] || { dx: 0, dy: 0 };
-        nodes.push({
-          key: pin.__key,
-          x: centerX + offset.dx,
-          y: centerY + offset.dy,
+<<<<<<< ours
+<<<<<<< ours
+=======
+>>>>>>> theirs
+        if (clusterPins.length === 1) {
+          const pin = clusterPins[0];
+=======
+        const withAngles = clusterPins.map((pin) => ({
           pin,
-          icon: pin.icon || DEFAULT_EMOJI,
-          clusterSize: clusterPins.length,
-          center: centerLngLat,
-          isPlus: false,
-          labelText: pin.labelText,
-          category: pin.__kind,
-          sortOrder: pin.__order ?? idx,
-          isSelected: pin.isSelected,
+          angle: Math.atan2(pin.y - centerY, pin.x - centerX),
+          dist: (pin.x - centerX) ** 2 + (pin.y - centerY) ** 2,
+        }));
+
+        const usingPlus = clusterPins.length > HONEYCOMB_MAX;
+        const visiblePinCount = usingPlus
+          ? Math.min(LARGE_CLUSTER_SAMPLE, HONEYCOMB_MAX - 1, clusterPins.length)
+          : clusterPins.length;
+        const offsetPoolCount = Math.min(
+          HONEYCOMB_MAX,
+          Math.max(visiblePinCount + 8, Math.ceil(visiblePinCount * 1.35))
+        );
+<<<<<<< ours
+<<<<<<< ours
+        const offsets = generateHoneycombOffsets(offsetPoolCount + (usingPlus ? 1 : 0));
+=======
+        const desiredOffsetCount = Math.max(
+          offsetPoolCount + (usingPlus ? 1 : 0),
+          visiblePinCount + (usingPlus ? 1 : 0)
+        );
+        const offsets = generateHoneycombOffsets(desiredOffsetCount);
+>>>>>>> theirs
+=======
+        const offsets = generateHoneycombOffsets(offsetPoolCount + (usingPlus ? 1 : 0));
+>>>>>>> theirs
+        const offsetsForPins = usingPlus ? offsets.slice(1) : offsets;
+
+        if (usingPlus) {
+>>>>>>> theirs
+          nodes.push({
+            key: pin.__key,
+            x: pin.x,
+            y: pin.y,
+            pin,
+            icon: pin.icon || DEFAULT_EMOJI,
+            clusterSize: 1,
+            center: centerLngLat,
+            isPlus: false,
+            labelText: pin.labelText,
+            category: pin.__kind,
+            sortOrder: pin.__order ?? 0,
+            isSelected: pin.isSelected,
+            clusterRoot: root,
+          });
+          cache.set(pin.__key, { dx: 0, dy: 0, idx: 0 });
+          return;
+        }
+>>>>>>> theirs
+
+      projected.forEach((pin, index) => {
+        const gx = Math.floor(pin.x / cellSize);
+        const gy = Math.floor(pin.y / cellSize);
+        for (let dx = -1; dx <= 1; dx += 1) {
+          for (let dy = -1; dy <= 1; dy += 1) {
+            const bucket = grid.get(`${gx + dx}:${gy + dy}`);
+            if (!bucket) continue;
+            bucket.forEach((other) => {
+              if (other === index) return;
+              const neighbor = projected[other];
+              const distSq = (pin.x - neighbor.x) ** 2 + (pin.y - neighbor.y) ** 2;
+              const collideDist = PIN_DIAMETER + CLUSTER_COLLISION_PADDING;
+              if (distSq <= collideDist * collideDist) {
+                uf.union(index, other);
+              }
+            });
+          }
+        }
+      });
+
+      const buildClusters = () => {
+        const clustersMap = new Map();
+        projected.forEach((pin, index) => {
+          const root = uf.find(index);
+          if (!clustersMap.has(root)) clustersMap.set(root, []);
+          clustersMap.get(root).push(pin);
         });
-      });
-    });
+        return Array.from(clustersMap.entries()).map(([root, pins]) => ({ root, pins }));
+      };
 
-    applyVisualNodes(nodes);
+      const nodes = [];
+      const maxIterations = 8;
+      let iteration = 0;
+      while (iteration < maxIterations) {
+        const clusters = buildClusters();
+        nodes.length = 0;
 
-    const iconBoxes = nodes.map((node) => ({
-      minX: node.x - PIN_RADIUS - 2,
-      maxX: node.x + PIN_RADIUS + 2,
-      minY: node.y - PIN_RADIUS - 2,
-      maxY: node.y + PIN_RADIUS + 2,
-    }));
+        clusters.forEach(({ root, pins: clusterPins }) => {
+          const centerX = clusterPins.reduce((sum, pin) => sum + pin.x, 0) / clusterPins.length;
+          const centerY = clusterPins.reduce((sum, pin) => sum + pin.y, 0) / clusterPins.length;
+          const centerLngLat = map.unproject([centerX, centerY]);
+          const clusterKey = buildClusterKey(clusterPins);
 
-    const labelCandidates = nodes
-      .filter((node) => Boolean(node.labelText))
-      .flatMap((node) => {
-        const basePriority =
-          (node.clusterSize > 1 ? node.clusterSize * 10 : 0) + (node.sortOrder ?? 0);
-        return [
-          {
-            key: `label-${node.key}-right`,
-            text: node.labelText,
-            x: node.x + PIN_RADIUS,
-            y: node.y,
-            category: node.category,
-            priority: basePriority,
-            side: "right",
-            pinKey: node.key,
-          },
-          {
-            key: `label-${node.key}-left`,
-            text: node.labelText,
-            x: node.x - PIN_RADIUS,
-            y: node.y,
-            category: node.category,
-            priority: basePriority + 1, // prefer right first
-            side: "left",
-            pinKey: node.key,
-          },
-        ];
-      });
+          const cache = pinOffsetCacheRef.current;
 
-    const placedLabels = buildLabelBoxes(labelCandidates, iconBoxes, ctx, bounds);
-    const deduped = [];
-    const perPin = new Map();
-    placedLabels.forEach((label) => {
-      const existing = perPin.get(label.pinKey);
-      if (!existing || label.priority < existing.priority) {
-        perPin.set(label.pinKey, label);
+          if (clusterPins.length === 1) {
+            const pin = clusterPins[0];
+            nodes.push({
+              key: pin.__key,
+              x: pin.x,
+              y: pin.y,
+              pin,
+              icon: pin.icon || DEFAULT_EMOJI,
+              clusterSize: 1,
+              center: centerLngLat,
+              isPlus: false,
+              labelText: pin.labelText,
+              category: pin.__kind,
+              sortOrder: pin.__order ?? 0,
+              isSelected: pin.isSelected,
+              clusterRoot: root,
+            });
+            cache.set(pin.__key, { dx: 0, dy: 0, idx: 0 });
+            return;
+          }
+
+<<<<<<< ours
+          const withAngles = clusterPins.map((pin) => ({
+            pin,
+            angle: Math.atan2(pin.y - centerY, pin.x - centerX),
+            dist: (pin.x - centerX) ** 2 + (pin.y - centerY) ** 2,
+          }));
+
+          const usingPlus = clusterPins.length > HONEYCOMB_MAX;
+          const visiblePinCount = usingPlus
+            ? Math.min(LARGE_CLUSTER_SAMPLE, HONEYCOMB_MAX - 1, clusterPins.length)
+            : clusterPins.length;
+          const offsetPoolCount = Math.min(
+            HONEYCOMB_MAX,
+            Math.max(visiblePinCount + 8, Math.ceil(visiblePinCount * 1.35))
+          );
+          const desiredOffsetCount = Math.max(
+            offsetPoolCount + (usingPlus ? 1 : 0),
+            visiblePinCount + (usingPlus ? 1 : 0),
+            visiblePinCount + 14
+          );
+          const offsets = generateHoneycombOffsets(desiredOffsetCount);
+          const offsetsForPins = usingPlus ? offsets.slice(1) : offsets;
+
+          if (usingPlus) {
+            nodes.push({
+              key: `${clusterKey}-plus`,
+              x: centerX,
+              y: centerY,
+              isPlus: true,
+              clusterSize: clusterPins.length,
+              center: centerLngLat,
+              labelText: `${clusterPins.length} pins`,
+              category: "cluster",
+              sortOrder: -1,
+              clusterRoot: root,
+            });
+          }
+
+<<<<<<< ours
+          let availableOffsets = offsetsForPins
+            .map((off, idx) => ({
+              ...off,
+              idx,
+=======
+        const cache = pinOffsetCacheRef.current;
+        const availableOffsets = offsetsForPins
+=======
+        const cache = pinOffsetCacheRef.current;
+<<<<<<< ours
+        let availableOffsets = offsetsForPins
+>>>>>>> theirs
+=======
+        const availableOffsets = offsetsForPins
+>>>>>>> theirs
+          .map((off, idx) => ({
+            ...off,
+            idx,
+            radius: Math.hypot(off.dx, off.dy),
+            angle: Math.atan2(off.dy, off.dx),
+          }))
+          .sort((a, b) => a.radius - b.radius || a.angle - b.angle);
+
+        const visiblePins = [...withAngles]
+          .sort((a, b) => a.angle - b.angle || (a.pin.__order ?? 0) - (b.pin.__order ?? 0))
+          .slice(0, visiblePinCount);
+
+        const pinCount = visiblePins.length;
+
+<<<<<<< ours
+<<<<<<< ours
+        // Grow offset supply if we run short (always real offsets).
+        const maxExistingIdx = availableOffsets.reduce((m, off) => Math.max(m, off.idx), -1);
+        if (availableOffsets.length < pinCount) {
+          const target = Math.max(pinCount + 12, availableOffsets.length + 12);
+          const expanded = generateHoneycombOffsets(target + (usingPlus ? 1 : 0));
+          const expandedForPins = usingPlus ? expanded.slice(1) : expanded;
+          const extras = expandedForPins
+            .slice(availableOffsets.length)
+            .map((off, i) => ({
+              dx: off.dx,
+              dy: off.dy,
+              idx: maxExistingIdx + 1 + i,
+>>>>>>> theirs
+=======
+        const pinCount = unassignedPins.length;
+<<<<<<< ours
+=======
+        const unassignedPins = visiblePins.filter(({ pin }) => !lockedAssignments.has(pin.__key));
+        const freeOffsets = availableOffsets.filter((off) => !usedOffsets.has(off.idx));
+
+        const pinCount = unassignedPins.length;
+<<<<<<< ours
+>>>>>>> theirs
+        // Ensure we never run out of real offsets; extend if needed.
+        let paddedOffsets = [...freeOffsets];
+        if (paddedOffsets.length < pinCount) {
+          const extra = generateHoneycombOffsets(pinCount + (usingPlus ? 1 : 0));
+          const extraForPins = usingPlus ? extra.slice(1) : extra;
+          paddedOffsets = extraForPins
+            .map((off, idx) => ({
+              ...off,
+              idx,
+<<<<<<< ours
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+              radius: Math.hypot(off.dx, off.dy),
+              angle: Math.atan2(off.dy, off.dx),
+            }))
+            .sort((a, b) => a.radius - b.radius || a.angle - b.angle);
+<<<<<<< ours
+<<<<<<< ours
+
+          const visiblePins = [...withAngles]
+            .sort((a, b) => a.angle - b.angle || (a.pin.__order ?? 0) - (b.pin.__order ?? 0))
+            .slice(0, visiblePinCount);
+
+          const pinCount = visiblePins.length;
+
+          // Grow offset supply if we run short (always real offsets).
+          const maxExistingIdx = availableOffsets.reduce((m, off) => Math.max(m, off.idx), -1);
+          if (availableOffsets.length < pinCount) {
+            const target = Math.max(pinCount + 12, availableOffsets.length + 12);
+            const expanded = generateHoneycombOffsets(target + (usingPlus ? 1 : 0));
+            const expandedForPins = usingPlus ? expanded.slice(1) : expanded;
+            const extras = expandedForPins
+              .slice(availableOffsets.length)
+              .map((off, i) => ({
+                dx: off.dx,
+                dy: off.dy,
+                idx: maxExistingIdx + 1 + i,
+                radius: Math.hypot(off.dx, off.dy),
+                angle: Math.atan2(off.dy, off.dx),
+              }));
+            availableOffsets = [...availableOffsets, ...extras].sort(
+              (a, b) => a.radius - b.radius || a.angle - b.angle
+            );
+          }
+
+          const maxRadius = availableOffsets.reduce((max, off) => Math.max(max, off.radius), PIN_DIAMETER);
+          const dim = Math.max(pinCount, availableOffsets.length);
+          const costMatrix = Array.from({ length: dim }, () => Array(dim).fill(1e6));
+
+          visiblePins.forEach((entry, i) => {
+            const cached = cache.get(entry.pin.__key);
+            const cacheWeight = clusterPins.length <= 6 ? 0.35 : 1;
+            const desiredDx = Math.cos(entry.angle) * maxRadius * 0.72;
+            const desiredDy = Math.sin(entry.angle) * maxRadius * 0.72;
+            availableOffsets.forEach((off, j) => {
+              const angleDiff = Math.abs(off.angle - entry.angle);
+              const wrapped = Math.min(angleDiff, Math.abs(angleDiff - Math.PI * 2));
+              const distCost = (off.dx - desiredDx) ** 2 + (off.dy - desiredDy) ** 2;
+              const angleCost = wrapped * wrapped * 220;
+              const radiusCost = off.radius * 22; // prefer compact fill
+              const cacheBonus =
+                cached && cached.idx !== undefined && cached.idx === off.idx ? -25000 * cacheWeight : 0;
+              const cachePenalty =
+                cached && cached.idx !== undefined && cached.idx !== off.idx ? 900 * cacheWeight : 0;
+              costMatrix[i][j] = distCost + angleCost + radiusCost + cacheBonus + cachePenalty;
+            });
+=======
+=======
+        }
+        const dim = Math.max(pinCount, paddedOffsets.length || 1);
+=======
+        const dim = Math.max(pinCount, freeOffsets.length || 1);
+        const paddedOffsets = [...freeOffsets];
+>>>>>>> theirs
+        while (paddedOffsets.length < dim) {
+          paddedOffsets.push({
+            dx: 0,
+            dy: 0,
+            idx: -1,
+            radius: PIN_DIAMETER,
+            angle: 0,
+            pad: true,
+          });
+>>>>>>> theirs
+        }
+        const dim = Math.max(pinCount, paddedOffsets.length || 1);
+=======
+        const dim = Math.max(pinCount, freeOffsets.length || 1);
+        const paddedOffsets = [...freeOffsets];
+>>>>>>> theirs
+        while (paddedOffsets.length < dim) {
+          paddedOffsets.push({
+            dx: 0,
+            dy: 0,
+            idx: -1,
+            radius: PIN_DIAMETER,
+            angle: 0,
+            pad: true,
+>>>>>>> theirs
+          });
+
+<<<<<<< ours
+<<<<<<< ours
+          // Pad rows/cols to square for Hungarian
+          while (costMatrix.length < dim) costMatrix.push(Array(dim).fill(1e6));
+          const assignment = pinCount > 0 ? hungarian(costMatrix).slice(0, pinCount) : [];
+          const pinnedOffsets = new Map();
+          assignment.forEach((offsetIdx, pinIdx) => {
+            const pin = visiblePins[pinIdx].pin;
+            const off = availableOffsets[offsetIdx] || { dx: 0, dy: 0, idx: -1 };
+            pinnedOffsets.set(pin.__key, off);
+          });
+=======
+=======
+>>>>>>> theirs
+        const maxRadius = paddedOffsets.reduce((max, off) => Math.max(max, off.radius), PIN_DIAMETER);
+        const costMatrix = Array.from({ length: dim }, () => Array(dim).fill(1e6));
+
+        unassignedPins.forEach((entry, i) => {
+          const desiredDx = Math.cos(entry.angle) * maxRadius * 0.72;
+          const desiredDy = Math.sin(entry.angle) * maxRadius * 0.72;
+          paddedOffsets.forEach((off, j) => {
+            if (off.pad) return;
+            const angleDiff = Math.abs(off.angle - entry.angle);
+            const wrapped = Math.min(angleDiff, Math.abs(angleDiff - Math.PI * 2));
+            const distCost = (off.dx - desiredDx) ** 2 + (off.dy - desiredDy) ** 2;
+            const angleCost = wrapped * wrapped * 220;
+            const radiusCost = off.radius * 14; // gently prefer closer, compact fills holes
+            costMatrix[i][j] = distCost + angleCost + radiusCost;
+          });
+        });
+
+        const assignment = pinCount > 0 ? hungarian(costMatrix).slice(0, pinCount) : [];
+        const pinnedOffsets = new Map(lockedAssignments);
+        assignment.forEach((offsetIdx, pinIdx) => {
+          const pin = unassignedPins[pinIdx].pin;
+          const off = paddedOffsets[offsetIdx] || { dx: 0, dy: 0, idx: -1 };
+          if (!off.pad) {
+            pinnedOffsets.set(pin.__key, off);
+          }
+        });
+>>>>>>> theirs
+
+          visiblePins.forEach(({ pin }) => {
+            const offset = pinnedOffsets.get(pin.__key) || { dx: 0, dy: 0, idx: -1 };
+            nodes.push({
+              key: pin.__key,
+              x: centerX + offset.dx,
+              y: centerY + offset.dy,
+              pin,
+              icon: pin.icon || DEFAULT_EMOJI,
+              clusterSize: clusterPins.length,
+              center: centerLngLat,
+              isPlus: false,
+              labelText: pin.labelText,
+              category: pin.__kind,
+              sortOrder: pin.__order ?? 0,
+              isSelected: pin.isSelected,
+              clusterRoot: root,
+            });
+            cache.set(pin.__key, { dx: offset.dx, dy: offset.dy, idx: offset.idx });
+          });
+        });
+
+        // Detect inter-cluster collisions based on laid-out nodes; merge and rerun if needed.
+        const nodeGrid = new Map();
+        nodes.forEach((node, idx) => {
+          const gx = Math.floor(node.x / cellSize);
+          const gy = Math.floor(node.y / cellSize);
+          const key = `${gx}:${gy}`;
+          if (!nodeGrid.has(key)) nodeGrid.set(key, []);
+          nodeGrid.get(key).push(idx);
+        });
+
+        let merged = false;
+        nodes.forEach((node, idx) => {
+          const gx = Math.floor(node.x / cellSize);
+          const gy = Math.floor(node.y / cellSize);
+          for (let dx = -1; dx <= 1; dx += 1) {
+            for (let dy = -1; dy <= 1; dy += 1) {
+              const bucket = nodeGrid.get(`${gx + dx}:${gy + dy}`);
+              if (!bucket) continue;
+              bucket.forEach((otherIdx) => {
+                if (otherIdx === idx) return;
+                const other = nodes[otherIdx];
+                if (other.clusterRoot === node.clusterRoot) return;
+                const distSq = (node.x - other.x) ** 2 + (node.y - other.y) ** 2;
+                const collideDist = PIN_DIAMETER + CLUSTER_COLLISION_PADDING;
+                if (distSq <= collideDist * collideDist) {
+                  const repA = projected.findIndex((p) => uf.find(p.__idx) === node.clusterRoot);
+                  const repB = projected.findIndex((p) => uf.find(p.__idx) === other.clusterRoot);
+                  if (repA >= 0 && repB >= 0) {
+                    merged = uf.union(repA, repB) || merged;
+                  }
+                }
+              });
+            }
+          }
+        });
+
+        if (!merged) break;
+        iteration += 1;
       }
-    });
-    perPin.forEach((label) => deduped.push(label));
 
-    lastGoodNodesRef.current = nodes;
-    lastGoodLabelsRef.current = deduped;
-    applyLabelNodes(deduped);
+      if (nodes.length === 0 && lastGoodNodesRef.current.length > 0) {
+        applyVisualNodes(lastGoodNodesRef.current);
+        applyLabelNodes(lastGoodLabelsRef.current);
+        return;
+      }
+
+      applyVisualNodes(nodes);
+
+      const iconBoxes = nodes.map((node) => ({
+        minX: node.x - PIN_RADIUS - 2,
+        maxX: node.x + PIN_RADIUS + 2,
+        minY: node.y - PIN_RADIUS - 2,
+        maxY: node.y + PIN_RADIUS + 2,
+        pinKey: node.key,
+      }));
+
+      const labelCandidates = nodes
+        .filter((node) => Boolean(node.labelText) && !node.isPlus && node.clusterSize <= 1)
+        .flatMap((node) => {
+          const basePriority =
+            (node.clusterSize > 1 ? node.clusterSize * 10 : 0) + (node.sortOrder ?? 0);
+          return [
+            {
+              key: `label-${node.key}-right`,
+              text: node.labelText,
+              x: node.x,
+              y: node.y,
+              category: node.category,
+              priority: basePriority,
+              side: "right",
+              pinKey: node.key,
+            },
+            {
+              key: `label-${node.key}-left`,
+              text: node.labelText,
+              x: node.x,
+              y: node.y,
+              category: node.category,
+              priority: basePriority + 1, // prefer right first
+              side: "left",
+              pinKey: node.key,
+            },
+          ];
+        });
+
+      const placedLabels = buildLabelBoxes(labelCandidates, iconBoxes, ctx, bounds);
+      const deduped = [];
+      const perPin = new Map();
+      placedLabels.forEach((label) => {
+        const existing = perPin.get(label.pinKey);
+        if (!existing || label.priority < existing.priority) {
+          perPin.set(label.pinKey, label);
+        }
+      });
+      perPin.forEach((label) => deduped.push(label));
+
+      lastGoodNodesRef.current = nodes;
+      lastGoodLabelsRef.current = deduped;
+      applyLabelNodes(
+        deduped.map((label) => ({
+          ...label,
+          key: `label-${label.pinKey}`,
+        }))
+      );
+    } catch (error) {
+      console.error("layout error", error);
+      if (lastGoodNodesRef.current.length > 0) {
+        applyVisualNodes(lastGoodNodesRef.current);
+        applyLabelNodes(lastGoodLabelsRef.current);
+      }
+    }
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
 
   const scheduleLayout = useCallback(() => {
@@ -598,36 +1062,7 @@ function MapView({
   }, [computeLayout]);
 
   useEffect(() => {
-    visualNodes.some((node) => node.phase === "enter") &&
-      requestAnimationFrame(() => {
-        setVisualNodes((prev) => prev.map((node) => (node.phase === "enter" ? { ...node, phase: "active" } : node)));
-      });
   }, [visualNodes]);
-
-  useEffect(() => {
-    const exiting = visualNodes.some((node) => node.phase === "exit");
-    if (!exiting) return undefined;
-    const timeout = setTimeout(() => {
-      setVisualNodes((prev) => prev.filter((node) => node.phase !== "exit"));
-    }, ANIMATION_TIMING.exit + 60);
-    return () => clearTimeout(timeout);
-  }, [visualNodes]);
-
-  useEffect(() => {
-    labelNodes.some((node) => node.phase === "enter") &&
-      requestAnimationFrame(() => {
-        setLabelNodes((prev) => prev.map((node) => (node.phase === "enter" ? { ...node, phase: "active" } : node)));
-      });
-  }, [labelNodes]);
-
-  useEffect(() => {
-    const exiting = labelNodes.some((node) => node.phase === "exit");
-    if (!exiting) return undefined;
-    const timeout = setTimeout(() => {
-      setLabelNodes((prev) => prev.filter((node) => node.phase !== "exit"));
-    }, ANIMATION_TIMING.exit + 60);
-    return () => clearTimeout(timeout);
-  }, [labelNodes]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
@@ -730,9 +1165,9 @@ function MapView({
     });
 
     map.on("resize", scheduleLayout);
-    map.on("idle", scheduleLayout);
 
     map.on("click", (e) => {
+      if (!enableAddMode) return;
       const zoomTarget = map.getZoom();
       map.flyTo({
         center: [e.lngLat.lng, e.lngLat.lat],
@@ -745,6 +1180,10 @@ function MapView({
     });
 
     return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       map.remove();
       mapRef.current = null;
       setMapLoaded(false);
@@ -764,14 +1203,6 @@ function MapView({
     scheduledLayoutRef.current = false;
     computeLayout();
   }, [combinedPins, computeLayout]);
-
-  useEffect(() => {
-    if (!mapLoaded) return undefined;
-    const interval = setInterval(() => {
-      scheduleLayout();
-    }, 450);
-    return () => clearInterval(interval);
-  }, [mapLoaded, scheduleLayout]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -843,9 +1274,27 @@ function MapView({
       const map = mapRef.current;
       if (!map) return;
 
-      if (node.isPlus || node.clusterSize > 1) {
-        const targetZoom = Math.min(map.getMaxZoom() || 20, map.getZoom() + CLICK_TO_SPLIT_DELTA);
-        map.easeTo({ center: [node.center.lng, node.center.lat], zoom: targetZoom });
+      // Pending pins: select, do not zoom
+      if (node.category === "pending") {
+        if (node.pin && onPinSelectRef.current) {
+          onPinSelectRef.current(node.pin);
+        }
+        return;
+      }
+
+      // Unified zoom for approved pins/clusters
+      const targetZoom = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
+
+      if (node.isPlus) {
+        centerThenZoom(map, [node.center.lng, node.center.lat], targetZoom, animationFrameRef);
+        return;
+      }
+
+      if (node.clusterSize > 1 && node.pin) {
+        if (onPinSelectRef.current) {
+          onPinSelectRef.current(node.pin);
+        }
+        centerThenZoom(map, [node.pin.lng, node.pin.lat], targetZoom, animationFrameRef);
         return;
       }
 
@@ -853,8 +1302,7 @@ function MapView({
         onPinSelectRef.current(node.pin);
       }
 
-      const zoomTarget = Math.max(map.getZoom(), MAP_CLICK_TARGET_ZOOM);
-      map.easeTo({ center: [node.pin.lng, node.pin.lat], zoom: zoomTarget });
+      centerThenZoom(map, [node.pin.lng, node.pin.lat], targetZoom, animationFrameRef);
     },
     []
   );
@@ -889,10 +1337,8 @@ function MapView({
           const allowTransitions = now < dataAnimationUntilRef.current;
           const emoji = node.isPlus ? "＋" : node.category === "pending" ? PENDING_REVIEW_EMOJI : node.icon || DEFAULT_EMOJI;
           const transitionSpeed = allowTransitions ? ANIMATION_TIMING.move : 0;
-          const isEntering = allowTransitions && node.phase === "enter";
-          const isExiting = allowTransitions && node.phase === "exit";
-          const baseScale = isEntering ? 0.7 : isExiting ? 0.85 : 1;
-          const opacity = isExiting ? 0 : 1;
+          const baseScale = 1;
+          const opacity = 1;
           const style = {
             transform: `translate(${node.x - PIN_RADIUS}px, ${node.y - PIN_RADIUS}px) scale(${baseScale})`,
             opacity,
