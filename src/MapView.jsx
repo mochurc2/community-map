@@ -416,7 +416,7 @@ function MapView({
   const isMapMovingRef = useRef(false);
   const lastGoodNodesRef = useRef([]);
   const lastGoodLabelsRef = useRef([]);
-  const lastGoodSignatureRef = useRef("");
+  const lastGoodCacheRef = useRef(new Map());
   const pinOffsetCacheRef = useRef(new Map());
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
@@ -908,10 +908,10 @@ function MapView({
       }
 
       if (nodes.length === 0) {
-        if (lastGoodNodesRef.current.length > 0 && lastGoodSignatureRef.current === dataSignatureRef.current) {
-          applyVisualNodes(lastGoodNodesRef.current);
-          applyLabelNodes(lastGoodLabelsRef.current);
-          lastGoodSignatureRef.current = dataSignatureRef.current;
+        const cached = lastGoodCacheRef.current.get(dataSignatureRef.current);
+        if (cached) {
+          applyVisualNodes(cached.nodes);
+          applyLabelNodes(cached.labels);
         }
         return;
       }
@@ -968,7 +968,7 @@ function MapView({
 
       lastGoodNodesRef.current = nodes;
       lastGoodLabelsRef.current = deduped;
-      lastGoodSignatureRef.current = dataSignatureRef.current;
+      lastGoodCacheRef.current.set(dataSignatureRef.current, { nodes, labels: deduped });
       applyLabelNodes(
         deduped.map((label) => ({
           ...label,
@@ -977,10 +977,10 @@ function MapView({
       );
     } catch (error) {
       console.error("layout error", error);
-      if (lastGoodNodesRef.current.length > 0) {
-        applyVisualNodes(lastGoodNodesRef.current);
-        applyLabelNodes(lastGoodLabelsRef.current);
-        lastGoodSignatureRef.current = dataSignatureRef.current;
+      const cached = lastGoodCacheRef.current.get(dataSignatureRef.current);
+      if (cached) {
+        applyVisualNodes(cached.nodes);
+        applyLabelNodes(cached.labels);
       }
     }
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
@@ -1149,11 +1149,6 @@ function MapView({
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (signature !== dataSignatureRef.current) {
       dataAnimationUntilRef.current = now + 650;
-    }
-    if (signature !== dataSignatureRef.current) {
-      lastGoodNodesRef.current = [];
-      lastGoodLabelsRef.current = [];
-      lastGoodSignatureRef.current = "";
     }
     dataSignatureRef.current = signature;
     scheduledLayoutRef.current = false;
@@ -1332,7 +1327,9 @@ function MapView({
       )}
       <div ref={mapContainerRef} className="map-container" />
       <div className="pin-overlay" ref={overlayRef}>
-        {(visualNodes.length ? visualNodes : lastGoodNodesRef.current)
+        {(visualNodes.length
+          ? visualNodes
+          : lastGoodCacheRef.current.get(dataSignatureRef.current)?.nodes || [])
           .map((node) =>
             selectedPinId !== null && selectedPinId !== undefined && node.pin?.id === selectedPinId
               ? { ...node, isSelected: true }
@@ -1380,7 +1377,9 @@ function MapView({
           );
         })}
 
-        {(labelNodes.length ? labelNodes : lastGoodLabelsRef.current).map((label) => {
+        {(labelNodes.length
+          ? labelNodes
+          : lastGoodCacheRef.current.get(dataSignatureRef.current)?.labels || []).map((label) => {
           const now = typeof performance !== "undefined" ? performance.now() : Date.now();
           const shouldAnimate = !isInteracting && now < dataAnimationUntilRef.current;
           const transitionSpeed = shouldAnimate ? Math.round(ANIMATION_TIMING.label * 1.1) : 0;
