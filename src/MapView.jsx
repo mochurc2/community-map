@@ -15,6 +15,7 @@ import {
   LABEL_PADDING_X,
   LABEL_PADDING_Y,
   LABEL_MARGIN,
+  LABEL_VERTICAL_GAP,
   ANIMATION_TIMING,
   CLICK_TO_SPLIT_DELTA,
 } from "./mapConstants";
@@ -226,7 +227,10 @@ const buildLabelBoxes = (candidates, obstacles, ctx, bounds) => {
 
   sorted.forEach((candidate) => {
     const { width, height } = measureLabel(ctx, candidate.text);
-    const left = candidate.x + LABEL_HORIZONTAL_GAP;
+    const left =
+      candidate.side === "left"
+        ? candidate.x - LABEL_HORIZONTAL_GAP - width
+        : candidate.x + LABEL_HORIZONTAL_GAP;
     const top = candidate.y - height / 2;
     const box = {
       key: candidate.key,
@@ -241,6 +245,9 @@ const buildLabelBoxes = (candidates, obstacles, ctx, bounds) => {
       anchorX: left,
       anchorY: top,
       category: candidate.category,
+      side: candidate.side,
+      pinKey: candidate.pinKey,
+      priority: candidate.priority,
     };
 
     if (box.maxX < 0 || box.minX > bounds.width || box.maxY < 0 || box.minY > bounds.height) {
@@ -293,6 +300,10 @@ function MapView({
   const measureContextRef = useRef(null);
   const scheduledLayoutRef = useRef(false);
   const isMapMovingRef = useRef(false);
+  const lastGoodNodesRef = useRef([]);
+  const lastGoodLabelsRef = useRef([]);
+  const dataSignatureRef = useRef("");
+  const dataAnimationUntilRef = useRef(0);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -399,19 +410,17 @@ function MapView({
 
     const container = map.getContainer();
     const bounds = {
-      width: container.clientWidth,
-      height: container.clientHeight,
+      width: container?.clientWidth || 0,
+      height: container?.clientHeight || 0,
     };
+    if (bounds.width < 10 || bounds.height < 10) return;
 
-    const padding = PIN_DIAMETER * 2;
     const projected = [];
 
     combinedPins.forEach((pin) => {
       if (typeof pin.lat !== "number" || typeof pin.lng !== "number") return;
       const { x, y } = map.project([pin.lng, pin.lat]);
-      if (x < -padding || x > bounds.width + padding || y < -padding || y > bounds.height + padding) {
-        return;
-      }
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
       const labelText = formatLabelText(pin);
       projected.push({
         ...pin,
@@ -423,8 +432,12 @@ function MapView({
     });
 
     if (projected.length === 0) {
-      applyVisualNodes([]);
-      applyLabelNodes([]);
+      if (combinedPins.length === 0) {
+        applyVisualNodes([]);
+        applyLabelNodes([]);
+        lastGoodNodesRef.current = [];
+        lastGoodLabelsRef.current = [];
+      }
       return;
     }
 
@@ -477,7 +490,6 @@ function MapView({
       const clusterKey = buildClusterKey(clusterPins);
 
       const sortedPins = [...clusterPins].sort((a, b) => {
-        if (a.__kind !== b.__kind) return a.__kind === "approved" ? -1 : 1;
         if (a.__order !== b.__order) return a.__order - b.__order;
         return a.__key.localeCompare(b.__key);
       });
@@ -533,19 +545,47 @@ function MapView({
 
     const labelCandidates = nodes
       .filter((node) => Boolean(node.labelText))
-      .map((node) => ({
-        key: `label-${node.key}`,
-        text: node.labelText,
-        x: node.x + PIN_RADIUS,
-        y: node.y,
-        category: node.category,
-        priority:
-          (node.category === "approved" ? 0 : 1) * 1_000_000 +
-          (node.clusterSize > 1 ? node.clusterSize * 10 : node.sortOrder),
-      }));
+      .flatMap((node) => {
+        const basePriority =
+          (node.clusterSize > 1 ? node.clusterSize * 10 : 0) + (node.sortOrder ?? 0);
+        return [
+          {
+            key: `label-${node.key}-right`,
+            text: node.labelText,
+            x: node.x + PIN_RADIUS,
+            y: node.y,
+            category: node.category,
+            priority: basePriority,
+            side: "right",
+            pinKey: node.key,
+          },
+          {
+            key: `label-${node.key}-left`,
+            text: node.labelText,
+            x: node.x - PIN_RADIUS,
+            y: node.y,
+            category: node.category,
+            priority: basePriority + 1, // prefer right first
+            side: "left",
+            pinKey: node.key,
+          },
+        ];
+      });
 
     const placedLabels = buildLabelBoxes(labelCandidates, iconBoxes, ctx, bounds);
-    applyLabelNodes(placedLabels);
+    const deduped = [];
+    const perPin = new Map();
+    placedLabels.forEach((label) => {
+      const existing = perPin.get(label.pinKey);
+      if (!existing || label.priority < existing.priority) {
+        perPin.set(label.pinKey, label);
+      }
+    });
+    perPin.forEach((label) => deduped.push(label));
+
+    lastGoodNodesRef.current = nodes;
+    lastGoodLabelsRef.current = deduped;
+    applyLabelNodes(deduped);
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
 
   const scheduleLayout = useCallback(() => {
@@ -690,6 +730,7 @@ function MapView({
     });
 
     map.on("resize", scheduleLayout);
+    map.on("idle", scheduleLayout);
 
     map.on("click", (e) => {
       const zoomTarget = map.getZoom();
@@ -711,15 +752,38 @@ function MapView({
   }, [ensureEmojiImage]);
 
   useEffect(() => {
-    scheduleLayout();
-  }, [combinedPins, scheduleLayout]);
+    const signature = `${combinedPins.length}:${combinedPins
+      .map((p) => p.__key)
+      .sort()
+      .join("|")}`;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (signature !== dataSignatureRef.current) {
+      dataAnimationUntilRef.current = now + 650;
+    }
+    dataSignatureRef.current = signature;
+    scheduledLayoutRef.current = false;
+    computeLayout();
+  }, [combinedPins, computeLayout]);
+
+  useEffect(() => {
+    if (!mapLoaded) return undefined;
+    const interval = setInterval(() => {
+      scheduleLayout();
+    }, 450);
+    return () => clearInterval(interval);
+  }, [mapLoaded, scheduleLayout]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const handleMove = () => scheduleLayout();
+    const handleZoom = () => scheduleLayout();
     map.on("move", handleMove);
-    return () => map.off("move", handleMove);
+    map.on("zoom", handleZoom);
+    return () => {
+      map.off("move", handleMove);
+      map.off("zoom", handleZoom);
+    };
   }, [scheduleLayout]);
 
   useEffect(() => {
@@ -821,16 +885,20 @@ function MapView({
       <div ref={mapContainerRef} className="map-container" />
       <div className="pin-overlay" ref={overlayRef}>
         {visualNodes.map((node) => {
+          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+          const allowTransitions = now < dataAnimationUntilRef.current;
           const emoji = node.isPlus ? "＋" : node.category === "pending" ? PENDING_REVIEW_EMOJI : node.icon || DEFAULT_EMOJI;
-          const transitionSpeed = isMapMovingRef.current ? 60 : ANIMATION_TIMING.move;
-          const isEntering = node.phase === "enter";
-          const isExiting = node.phase === "exit";
+          const transitionSpeed = allowTransitions ? ANIMATION_TIMING.move : 0;
+          const isEntering = allowTransitions && node.phase === "enter";
+          const isExiting = allowTransitions && node.phase === "exit";
           const baseScale = isEntering ? 0.7 : isExiting ? 0.85 : 1;
-          const opacity = isEntering || isExiting ? 0 : 1;
+          const opacity = isExiting ? 0 : 1;
           const style = {
             transform: `translate(${node.x - PIN_RADIUS}px, ${node.y - PIN_RADIUS}px) scale(${baseScale})`,
             opacity,
-            transition: `transform ${transitionSpeed}ms ease, opacity ${ANIMATION_TIMING.filter}ms ease`,
+            transition: allowTransitions
+              ? `transform ${transitionSpeed}ms ease, opacity ${ANIMATION_TIMING.filter}ms ease`
+              : "transform 0ms linear, opacity 0ms linear",
           };
           const className = [
             "pin-node",
@@ -861,19 +929,23 @@ function MapView({
         })}
 
         {labelNodes.map((label) => {
-          const transitionSpeed = isMapMovingRef.current ? 80 : ANIMATION_TIMING.label;
-          const baseOpacity = label.phase === "enter" || label.phase === "exit" ? 0 : 1;
+          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+          const allowTransitions = now < dataAnimationUntilRef.current;
+          const transitionSpeed = allowTransitions ? ANIMATION_TIMING.label : 0;
+          const baseOpacity = allowTransitions && label.phase === "exit" ? 0 : 1;
           const style = {
             left: `${label.anchorX}px`,
             top: `${label.anchorY}px`,
             width: `${label.width}px`,
             height: `${label.height}px`,
             opacity: baseOpacity,
-            transition: `opacity ${transitionSpeed}ms ease`,
+            transition: allowTransitions ? `opacity ${transitionSpeed}ms ease` : "opacity 0ms linear",
+            textAlign: label.side === "left" ? "right" : "left",
           };
           const className = [
             "pin-label",
             label.category === "pending" ? "pending" : "",
+            label.side === "left" ? "left" : "right",
           ]
             .filter(Boolean)
             .join(" ");

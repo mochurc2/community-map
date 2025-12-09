@@ -8,10 +8,11 @@ export const LARGE_CLUSTER_SAMPLE = 12;
 
 export const LABEL_MAX_WIDTH = 148;
 export const LABEL_LINE_HEIGHT = 16;
-export const LABEL_HORIZONTAL_GAP = 12;
+export const LABEL_HORIZONTAL_GAP = 4;
 export const LABEL_PADDING_X = 9;
-export const LABEL_PADDING_Y = 6;
-export const LABEL_MARGIN = 6;
+export const LABEL_PADDING_Y = 5;
+export const LABEL_MARGIN = 1;
+export const LABEL_VERTICAL_GAP = 2;
 
 export const ANIMATION_TIMING = {
   enter: 220,

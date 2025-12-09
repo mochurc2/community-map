@@ -277,34 +277,31 @@ textarea {
   position: absolute;
   padding: 6px 9px;
   box-sizing: border-box;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow:
-    0 6px 18px rgba(15, 23, 42, 0.2),
-    0 0 0 1px rgba(15, 23, 42, 0.05);
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
   pointer-events: none;
   color: #0f172a;
+  text-shadow:
+    -1px -1px 0 rgba(255, 255, 255, 0.75),
+    1px -1px 0 rgba(255, 255, 255, 0.75),
+    -1px 1px 0 rgba(255, 255, 255, 0.75),
+    1px 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .pin-label.pending {
   color: #1e293b;
 }
 
-.pin-label-line.primary {
+.pin-label-line {
   font-weight: 700;
   font-size: 13px;
-  line-height: 1.1;
-}
-
-.pin-label-line.secondary {
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 1.1;
-  color: #475569;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .map-banner {
