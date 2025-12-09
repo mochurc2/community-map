@@ -3,13 +3,73 @@
   background-color: #ffffff;
   font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
   line-height: 1.6;
+
+  /* ========================================
+     DESIGN TOKENS (CSS Variables)
+     Mirrors tokens.js for use in CSS
+     ======================================== */
+
+  /* Colors - Primary */
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-darker: #1e40af;
+
+  /* Colors - Text */
+  --color-text-primary: #0f172a;
+  --color-text-body: #111827;
+  --color-text-secondary: #374151;
+  --color-text-tertiary: #4b5563;
+  --color-text-muted: #6b7280;
+
+  /* Colors - Borders */
+  --color-border: #e5e7eb;
+  --color-border-light: #d0d7e2;
+
+  /* Colors - Backgrounds */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-muted: #f9fafb;
+  --color-bg-ghost: #f3f4f6;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.35rem;
+  --spacing-md: 0.5rem;
+  --spacing-lg: 0.75rem;
+  --spacing-xl: 1rem;
+  --spacing-2xl: 1.25rem;
+
+  /* Typography */
   --font-family-base: "Inter", "Helvetica Neue", Arial, sans-serif;
-  --section-title-size: 1.05rem;
-  --section-title-weight: 700;
-  --subtext-size: 0.95rem;
-  --subtext-color: #6b7280;
-  --chip-font-size: 0.95rem;
-  --chip-font-weight: 500;
+  --font-size-xs: 0.875rem;
+  --font-size-sm: 0.9rem;
+  --font-size-base: 0.95rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.05rem;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Border radius */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 18px;
+  --radius-full: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 10px 30px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.14);
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.16);
+
+  /* Legacy variables (for backwards compatibility) */
+  --section-title-size: var(--font-size-xl);
+  --section-title-weight: var(--font-weight-bold);
+  --subtext-size: var(--font-size-base);
+  --subtext-color: var(--color-text-muted);
+  --chip-font-size: var(--font-size-base);
+  --chip-font-weight: var(--font-weight-medium);
   --title-card-height: 220px;
   --panel-stack-spacing: 48px;
   --app-viewport-height: 100vh;
@@ -76,7 +136,7 @@ p {
 
 button {
   border: 1px solid #d0d7e2;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
   font-size: 1rem;
   font-weight: 600;
@@ -123,7 +183,7 @@ button.ghost {
 .ghost-button {
   background: #f3f4f6;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 0.55rem 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -135,7 +195,7 @@ button.ghost {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid #e5e7eb;
   background: #ffffff;
   color: #2563eb;
@@ -159,7 +219,7 @@ button.ghost {
 textarea {
   width: 100%;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 0.85rem 0.95rem;
   background: #ffffff;
   font-size: 0.95rem;
@@ -176,6 +236,102 @@ textarea:focus {
 
 textarea {
   resize: vertical;
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Flexbox utilities */
+.flex {
+  display: flex;
+}
+
+.flex-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.flex-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Typography utilities */
+.font-bold {
+  font-weight: 700;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.text-sm {
+  font-size: 0.9rem;
+}
+
+.text-base {
+  font-size: 0.95rem;
+}
+
+.text-muted {
+  color: #6b7280;
+}
+
+.text-secondary {
+  color: #374151;
+}
+
+/* Spacing utilities */
+.gap-sm {
+  gap: 0.35rem;
+}
+
+.gap-md {
+  gap: 0.5rem;
+}
+
+.gap-lg {
+  gap: 0.75rem;
+}
+
+.m-0 {
+  margin: 0;
+}
+
+.mt-sm {
+  margin-top: 0.25rem;
+}
+
+/* Common text patterns */
+.detail-text {
+  margin: 0.25rem 0;
+  font-size: 0.95rem;
+  color: #374151;
 }
 
 .app-shell {
@@ -310,7 +466,7 @@ textarea {
   left: 16px;
   right: 16px;
   padding: 0.9rem 1rem;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.96);
   color: #0b1021;
   font-weight: 600;
@@ -353,7 +509,7 @@ textarea {
   gap: 0.55rem;
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   padding: 0.85rem 0.9rem;
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.14);
   pointer-events: auto;
@@ -387,9 +543,9 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.65rem;
-  border-radius: 999px;
-  background: #f3f4f6;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
+  background: #f6f7fb;
   color: #0f172a;
   font-size: var(--chip-font-size);
   font-weight: var(--chip-font-weight);
@@ -413,12 +569,20 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: #f8fafc;
+  background: #f6f7fb;
   border: 1px solid #e5e7eb;
+  border-radius: var(--radius-full);
   color: #0f172a;
-  padding: 0.55rem 0.85rem;
+  padding: 0.45rem 0.85rem;
   font-size: var(--chip-font-size);
   font-weight: var(--chip-font-weight);
+  cursor: pointer;
+  transition: background 120ms ease, border 120ms ease, transform 120ms ease;
+}
+
+.icon-pill:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
 }
 
 .icon-pill svg {
@@ -435,7 +599,7 @@ textarea {
   position: absolute;
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 14px 50px rgba(15, 23, 42, 0.12);
   width: min(440px, calc(100% - 32px));
   z-index: 6;
@@ -596,7 +760,7 @@ textarea {
 
 .card {
   border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 0.95rem 1rem;
   background: #ffffff;
   display: flex;
@@ -716,7 +880,7 @@ textarea {
   border: 1px solid #e5e7eb;
   background: #f6f7fb;
   color: #111827;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   display: inline-flex;
   align-items: center;
   padding: 0.45rem 0.85rem;
@@ -866,18 +1030,19 @@ textarea {
 .location-chip {
   display: inline-flex;
   align-items: center;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
   border: 1px solid #e5e7eb;
   background: #ffffff;
   font-weight: 600;
+  font-size: var(--chip-font-size);
   color: #0f172a;
   max-width: 100%;
   word-break: break-word;
 }
 
 .location-chip.subdued {
-  background: #f1f5f9;
+  background: #f6f7fb;
   color: #374151;
 }
 
@@ -902,16 +1067,23 @@ textarea {
 }
 
 .emoji-chip {
-  border-radius: 14px;
+  border-radius: var(--radius-sm);
   border: 1px solid #e5e7eb;
   padding: 0.55rem;
   font-size: 1.25rem;
   background: #ffffff;
+  cursor: pointer;
+  transition: border 120ms ease, box-shadow 120ms ease;
+}
+
+.emoji-chip:hover {
+  border-color: #cbd5e1;
 }
 
 .emoji-chip.selected {
-  border-color: #2563eb;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.16);
+  background: #2563eb;
+  border-color: #1d4ed8;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
 }
 
 .emoji-tone-panel {
@@ -1008,7 +1180,7 @@ textarea {
   width: 100%;
   height: 6px;
   background: #e5e7eb;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .age-range-slider input[type="range"] {
@@ -1072,7 +1244,7 @@ textarea {
 }
 
 .tab-button {
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   padding: 0.55rem 0.9rem;
   background: #e5e7eb;
   border-color: #d1d5db;
@@ -1123,7 +1295,7 @@ textarea {
 
 .bubble-moderation-shell {
   padding: 1.25rem 1.1rem;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   background: #fff;
   border: 1px solid #e5e7eb;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
@@ -1191,7 +1363,7 @@ textarea {
 
 .pending-changes-panel {
   border: 1px dashed #cbd5e1;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   padding: 0.9rem 1rem;
   display: grid;
   gap: 0.6rem;
@@ -1215,7 +1387,7 @@ textarea {
 
 .pending-chip {
   padding: 0.2rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 0.9rem;
   text-transform: capitalize;
 }
@@ -1233,12 +1405,19 @@ textarea {
 }
 
 .status-button {
-  padding: 0.55rem 0.9rem;
-  border-radius: 10px;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
   font-weight: 700;
   text-transform: capitalize;
   border-color: #e5e7eb;
-  background: #f8fafc;
+  background: #f6f7fb;
+  cursor: pointer;
+  transition: background 120ms ease, border 120ms ease, transform 120ms ease;
+}
+
+.status-button:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
 }
 
 .status-button.active {
@@ -1284,7 +1463,7 @@ textarea {
 
 .status-pill {
   padding: 0.1rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: capitalize;
@@ -1318,7 +1497,7 @@ textarea {
 .stat-card {
   padding: 0.85rem 0.95rem;
   border: 1px solid #e5e7eb;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: #f8fafc;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
@@ -1329,7 +1508,7 @@ textarea {
   padding: 0.2rem 0.45rem;
   background: #e5e7eb;
   color: #0f172a;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-weight: 700;
   font-size: 0.85rem;
 }
@@ -1349,7 +1528,7 @@ textarea {
   width: 100%;
   background: #0b1220;
   padding: 1.75rem;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1366,10 +1545,10 @@ textarea {
 
 .tiny-button {
   padding: 0.45rem 0.7rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
   border: 1px solid #e5e7eb;
-  background: #f3f4f6;
+  background: #f6f7fb;
   font-weight: 700;
   box-shadow: none;
 }
@@ -1407,7 +1586,7 @@ textarea {
   position: relative;
   width: min(520px, 100%);
   background: #ffffff;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 1.1rem 1.25rem;
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
   border: 1px solid #e5e7eb;
@@ -1443,7 +1622,7 @@ textarea {
   width: min(640px, 100%);
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   padding: 1.2rem 1.35rem;
   box-shadow: 0 22px 48px rgba(15, 23, 42, 0.22);
   display: grid;
@@ -1458,7 +1637,7 @@ textarea {
 .muted-pill {
   display: inline-flex;
   padding: 0.35rem 0.65rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: #eef2ff;
   color: #3730a3;
   font-size: 0.9rem;
@@ -1530,7 +1709,7 @@ textarea {
   width: min(540px, 100%);
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   box-shadow: 0 22px 48px rgba(15, 23, 42, 0.25);
   padding: 1rem 1.15rem;
   display: grid;
@@ -1577,7 +1756,7 @@ textarea {
   width: min(760px, 100%);
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   box-shadow: 0 22px 48px rgba(15, 23, 42, 0.25);
   padding: 1rem 1.15rem;
   display: grid;
