@@ -397,6 +397,9 @@ function MapView({
   pendingIcon,
   selectedPinId,
   enableAddMode = false,
+  panelPlacement = "side",
+  titleCardBounds = { top: 0, bottom: 0, height: 0 },
+  pinPanelBounds = null,
 }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -421,6 +424,10 @@ function MapView({
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
   const dataAnimationUntilRef = useRef(0);
+  const activeTouchIdsRef = useRef(new Set());
+  const cachedTouchEventsRef = useRef(new Map());
+  const forwardingMultiTouchRef = useRef(false);
+  const lastMobileCenterRef = useRef("");
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -1174,6 +1181,98 @@ function MapView({
   }, [scheduleLayout]);
 
   useEffect(() => {
+    // Forward multi-touch gestures from pin overlay buttons to the map canvas so pinch-zoom works on clusters.
+    const overlayEl = overlayRef.current;
+    const map = mapRef.current;
+    const canvas = map?.getCanvas?.();
+    if (!overlayEl || !map || !canvas) return undefined;
+    if (typeof PointerEvent === "undefined") return undefined;
+
+    const forwardPointerEvent = (sourceEvent, typeOverride) => {
+      const eventType = typeOverride || sourceEvent.type;
+      const clone = new PointerEvent(eventType, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: sourceEvent.pointerId,
+        pointerType: sourceEvent.pointerType,
+        clientX: sourceEvent.clientX,
+        clientY: sourceEvent.clientY,
+        screenX: sourceEvent.screenX,
+        screenY: sourceEvent.screenY,
+        buttons: sourceEvent.buttons,
+        ctrlKey: sourceEvent.ctrlKey,
+        shiftKey: sourceEvent.shiftKey,
+        altKey: sourceEvent.altKey,
+        metaKey: sourceEvent.metaKey,
+        width: sourceEvent.width,
+        height: sourceEvent.height,
+        pressure: sourceEvent.pressure,
+        tangentialPressure: sourceEvent.tangentialPressure || 0,
+        tiltX: sourceEvent.tiltX || 0,
+        tiltY: sourceEvent.tiltY || 0,
+        twist: sourceEvent.twist || 0,
+        isPrimary: sourceEvent.isPrimary,
+      });
+      canvas.dispatchEvent(clone);
+    };
+
+    const handlePointerDown = (event) => {
+      if (event.pointerType !== "touch") return;
+      activeTouchIdsRef.current.add(event.pointerId);
+      cachedTouchEventsRef.current.set(event.pointerId, event);
+      if (forwardingMultiTouchRef.current || activeTouchIdsRef.current.size >= 2) {
+        forwardingMultiTouchRef.current = true;
+        event.preventDefault();
+        if (activeTouchIdsRef.current.size === 2 && cachedTouchEventsRef.current.size >= 2) {
+          cachedTouchEventsRef.current.forEach((cachedEvent) => {
+            forwardPointerEvent(cachedEvent, "pointerdown");
+          });
+        } else {
+          forwardPointerEvent(event, "pointerdown");
+        }
+      }
+    };
+
+    const handlePointerMove = (event) => {
+      if (event.pointerType !== "touch") return;
+      if (!forwardingMultiTouchRef.current) return;
+      cachedTouchEventsRef.current.set(event.pointerId, event);
+      event.preventDefault();
+      forwardPointerEvent(event, "pointermove");
+    };
+
+    const handlePointerEnd = (event) => {
+      if (event.pointerType !== "touch") return;
+      if (forwardingMultiTouchRef.current) {
+        event.preventDefault();
+        forwardPointerEvent(event, event.type);
+      }
+      activeTouchIdsRef.current.delete(event.pointerId);
+      cachedTouchEventsRef.current.delete(event.pointerId);
+      if (activeTouchIdsRef.current.size < 2) {
+        forwardingMultiTouchRef.current = false;
+      }
+    };
+
+    const listenerOptions = { passive: false };
+    overlayEl.addEventListener("pointerdown", handlePointerDown, listenerOptions);
+    overlayEl.addEventListener("pointermove", handlePointerMove, listenerOptions);
+    overlayEl.addEventListener("pointerup", handlePointerEnd, listenerOptions);
+    overlayEl.addEventListener("pointercancel", handlePointerEnd, listenerOptions);
+
+    return () => {
+      overlayEl.removeEventListener("pointerdown", handlePointerDown, listenerOptions);
+      overlayEl.removeEventListener("pointermove", handlePointerMove, listenerOptions);
+      overlayEl.removeEventListener("pointerup", handlePointerEnd, listenerOptions);
+      overlayEl.removeEventListener("pointercancel", handlePointerEnd, listenerOptions);
+      forwardingMultiTouchRef.current = false;
+      activeTouchIdsRef.current.clear();
+      cachedTouchEventsRef.current.clear();
+    };
+  }, [mapLoaded]);
+
+  useEffect(() => {
     if (isInteracting) return;
     scheduleLayout();
   }, [isInteracting, scheduleLayout]);
@@ -1262,6 +1361,69 @@ function MapView({
     };
   }, [pendingLocation, pendingIcon, mapLoaded, ensureEmojiImage]);
 
+  const computeMobilePadding = useCallback(() => {
+    if (panelPlacement !== "bottom") return null;
+    const map = mapRef.current;
+    const containerHeight =
+      map?.getContainer?.()?.clientHeight ||
+      (typeof window !== "undefined"
+        ? window.visualViewport?.height || window.innerHeight || 0
+        : 0);
+
+    const topPadding = Math.max(0, titleCardBounds?.bottom || 0);
+    const pinPanelTop = pinPanelBounds?.top;
+    const bottomPadding =
+      typeof pinPanelTop === "number" ? Math.max(0, containerHeight - pinPanelTop) : 0;
+
+    return {
+      top: topPadding,
+      bottom: bottomPadding,
+      left: 12,
+      right: 12,
+    };
+  }, [panelPlacement, pinPanelBounds, titleCardBounds]);
+
+  useEffect(() => {
+    if (panelPlacement !== "bottom") {
+      lastMobileCenterRef.current = "";
+      return;
+    }
+    if (!mapLoaded) return;
+    if (!selectedPinId) {
+      lastMobileCenterRef.current = "";
+      return;
+    }
+    if (isInteracting) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const padding = computeMobilePadding();
+    if (!padding) return;
+
+    const selectedPin = combinedPins.find((pin) => pin.id === selectedPinId);
+    if (!selectedPin || typeof selectedPin.lng !== "number" || typeof selectedPin.lat !== "number") return;
+
+    const signature = `${selectedPinId}:${padding.top}-${padding.bottom}-${padding.left}-${padding.right}:${map.getZoom()}`;
+    if (lastMobileCenterRef.current === signature) return;
+    lastMobileCenterRef.current = signature;
+
+    map.easeTo({
+      center: [selectedPin.lng, selectedPin.lat],
+      zoom: map.getZoom(),
+      padding,
+      duration: 320,
+      easing: easeInOut,
+    });
+  }, [
+    combinedPins,
+    computeMobilePadding,
+    isInteracting,
+    mapLoaded,
+    panelPlacement,
+    pinPanelBounds,
+    selectedPinId,
+    titleCardBounds,
+  ]);
+
   const handleNodeClick = useCallback(
     (event, node) => {
       event.stopPropagation();
@@ -1269,7 +1431,6 @@ function MapView({
       const map = mapRef.current;
       if (!map) return;
 
-      // Pending pins: select, do not zoom
       if (node.category === "pending") {
         if (node.pin && onPinSelectRef.current) {
           onPinSelectRef.current(node.pin);
@@ -1277,7 +1438,6 @@ function MapView({
         return;
       }
 
-      // Unified zoom for approved pins/clusters
       const targetZoom = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
       if (node.isPlus) {
@@ -1285,21 +1445,38 @@ function MapView({
         return;
       }
 
-      if (node.clusterSize > 1 && node.pin) {
-        if (onPinSelectRef.current) {
-          onPinSelectRef.current(node.pin);
-        }
-        centerThenZoom(map, [node.pin.lng, node.pin.lat], targetZoom, animationFrameRef);
-        return;
-      }
+      const destination = node.pin
+        ? [node.pin.lng, node.pin.lat]
+        : node.center
+          ? [node.center.lng, node.center.lat]
+          : null;
 
       if (node.pin && onPinSelectRef.current) {
         onPinSelectRef.current(node.pin);
       }
 
-      centerThenZoom(map, [node.pin.lng, node.pin.lat], targetZoom, animationFrameRef);
+      const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+
+      if (mobilePadding && destination) {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        map.easeTo({
+          center: destination,
+          zoom: targetZoom,
+          padding: mobilePadding,
+          duration: smoothDuration(map.getZoom(), targetZoom),
+          easing: easeInOut,
+        });
+        return;
+      }
+
+      if (destination) {
+        centerThenZoom(map, destination, targetZoom, animationFrameRef);
+      }
     },
-    []
+    [computeMobilePadding, panelPlacement]
   );
 
   if (!styleUrl) {

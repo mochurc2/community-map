@@ -11,12 +11,13 @@ import { X } from 'lucide-react';
  * @param {Function} props.onClose - Callback when close button is clicked
  * @param {React.ReactNode} props.reportButton - Report button element to display
  * @param {React.ReactNode} props.children - Panel body content (typically PinInfoPanel)
+ * @param {React.Ref} [props.panelRef] - Optional ref to the panel container (used for layout calculations)
  */
-export function PinCard({ pin, placement, onClose, reportButton, children }) {
+export function PinCard({ pin, placement, onClose, reportButton, children, panelRef }) {
   if (!pin) return null;
 
   return (
-    <div className={`floating-panel ${placement} pin-panel`}>
+    <div className={`floating-panel ${placement} pin-panel`} ref={panelRef}>
       <div className="panel-top">
         <div className="panel-title">
           <div className="panel-icon">{pin.icon || "📍"}</div>

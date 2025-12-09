@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { supabaseConfigError } from "./supabaseClient";
 
 import ConfigErrorNotice from "./components/ConfigErrorNotice";
@@ -102,11 +102,43 @@ function AppContent() {
     panelPlacement,
     showFullAddForm,
     setShowFullAddForm,
+    titleCardBounds,
     titleCardHeight,
     titleCardRef,
     togglePanel,
     closePanel,
   } = panelStateHook;
+
+  const pinPanelRef = useRef(null);
+  const [pinPanelBounds, setPinPanelBounds] = useState(null);
+
+  useEffect(() => {
+    const node = pinPanelRef.current;
+    if (!node) {
+      setPinPanelBounds(null);
+      return undefined;
+    }
+
+    const updateBounds = () => {
+      const rect = node.getBoundingClientRect();
+      setPinPanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
+    };
+
+    updateBounds();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => updateBounds()) : null;
+    resizeObserver?.observe(node);
+
+    window.addEventListener("resize", updateBounds);
+    window.visualViewport?.addEventListener("resize", updateBounds);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateBounds);
+      window.visualViewport?.removeEventListener("resize", updateBounds);
+    };
+  }, [visibleSelectedPin, panelPlacement]);
 
   // Map interaction handlers
   const handleMapClick = useCallback(
@@ -185,6 +217,9 @@ function AppContent() {
               pendingIcon={!hasSubmitted && activePanel === "add" ? form.icon : null}
               selectedPinId={visibleSelectedPin?.id}
               enableAddMode={activePanel === "add" && !hasSubmitted}
+              panelPlacement={panelPlacement}
+              titleCardBounds={titleCardBounds}
+              pinPanelBounds={pinPanelBounds}
             />
 
             <div className="overlay-rail">
@@ -252,6 +287,7 @@ function AppContent() {
               <PinCard
                 pin={visibleSelectedPin}
                 placement="bottom"
+                panelRef={pinPanelRef}
                 onClose={() => setSelectedPin(null)}
                 reportButton={<ReportPinButton pin={visibleSelectedPin} />}
               >

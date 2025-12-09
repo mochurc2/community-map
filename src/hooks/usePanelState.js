@@ -8,6 +8,7 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
   const [panelPlacement, setPanelPlacement] = useState("side");
   const [showFullAddForm, setShowFullAddForm] = useState(false);
   const [titleCardHeight, setTitleCardHeight] = useState(0);
+  const [titleCardBounds, setTitleCardBounds] = useState({ top: 0, bottom: 0, height: 0 });
   const titleCardRef = useRef(null);
 
   // Handle responsive panel placement
@@ -45,6 +46,7 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
       const rect = node.getBoundingClientRect();
       const nextHeight = rect.height;
       setTitleCardHeight(nextHeight);
+      setTitleCardBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
       root.style.setProperty("--title-card-height", `${nextHeight}px`);
     };
 
@@ -78,6 +80,7 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
     showFullAddForm,
     setShowFullAddForm,
     titleCardHeight,
+    titleCardBounds,
     titleCardRef,
     togglePanel,
     closePanel,

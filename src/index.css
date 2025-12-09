@@ -361,6 +361,7 @@ textarea {
   pointer-events: none;
   overflow: visible;
   z-index: 4;
+  touch-action: none;
 }
 
 .pin-node {
@@ -374,6 +375,7 @@ textarea {
   pointer-events: auto;
   outline: none;
   will-change: transform, opacity;
+  touch-action: none;
 }
 
 .pin-node .pin-circle {
@@ -641,6 +643,21 @@ textarea {
 
 .floating-panel.bottom .panel-body-wrapper {
   max-height: calc(var(--app-viewport-height) - 220px);
+}
+
+@media (max-width: 960px) {
+  .floating-panel.bottom {
+    max-height: min(50vh, 50dvh, calc(var(--app-viewport-height) * 0.5));
+  }
+
+  .floating-panel.bottom.expanded {
+    top: auto;
+    max-height: min(50vh, 50dvh, calc(var(--app-viewport-height) * 0.5));
+  }
+
+  .floating-panel.bottom .panel-body-wrapper {
+    max-height: calc(min(50vh, 50dvh, var(--app-viewport-height)) - 96px);
+  }
 }
 
 .panel-top {
