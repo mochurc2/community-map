@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin } from "./supabaseClient";
+import { supabase, supabaseAdmin } from "../supabaseClient";
 
 const baseDefaultOptions = {
   gender_identity: ["Man", "Woman", "Non-binary", "Trans"],
