@@ -1648,6 +1648,7 @@ function App() {
         pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}
         pendingIcon={!hasSubmitted && activePanel === "add" ? form.icon : null}
         selectedPinId={visibleSelectedPin?.id}
+        enableAddMode={activePanel === "add" && !hasSubmitted}
       />
 
       <div className="overlay-rail">

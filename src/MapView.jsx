@@ -22,6 +22,7 @@ import {
 
 const DEFAULT_EMOJI = "🙂";
 const PENDING_REVIEW_EMOJI = "❗";
+const CLUSTER_PLUS_EMOJI = "➕";
 const FEET_TO_METERS = 0.3048;
 const PENDING_RADIUS_FEET = 1500;
 const EARTH_RADIUS_METERS = 6378137;
@@ -402,8 +403,10 @@ function MapView({
   const overlayRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
   const onPinSelectRef = useRef(onPinSelect);
+  const enableAddModeRef = useRef(enableAddMode);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
+  const [isInteracting, setIsInteracting] = useState(false);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
   const [visualNodes, setVisualNodes] = useState([]);
@@ -425,6 +428,10 @@ function MapView({
   useEffect(() => {
     onPinSelectRef.current = onPinSelect;
   }, [onPinSelect]);
+
+  useEffect(() => {
+    enableAddModeRef.current = enableAddMode;
+  }, [enableAddMode]);
 
   useEffect(() => {
     const canvas = document.createElement("canvas");
@@ -491,6 +498,7 @@ function MapView({
     setLabelNodes(nextLabels.map((label) => ({ ...label, phase: "active" })));
   }, []);
 
+
   const computeLayout = useCallback(() => {
     try {
       const map = mapRef.current;
@@ -541,79 +549,7 @@ function MapView({
         grid.get(key).push(index);
       });
 
-<<<<<<< ours
       const uf = new UnionFind(projected.length);
-=======
-    const nodes = [];
-    const maxIterations = 6;
-    let iteration = 0;
-    while (iteration < maxIterations) {
-      const clusters = buildClusters();
-      nodes.length = 0;
-
-      clusters.forEach(({ root, pins: clusterPins }) => {
-        const centerX = clusterPins.reduce((sum, pin) => sum + pin.x, 0) / clusterPins.length;
-        const centerY = clusterPins.reduce((sum, pin) => sum + pin.y, 0) / clusterPins.length;
-        const centerLngLat = map.unproject([centerX, centerY]);
-        const clusterKey = buildClusterKey(clusterPins);
-
-<<<<<<< ours
-<<<<<<< ours
-=======
->>>>>>> theirs
-        if (clusterPins.length === 1) {
-          const pin = clusterPins[0];
-=======
-        const withAngles = clusterPins.map((pin) => ({
-          pin,
-          angle: Math.atan2(pin.y - centerY, pin.x - centerX),
-          dist: (pin.x - centerX) ** 2 + (pin.y - centerY) ** 2,
-        }));
-
-        const usingPlus = clusterPins.length > HONEYCOMB_MAX;
-        const visiblePinCount = usingPlus
-          ? Math.min(LARGE_CLUSTER_SAMPLE, HONEYCOMB_MAX - 1, clusterPins.length)
-          : clusterPins.length;
-        const offsetPoolCount = Math.min(
-          HONEYCOMB_MAX,
-          Math.max(visiblePinCount + 8, Math.ceil(visiblePinCount * 1.35))
-        );
-<<<<<<< ours
-<<<<<<< ours
-        const offsets = generateHoneycombOffsets(offsetPoolCount + (usingPlus ? 1 : 0));
-=======
-        const desiredOffsetCount = Math.max(
-          offsetPoolCount + (usingPlus ? 1 : 0),
-          visiblePinCount + (usingPlus ? 1 : 0)
-        );
-        const offsets = generateHoneycombOffsets(desiredOffsetCount);
->>>>>>> theirs
-=======
-        const offsets = generateHoneycombOffsets(offsetPoolCount + (usingPlus ? 1 : 0));
->>>>>>> theirs
-        const offsetsForPins = usingPlus ? offsets.slice(1) : offsets;
-
-        if (usingPlus) {
->>>>>>> theirs
-          nodes.push({
-            key: pin.__key,
-            x: pin.x,
-            y: pin.y,
-            pin,
-            icon: pin.icon || DEFAULT_EMOJI,
-            clusterSize: 1,
-            center: centerLngLat,
-            isPlus: false,
-            labelText: pin.labelText,
-            category: pin.__kind,
-            sortOrder: pin.__order ?? 0,
-            isSelected: pin.isSelected,
-            clusterRoot: root,
-          });
-          cache.set(pin.__key, { dx: 0, dy: 0, idx: 0 });
-          return;
-        }
->>>>>>> theirs
 
       projected.forEach((pin, index) => {
         const gx = Math.floor(pin.x / cellSize);
@@ -681,7 +617,6 @@ function MapView({
             return;
           }
 
-<<<<<<< ours
           const withAngles = clusterPins.map((pin) => ({
             pin,
             angle: Math.atan2(pin.y - centerY, pin.x - centerX),
@@ -719,80 +654,43 @@ function MapView({
             });
           }
 
-<<<<<<< ours
+          const clusterCache = new Map();
+          const occupiedOffsets = new Set();
+          const spacing = PIN_DIAMETER * 1.02 + CLUSTER_COLLISION_PADDING * 0.3;
+          clusterPins.forEach((pin) => {
+            const cached = cache.get(pin.__key);
+            if (cached && cached.idx !== undefined && cached.idx >= 0) {
+              clusterCache.set(pin.__key, cached);
+              occupiedOffsets.add(cached.idx);
+            }
+          });
+
           let availableOffsets = offsetsForPins
             .map((off, idx) => ({
               ...off,
               idx,
-=======
-        const cache = pinOffsetCacheRef.current;
-        const availableOffsets = offsetsForPins
-=======
-        const cache = pinOffsetCacheRef.current;
-<<<<<<< ours
-        let availableOffsets = offsetsForPins
->>>>>>> theirs
-=======
-        const availableOffsets = offsetsForPins
->>>>>>> theirs
-          .map((off, idx) => ({
-            ...off,
-            idx,
-            radius: Math.hypot(off.dx, off.dy),
-            angle: Math.atan2(off.dy, off.dx),
-          }))
-          .sort((a, b) => a.radius - b.radius || a.angle - b.angle);
-
-        const visiblePins = [...withAngles]
-          .sort((a, b) => a.angle - b.angle || (a.pin.__order ?? 0) - (b.pin.__order ?? 0))
-          .slice(0, visiblePinCount);
-
-        const pinCount = visiblePins.length;
-
-<<<<<<< ours
-<<<<<<< ours
-        // Grow offset supply if we run short (always real offsets).
-        const maxExistingIdx = availableOffsets.reduce((m, off) => Math.max(m, off.idx), -1);
-        if (availableOffsets.length < pinCount) {
-          const target = Math.max(pinCount + 12, availableOffsets.length + 12);
-          const expanded = generateHoneycombOffsets(target + (usingPlus ? 1 : 0));
-          const expandedForPins = usingPlus ? expanded.slice(1) : expanded;
-          const extras = expandedForPins
-            .slice(availableOffsets.length)
-            .map((off, i) => ({
-              dx: off.dx,
-              dy: off.dy,
-              idx: maxExistingIdx + 1 + i,
->>>>>>> theirs
-=======
-        const pinCount = unassignedPins.length;
-<<<<<<< ours
-=======
-        const unassignedPins = visiblePins.filter(({ pin }) => !lockedAssignments.has(pin.__key));
-        const freeOffsets = availableOffsets.filter((off) => !usedOffsets.has(off.idx));
-
-        const pinCount = unassignedPins.length;
-<<<<<<< ours
->>>>>>> theirs
-        // Ensure we never run out of real offsets; extend if needed.
-        let paddedOffsets = [...freeOffsets];
-        if (paddedOffsets.length < pinCount) {
-          const extra = generateHoneycombOffsets(pinCount + (usingPlus ? 1 : 0));
-          const extraForPins = usingPlus ? extra.slice(1) : extra;
-          paddedOffsets = extraForPins
-            .map((off, idx) => ({
-              ...off,
-              idx,
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
               radius: Math.hypot(off.dx, off.dy),
               angle: Math.atan2(off.dy, off.dx),
+              neighborCount: 0,
             }))
             .sort((a, b) => a.radius - b.radius || a.angle - b.angle);
-<<<<<<< ours
-<<<<<<< ours
+
+          const offsetByIdx = new Map();
+          availableOffsets.forEach((off) => offsetByIdx.set(off.idx, off));
+          const adjacency = availableOffsets.map((off) =>
+            availableOffsets
+              .filter((other) => other.idx !== off.idx && Math.hypot(off.dx - other.dx, off.dy - other.dy) <= spacing * 1.05)
+              .map((other) => other.idx)
+          );
+
+          availableOffsets = availableOffsets.map((off, i, arr) => {
+            const neighbors = arr.reduce((count, other) => {
+              if (other.idx === off.idx) return count;
+              const dist = Math.hypot(off.dx - other.dx, off.dy - other.dy);
+              return dist <= spacing * 1.05 ? count + 1 : count;
+            }, 0);
+            return { ...off, neighborCount: neighbors };
+          });
 
           const visiblePins = [...withAngles]
             .sort((a, b) => a.angle - b.angle || (a.pin.__order ?? 0) - (b.pin.__order ?? 0))
@@ -800,7 +698,6 @@ function MapView({
 
           const pinCount = visiblePins.length;
 
-          // Grow offset supply if we run short (always real offsets).
           const maxExistingIdx = availableOffsets.reduce((m, off) => Math.max(m, off.idx), -1);
           if (availableOffsets.length < pinCount) {
             const target = Math.max(pinCount + 12, availableOffsets.length + 12);
@@ -820,65 +717,83 @@ function MapView({
             );
           }
 
-          const maxRadius = availableOffsets.reduce((max, off) => Math.max(max, off.radius), PIN_DIAMETER);
+          const compactRadius =
+            availableOffsets[Math.min(pinCount, availableOffsets.length) - 1]?.radius || PIN_DIAMETER;
+          const relaxedRadius =
+            availableOffsets[Math.min(pinCount + 3, availableOffsets.length) - 1]?.radius || compactRadius;
+          const desiredRadius = (usingPlus ? compactRadius * 0.92 : compactRadius * 0.74) || PIN_DIAMETER;
+          const radiusHardCap = relaxedRadius + PIN_RADIUS * 0.6;
+          const preferredMaxIdx = Math.max(
+            0,
+            Math.min(availableOffsets.length - 1, pinCount + 3)
+          );
+          const cachedOwnerByIdx = new Map();
+          clusterPins.forEach((pin) => {
+            const cached = cache.get(pin.__key);
+            if (cached && cached.idx !== undefined && cached.idx >= 0) {
+              cachedOwnerByIdx.set(cached.idx, pin.__key);
+            }
+          });
           const dim = Math.max(pinCount, availableOffsets.length);
           const costMatrix = Array.from({ length: dim }, () => Array(dim).fill(1e6));
 
           visiblePins.forEach((entry, i) => {
             const cached = cache.get(entry.pin.__key);
             const cacheWeight = clusterPins.length <= 6 ? 0.35 : 1;
-            const desiredDx = Math.cos(entry.angle) * maxRadius * 0.72;
-            const desiredDy = Math.sin(entry.angle) * maxRadius * 0.72;
+            const desiredDx = Math.cos(entry.angle) * desiredRadius;
+            const desiredDy = Math.sin(entry.angle) * desiredRadius;
             availableOffsets.forEach((off, j) => {
+              const owner = cachedOwnerByIdx.get(off.idx);
+              const isOwner = owner && owner === entry.pin.__key;
+              const centerAvailable = !owner && !occupiedOffsets.has(off.idx);
+              if (
+                off.idx === 0 &&
+                clusterPins.length > 1 &&
+                !isOwner &&
+                !centerAvailable
+              ) {
+                costMatrix[i][j] = 1e12;
+                return;
+              }
               const angleDiff = Math.abs(off.angle - entry.angle);
               const wrapped = Math.min(angleDiff, Math.abs(angleDiff - Math.PI * 2));
               const distCost = (off.dx - desiredDx) ** 2 + (off.dy - desiredDy) ** 2;
-              const angleCost = wrapped * wrapped * 220;
-              const radiusCost = off.radius * 22; // prefer compact fill
+              const angleCost = off.radius < PIN_RADIUS * 0.9 ? 0 : wrapped * wrapped * 220;
+              const radiusBias =
+                off.radius <= compactRadius ? 0 : (off.radius - compactRadius) ** 2 * 0.85;
+              const overflowPenalty =
+                off.radius > radiusHardCap ? (off.radius - radiusHardCap) ** 2 * 3.4 : 0;
+              const slotPenalty = off.idx > preferredMaxIdx ? (off.idx - preferredMaxIdx) * 2600 : 0;
+              const centerBonus = !usingPlus && off.idx === 0 ? -1400 : 0;
+              const centerGuard =
+                off.idx === 0 && clusterPins.length > 1 && (!cached || cached.idx !== 0) ? 24000 : 0;
+              const displacementPenalty =
+                occupiedOffsets.has(off.idx) && (!cached || cached.idx !== off.idx) ? 12000 : 0;
+              const neighborBonus = !occupiedOffsets.has(off.idx) ? -off.neighborCount * 520 : 0;
+              const ownerPenalty = owner && owner !== entry.pin.__key ? 1.2e7 : 0;
+              const lockedPenalty =
+                owner && owner !== entry.pin.__key && off.neighborCount >= 6 ? 5e8 : 0;
               const cacheBonus =
                 cached && cached.idx !== undefined && cached.idx === off.idx ? -25000 * cacheWeight : 0;
               const cachePenalty =
-                cached && cached.idx !== undefined && cached.idx !== off.idx ? 900 * cacheWeight : 0;
-              costMatrix[i][j] = distCost + angleCost + radiusCost + cacheBonus + cachePenalty;
+                cached && cached.idx !== undefined && cached.idx !== off.idx ? 5200 * cacheWeight : 0;
+              costMatrix[i][j] =
+                distCost +
+                angleCost +
+                radiusBias +
+                overflowPenalty +
+                slotPenalty +
+                cacheBonus +
+                cachePenalty +
+                centerBonus +
+                centerGuard +
+                displacementPenalty +
+                neighborBonus +
+                ownerPenalty +
+                lockedPenalty;
             });
-=======
-=======
-        }
-        const dim = Math.max(pinCount, paddedOffsets.length || 1);
-=======
-        const dim = Math.max(pinCount, freeOffsets.length || 1);
-        const paddedOffsets = [...freeOffsets];
->>>>>>> theirs
-        while (paddedOffsets.length < dim) {
-          paddedOffsets.push({
-            dx: 0,
-            dy: 0,
-            idx: -1,
-            radius: PIN_DIAMETER,
-            angle: 0,
-            pad: true,
-          });
->>>>>>> theirs
-        }
-        const dim = Math.max(pinCount, paddedOffsets.length || 1);
-=======
-        const dim = Math.max(pinCount, freeOffsets.length || 1);
-        const paddedOffsets = [...freeOffsets];
->>>>>>> theirs
-        while (paddedOffsets.length < dim) {
-          paddedOffsets.push({
-            dx: 0,
-            dy: 0,
-            idx: -1,
-            radius: PIN_DIAMETER,
-            angle: 0,
-            pad: true,
->>>>>>> theirs
           });
 
-<<<<<<< ours
-<<<<<<< ours
-          // Pad rows/cols to square for Hungarian
           while (costMatrix.length < dim) costMatrix.push(Array(dim).fill(1e6));
           const assignment = pinCount > 0 ? hungarian(costMatrix).slice(0, pinCount) : [];
           const pinnedOffsets = new Map();
@@ -887,36 +802,49 @@ function MapView({
             const off = availableOffsets[offsetIdx] || { dx: 0, dy: 0, idx: -1 };
             pinnedOffsets.set(pin.__key, off);
           });
-=======
-=======
->>>>>>> theirs
-        const maxRadius = paddedOffsets.reduce((max, off) => Math.max(max, off.radius), PIN_DIAMETER);
-        const costMatrix = Array.from({ length: dim }, () => Array(dim).fill(1e6));
 
-        unassignedPins.forEach((entry, i) => {
-          const desiredDx = Math.cos(entry.angle) * maxRadius * 0.72;
-          const desiredDy = Math.sin(entry.angle) * maxRadius * 0.72;
-          paddedOffsets.forEach((off, j) => {
-            if (off.pad) return;
-            const angleDiff = Math.abs(off.angle - entry.angle);
-            const wrapped = Math.min(angleDiff, Math.abs(angleDiff - Math.PI * 2));
-            const distCost = (off.dx - desiredDx) ** 2 + (off.dy - desiredDy) ** 2;
-            const angleCost = wrapped * wrapped * 220;
-            const radiusCost = off.radius * 14; // gently prefer closer, compact fills holes
-            costMatrix[i][j] = distCost + angleCost + radiusCost;
+          // Resolve inner "holes": empty slots with dense neighbors pull in the farthest neighbor occupant.
+          const occupancy = new Map();
+          pinnedOffsets.forEach((off, pinKey) => {
+            if (!off || off.idx === undefined || off.idx < 0) return;
+            occupancy.set(off.idx, pinKey);
           });
-        });
-
-        const assignment = pinCount > 0 ? hungarian(costMatrix).slice(0, pinCount) : [];
-        const pinnedOffsets = new Map(lockedAssignments);
-        assignment.forEach((offsetIdx, pinIdx) => {
-          const pin = unassignedPins[pinIdx].pin;
-          const off = paddedOffsets[offsetIdx] || { dx: 0, dy: 0, idx: -1 };
-          if (!off.pad) {
-            pinnedOffsets.set(pin.__key, off);
+          // Gentle hole fix: single move from a sparsely connected outer pin into the densest hole.
+          const holes = availableOffsets
+            .map((off, idx) => {
+              if (occupancy.has(off.idx)) return null;
+              const neighIdxs = adjacency[idx] || [];
+              const occupiedNeighbors = neighIdxs.filter((nIdx) => occupancy.has(nIdx));
+              if (occupiedNeighbors.length < 5) return null;
+              return { off, neighbors: occupiedNeighbors };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.off.radius - b.off.radius);
+          if (holes.length > 0) {
+            const hole = holes[0];
+            const candidates = hole.neighbors
+              .map((nIdx) => {
+                const key = occupancy.get(nIdx);
+                const off = offsetByIdx.get(nIdx);
+                if (!key || !off) return null;
+                if (off.neighborCount > 2) return null; // only move sparsely connected pins
+                const cachedIdx = cache.get(key)?.idx;
+                const prefer = cachedIdx !== nIdx; // prefer moving pins not anchored by cache
+                return { nIdx, key, off, prefer };
+              })
+              .filter(Boolean)
+              .filter(({ off }) => off.radius > hole.off.radius + PIN_RADIUS * 0.1); // only pull inward
+            if (candidates.length > 0) {
+              candidates.sort((a, b) => {
+                if (a.prefer !== b.prefer) return a.prefer ? -1 : 1;
+                return b.off.radius - a.off.radius || a.key.localeCompare(b.key);
+              });
+              const best = candidates[0];
+              pinnedOffsets.set(best.key, hole.off);
+              occupancy.delete(best.nIdx);
+              occupancy.set(hole.off.idx, best.key);
+            }
           }
-        });
->>>>>>> theirs
 
           visiblePins.forEach(({ pin }) => {
             const offset = pinnedOffsets.get(pin.__key) || { dx: 0, dy: 0, idx: -1 };
@@ -939,7 +867,6 @@ function MapView({
           });
         });
 
-        // Detect inter-cluster collisions based on laid-out nodes; merge and rerun if needed.
         const nodeGrid = new Map();
         nodes.forEach((node, idx) => {
           const gx = Math.floor(node.x / cellSize);
@@ -1017,7 +944,7 @@ function MapView({
               x: node.x,
               y: node.y,
               category: node.category,
-              priority: basePriority + 1, // prefer right first
+              priority: basePriority + 1,
               side: "left",
               pinKey: node.key,
             },
@@ -1052,6 +979,7 @@ function MapView({
     }
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
 
+
   const scheduleLayout = useCallback(() => {
     if (scheduledLayoutRef.current) return;
     scheduledLayoutRef.current = true;
@@ -1062,7 +990,15 @@ function MapView({
   }, [computeLayout]);
 
   useEffect(() => {
-  }, [visualNodes]);
+    const map = mapRef.current;
+    const canvas = map?.getCanvas?.();
+    if (!canvas) return undefined;
+    const previousCursor = canvas.style.cursor;
+    canvas.style.cursor = enableAddMode ? "crosshair" : "";
+    return () => {
+      canvas.style.cursor = previousCursor;
+    };
+  }, [enableAddMode]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
@@ -1148,26 +1084,31 @@ function MapView({
 
     map.on("movestart", () => {
       isMapMovingRef.current = true;
+      setIsInteracting(true);
     });
 
     map.on("moveend", () => {
       isMapMovingRef.current = false;
+      setIsInteracting(false);
       scheduleLayout();
     });
 
     map.on("zoomstart", () => {
       isMapMovingRef.current = true;
+      setIsInteracting(true);
     });
 
     map.on("zoomend", () => {
       isMapMovingRef.current = false;
+      setIsInteracting(false);
       scheduleLayout();
     });
 
+    map.on("idle", scheduleLayout);
     map.on("resize", scheduleLayout);
 
     map.on("click", (e) => {
-      if (!enableAddMode) return;
+      if (!enableAddModeRef.current) return;
       const zoomTarget = map.getZoom();
       map.flyTo({
         center: [e.lngLat.lng, e.lngLat.lat],
@@ -1205,6 +1146,11 @@ function MapView({
   }, [combinedPins, computeLayout]);
 
   useEffect(() => {
+    scheduledLayoutRef.current = false;
+    computeLayout();
+  }, [computeLayout, selectedPinId]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const handleMove = () => scheduleLayout();
@@ -1216,6 +1162,23 @@ function MapView({
       map.off("zoom", handleZoom);
     };
   }, [scheduleLayout]);
+
+  useEffect(() => {
+    if (isInteracting) return;
+    scheduleLayout();
+  }, [isInteracting, scheduleLayout]);
+
+  useEffect(() => {
+    if (isInteracting) return;
+    if (!mapLoaded) return;
+    if (combinedPins.length === 0) return;
+    if (visualNodes.length === 0 && lastGoodNodesRef.current.length > 0) {
+      applyVisualNodes(lastGoodNodesRef.current);
+    }
+    if (labelNodes.length === 0 && lastGoodLabelsRef.current.length > 0) {
+      applyLabelNodes(lastGoodLabelsRef.current);
+    }
+  }, [applyLabelNodes, applyVisualNodes, combinedPins.length, isInteracting, labelNodes.length, mapLoaded, visualNodes.length]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -1332,18 +1295,24 @@ function MapView({
       )}
       <div ref={mapContainerRef} className="map-container" />
       <div className="pin-overlay" ref={overlayRef}>
-        {visualNodes.map((node) => {
+        {(visualNodes.length ? visualNodes : lastGoodNodesRef.current)
+          .map((node) =>
+            selectedPinId !== null && selectedPinId !== undefined && node.pin?.id === selectedPinId
+              ? { ...node, isSelected: true }
+              : node
+          )
+          .map((node) => {
           const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-          const allowTransitions = now < dataAnimationUntilRef.current;
-          const emoji = node.isPlus ? "＋" : node.category === "pending" ? PENDING_REVIEW_EMOJI : node.icon || DEFAULT_EMOJI;
-          const transitionSpeed = allowTransitions ? ANIMATION_TIMING.move : 0;
-          const baseScale = 1;
+          const shouldAnimate = !isInteracting && now < dataAnimationUntilRef.current;
+          const emoji = node.isPlus ? CLUSTER_PLUS_EMOJI : node.category === "pending" ? PENDING_REVIEW_EMOJI : node.icon || DEFAULT_EMOJI;
+          const transitionSpeed = shouldAnimate ? Math.round(ANIMATION_TIMING.move * 1.25) : 0;
+          const baseScale = node.isPlus ? 1 : node.clusterSize > 1 ? 0.97 : 1;
           const opacity = 1;
           const style = {
             transform: `translate(${node.x - PIN_RADIUS}px, ${node.y - PIN_RADIUS}px) scale(${baseScale})`,
             opacity,
-            transition: allowTransitions
-              ? `transform ${transitionSpeed}ms ease, opacity ${ANIMATION_TIMING.filter}ms ease`
+            transition: shouldAnimate
+              ? `transform ${transitionSpeed}ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity ${ANIMATION_TIMING.filter}ms ease`
               : "transform 0ms linear, opacity 0ms linear",
           };
           const className = [
@@ -1374,18 +1343,18 @@ function MapView({
           );
         })}
 
-        {labelNodes.map((label) => {
+        {(labelNodes.length ? labelNodes : lastGoodLabelsRef.current).map((label) => {
           const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-          const allowTransitions = now < dataAnimationUntilRef.current;
-          const transitionSpeed = allowTransitions ? ANIMATION_TIMING.label : 0;
-          const baseOpacity = allowTransitions && label.phase === "exit" ? 0 : 1;
+          const shouldAnimate = !isInteracting && now < dataAnimationUntilRef.current;
+          const transitionSpeed = shouldAnimate ? Math.round(ANIMATION_TIMING.label * 1.1) : 0;
+          const baseOpacity = shouldAnimate && label.phase === "exit" ? 0 : 1;
           const style = {
             left: `${label.anchorX}px`,
             top: `${label.anchorY}px`,
             width: `${label.width}px`,
             height: `${label.height}px`,
             opacity: baseOpacity,
-            transition: allowTransitions ? `opacity ${transitionSpeed}ms ease` : "opacity 0ms linear",
+            transition: shouldAnimate ? `opacity ${transitionSpeed}ms ease` : "opacity 0ms linear",
             textAlign: label.side === "left" ? "right" : "left",
           };
           const className = [

@@ -3,7 +3,7 @@ export const PIN_RADIUS = PIN_DIAMETER / 2;
 export const PIN_STROKE_WIDTH = 2;
 export const CLUSTER_COLLISION_PADDING = 2;
 
-export const HONEYCOMB_MAX = 25;
+export const HONEYCOMB_MAX = 50;
 export const LARGE_CLUSTER_SAMPLE = 12;
 
 export const LABEL_MAX_WIDTH = 148;
