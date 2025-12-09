@@ -1,16 +1,15 @@
 import { useState, useCallback, useMemo } from "react";
-import { X, Info, Plus, Filter } from "lucide-react";
 import { supabaseConfigError } from "./supabaseClient";
 
 import ConfigErrorNotice from "./components/ConfigErrorNotice";
 import MapView from "./components/MapView";
 import PolicyModal from "./components/PolicyModal";
 import TitleCard from "./components/TitleCard";
-import FilterPanel from "./components/FilterPanel";
-import InfoPanel from "./components/InfoPanel";
+import Panel from "./components/Panel";
+import PanelContent from "./components/PanelContent";
 import PinInfoPanel from "./components/PinInfoPanel";
 import PinCard from "./components/PinCard";
-import AddPinPanel from "./components/AddPinPanel";
+import ReportPinButton from "./components/ReportPinButton";
 import FeedbackModal from "./components/FeedbackModal";
 import privacyPolicyContent from "../PrivacyPolicy.md?raw";
 import termsContent from "../ToS.md?raw";
@@ -23,6 +22,7 @@ import {
   useOrderedOptions,
   usePinForm,
   usePanelState,
+  usePolicyModal,
 } from "./hooks";
 
 import {
@@ -30,7 +30,6 @@ import {
   PinFormProvider,
   FilterProvider,
   FeedbackProvider,
-  useFeedbackContext,
 } from "./context";
 
 /**
@@ -40,10 +39,6 @@ function AppContent() {
   // UI state for selected pin and location
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
-  const [policyModal, setPolicyModal] = useState(null);
-
-  // Get openFeedback from context
-  const { openFeedback } = useFeedbackContext();
 
   // Initialize hooks
   useViewport();
@@ -134,23 +129,14 @@ function AppContent() {
     setSelectedLocation(null);
   }, []);
 
-  // Policy modal
-  const openPolicy = (type) => setPolicyModal(type);
-  const closePolicy = () => setPolicyModal(null);
+  // Policy modal hook
+  const { policyModal, openPolicy, closePolicy } = usePolicyModal();
 
   // Computed values
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
     : null;
 
-  const getPanelTitle = () => {
-    if (activePanel === "info") return { icon: <Info />, label: "About this map" };
-    if (activePanel === "add") return { icon: <Plus />, label: "Add your pin" };
-    return { icon: <Filter />, label: "Filter pins" };
-  };
-  const panelTitle = getPanelTitle();
-
-  const isCompactAdd = panelPlacement === "bottom";
   const policyTitle = policyModal === "tos" ? "Terms of Service" : "Privacy Policy";
   const policyContent = policyModal === "tos" ? termsContent : privacyPolicyContent;
 
@@ -185,37 +171,6 @@ function AppContent() {
     orderedInterestOptions,
   }), [filtersHook, orderedInterestOptions]);
 
-  // Panel content components
-  const infoPanel = (
-    <InfoPanel
-      loadingPins={loadingPins}
-      approvedPinsCount={approvedPinsCount}
-      pendingPinsLabel={pendingPinsLabel}
-      pinsError={pinsError}
-      onOpenPolicy={openPolicy}
-    />
-  );
-
-  const reportPinButton =
-    visibleSelectedPin && visibleSelectedPin.id ? (
-      <button
-        type="button"
-        className="tiny-button subtle"
-        onClick={() =>
-          openFeedback("pin_report", {
-            pinId: visibleSelectedPin.id,
-            pinNickname: visibleSelectedPin.nickname || "Unnamed pin",
-          })
-        }
-      >
-        Report pin
-      </button>
-    ) : null;
-
-  const pinInfoPanel = (
-    <PinInfoPanel pin={visibleSelectedPin} isInterestApproved={isInterestApproved} />
-  );
-
   return (
     <AppProvider value={appContextValue}>
       <PinFormProvider value={pinFormContextValue}>
@@ -239,25 +194,24 @@ function AppContent() {
               />
 
               {activePanel && panelPlacement === "side" && (
-                <div
-                  className={`floating-panel ${panelPlacement} ${
-                    activePanel === "add" && showFullAddForm ? "expanded" : ""
-                  }`}
+                <Panel
+                  activePanel={activePanel}
+                  placement={panelPlacement}
+                  showFullAddForm={showFullAddForm}
+                  titleCardHeight={titleCardHeight}
+                  onClose={closePanel}
                 >
-                  <div className="panel-top">
-                    <div className="panel-title">
-                      <div className="panel-icon">{panelTitle.icon}</div>
-                      <h3>{panelTitle.label}</h3>
-                    </div>
-                    <button type="button" className="close-button" onClick={closePanel}>
-                      <X size={24} />
-                    </button>
-                  </div>
-
-                  {activePanel === "info" && infoPanel}
-                  {activePanel === "add" && <div className="panel-body-wrapper"><AddPinPanel /></div>}
-                  {activePanel === "filter" && <FilterPanel />}
-                </div>
+                  <PanelContent
+                    activePanel={activePanel}
+                    panelPlacement={panelPlacement}
+                    showFullAddForm={showFullAddForm}
+                    loadingPins={loadingPins}
+                    approvedPinsCount={approvedPinsCount}
+                    pendingPinsLabel={pendingPinsLabel}
+                    pinsError={pinsError}
+                    onOpenPolicy={openPolicy}
+                  />
+                </Panel>
               )}
 
               {panelPlacement === "side" && visibleSelectedPin && (
@@ -265,46 +219,32 @@ function AppContent() {
                   pin={visibleSelectedPin}
                   placement="side"
                   onClose={() => setSelectedPin(null)}
-                  reportButton={reportPinButton}
+                  reportButton={<ReportPinButton pin={visibleSelectedPin} />}
                 >
-                  {pinInfoPanel}
+                  <PinInfoPanel pin={visibleSelectedPin} isInterestApproved={isInterestApproved} />
                 </PinCard>
               )}
             </div>
 
             {activePanel && panelPlacement === "bottom" && (
-              <div
-                className={`floating-panel ${panelPlacement} ${
-                  activePanel === "add" && showFullAddForm ? "expanded" : ""
-                }`}
-                style={
-                  panelPlacement === "bottom" && activePanel === "add" && showFullAddForm
-                    ? { top: `${Math.max(titleCardHeight + 42, 150)}px` }
-                    : undefined
-                }
+              <Panel
+                activePanel={activePanel}
+                placement={panelPlacement}
+                showFullAddForm={showFullAddForm}
+                titleCardHeight={titleCardHeight}
+                onClose={closePanel}
               >
-                <div className="panel-top">
-                  <div className="panel-title">
-                    <div className="panel-icon">{panelTitle.icon}</div>
-                    <h3>{panelTitle.label}</h3>
-                  </div>
-                  <button type="button" className="close-button" onClick={closePanel}>
-                    <X size={24} />
-                  </button>
-                </div>
-
-                {activePanel === "info" && infoPanel}
-                {activePanel === "add" && (
-                  <div
-                    className={`panel-body-wrapper ${
-                      isCompactAdd && !showFullAddForm ? "compact" : ""
-                    }`}
-                  >
-                    <AddPinPanel />
-                  </div>
-                )}
-                {activePanel === "filter" && <FilterPanel />}
-              </div>
+                <PanelContent
+                  activePanel={activePanel}
+                  panelPlacement={panelPlacement}
+                  showFullAddForm={showFullAddForm}
+                  loadingPins={loadingPins}
+                  approvedPinsCount={approvedPinsCount}
+                  pendingPinsLabel={pendingPinsLabel}
+                  pinsError={pinsError}
+                  onOpenPolicy={openPolicy}
+                />
+              </Panel>
             )}
 
             {panelPlacement === "bottom" && visibleSelectedPin && (
@@ -312,9 +252,9 @@ function AppContent() {
                 pin={visibleSelectedPin}
                 placement="bottom"
                 onClose={() => setSelectedPin(null)}
-                reportButton={reportPinButton}
+                reportButton={<ReportPinButton pin={visibleSelectedPin} />}
               >
-                {pinInfoPanel}
+                <PinInfoPanel pin={visibleSelectedPin} isInterestApproved={isInterestApproved} />
               </PinCard>
             )}
 
