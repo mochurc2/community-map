@@ -1261,11 +1261,108 @@ function MapView({
     overlayEl.addEventListener("pointerup", handlePointerEnd, listenerOptions);
     overlayEl.addEventListener("pointercancel", handlePointerEnd, listenerOptions);
 
+    const cloneTouches = (touchList) => {
+      if (!touchList || typeof Touch === "undefined") return [];
+      return Array.from(touchList).map(
+        (touch) =>
+          new Touch({
+            identifier: touch.identifier,
+            target: canvas,
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            screenX: touch.screenX,
+            screenY: touch.screenY,
+            pageX: touch.pageX,
+            pageY: touch.pageY,
+            radiusX: touch.radiusX,
+            radiusY: touch.radiusY,
+            rotationAngle: touch.rotationAngle,
+            force: touch.force,
+          })
+      );
+    };
+
+    const forwardTouchEvent = (type, sourceEvent) => {
+      if (typeof TouchEvent === "undefined") return;
+      const touches = cloneTouches(sourceEvent.touches);
+      const changedTouches = cloneTouches(sourceEvent.changedTouches);
+      const eventInit = {
+        touches,
+        targetTouches: touches,
+        changedTouches,
+        ctrlKey: sourceEvent.ctrlKey,
+        shiftKey: sourceEvent.shiftKey,
+        altKey: sourceEvent.altKey,
+        metaKey: sourceEvent.metaKey,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      };
+      const cloned = new TouchEvent(type, eventInit);
+      canvas.dispatchEvent(cloned);
+    };
+
+    const handleTouchStart = (event) => {
+      if (event.touches.length < 2) return;
+      forwardingMultiTouchRef.current = true;
+      event.preventDefault();
+      forwardTouchEvent("touchstart", event);
+    };
+
+    const handleTouchMove = (event) => {
+      if (!forwardingMultiTouchRef.current) return;
+      event.preventDefault();
+      forwardTouchEvent("touchmove", event);
+    };
+
+    const handleTouchEnd = (event) => {
+      if (!forwardingMultiTouchRef.current) return;
+      event.preventDefault();
+      forwardTouchEvent("touchend", event);
+      if (event.touches.length === 0 || event.changedTouches.length >= 1) {
+        forwardingMultiTouchRef.current = false;
+      }
+    };
+
+    const handleWheel = (event) => {
+      if (!canvas) return;
+      event.preventDefault();
+      const wheel = new WheelEvent("wheel", {
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+        deltaZ: event.deltaZ,
+        deltaMode: event.deltaMode,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        screenX: event.screenX,
+        screenY: event.screenY,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        metaKey: event.metaKey,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+      canvas.dispatchEvent(wheel);
+    };
+
+    overlayEl.addEventListener("touchstart", handleTouchStart, listenerOptions);
+    overlayEl.addEventListener("touchmove", handleTouchMove, listenerOptions);
+    overlayEl.addEventListener("touchend", handleTouchEnd, listenerOptions);
+    overlayEl.addEventListener("touchcancel", handleTouchEnd, listenerOptions);
+    overlayEl.addEventListener("wheel", handleWheel, listenerOptions);
+
     return () => {
       overlayEl.removeEventListener("pointerdown", handlePointerDown, listenerOptions);
       overlayEl.removeEventListener("pointermove", handlePointerMove, listenerOptions);
       overlayEl.removeEventListener("pointerup", handlePointerEnd, listenerOptions);
       overlayEl.removeEventListener("pointercancel", handlePointerEnd, listenerOptions);
+      overlayEl.removeEventListener("touchstart", handleTouchStart, listenerOptions);
+      overlayEl.removeEventListener("touchmove", handleTouchMove, listenerOptions);
+      overlayEl.removeEventListener("touchend", handleTouchEnd, listenerOptions);
+      overlayEl.removeEventListener("touchcancel", handleTouchEnd, listenerOptions);
+      overlayEl.removeEventListener("wheel", handleWheel, listenerOptions);
       forwardingMultiTouchRef.current = false;
       activeTouchIdsRef.current.clear();
       cachedTouchEventsRef.current.clear();
