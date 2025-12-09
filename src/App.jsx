@@ -112,34 +112,6 @@ function AppContent() {
   const pinPanelRef = useRef(null);
   const [pinPanelBounds, setPinPanelBounds] = useState(null);
 
-  useEffect(() => {
-    const node = pinPanelRef.current;
-    if (!node) {
-      setPinPanelBounds(null);
-      return undefined;
-    }
-
-    const updateBounds = () => {
-      const rect = node.getBoundingClientRect();
-      setPinPanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
-    };
-
-    updateBounds();
-
-    const resizeObserver =
-      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => updateBounds()) : null;
-    resizeObserver?.observe(node);
-
-    window.addEventListener("resize", updateBounds);
-    window.visualViewport?.addEventListener("resize", updateBounds);
-
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", updateBounds);
-      window.visualViewport?.removeEventListener("resize", updateBounds);
-    };
-  }, [visibleSelectedPin, panelPlacement]);
-
   // Map interaction handlers
   const handleMapClick = useCallback(
     (lngLat) => {
@@ -168,6 +140,34 @@ function AppContent() {
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
     : null;
+
+  useEffect(() => {
+    const node = pinPanelRef.current;
+    if (!node) {
+      setPinPanelBounds(null);
+      return undefined;
+    }
+
+    const updateBounds = () => {
+      const rect = node.getBoundingClientRect();
+      setPinPanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
+    };
+
+    updateBounds();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => updateBounds()) : null;
+    resizeObserver?.observe(node);
+
+    window.addEventListener("resize", updateBounds);
+    window.visualViewport?.addEventListener("resize", updateBounds);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateBounds);
+      window.visualViewport?.removeEventListener("resize", updateBounds);
+    };
+  }, [visibleSelectedPin, panelPlacement]);
 
   const policyTitle = policyModal === "tos" ? "Terms of Service" : "Privacy Policy";
   const policyContent = policyModal === "tos" ? termsContent : privacyPolicyContent;
