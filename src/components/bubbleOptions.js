@@ -1,4 +1,4 @@
-import { supabase, supabaseAdmin } from "../supabaseClient";
+import { supabase } from "../supabaseClient";
 
 const baseDefaultOptions = {
   gender_identity: ["Man", "Woman", "Non-binary", "Trans"],
@@ -115,7 +115,7 @@ export async function fetchBubbleOptionsWithIds() {
 }
 
 export async function addBubbleOption(field, label, status = "approved") {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from("bubble_options")
     .insert({ field, label, status: normalizeStatus(status) })
     .select()
@@ -131,7 +131,7 @@ export async function updateBubbleOption(id, label, status) {
     payload.status = normalizeStatus(status);
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabase
     .from("bubble_options")
     .update(payload)
     .eq("id", id)
@@ -143,7 +143,7 @@ export async function updateBubbleOption(id, label, status) {
 }
 
 export async function deleteBubbleOption(id) {
-  const { error } = await supabaseAdmin
+  const { error } = await supabase
     .from("bubble_options")
     .delete()
     .eq("id", id);
