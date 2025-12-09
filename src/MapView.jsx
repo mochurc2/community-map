@@ -394,7 +394,7 @@ function MapView({
 
   const computeLayout = useCallback(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded) return;
+    if (!map) return;
     const ctx = measureContextRef.current;
 
     const container = map.getContainer();
@@ -546,17 +546,16 @@ function MapView({
 
     const placedLabels = buildLabelBoxes(labelCandidates, iconBoxes, ctx, bounds);
     applyLabelNodes(placedLabels);
-  }, [applyLabelNodes, applyVisualNodes, combinedPins, mapLoaded, selectedPinId]);
+  }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
 
   const scheduleLayout = useCallback(() => {
-    if (!mapLoaded) return;
     if (scheduledLayoutRef.current) return;
     scheduledLayoutRef.current = true;
     requestAnimationFrame(() => {
       scheduledLayoutRef.current = false;
       computeLayout();
     });
-  }, [computeLayout, mapLoaded]);
+  }, [computeLayout]);
 
   useEffect(() => {
     visualNodes.some((node) => node.phase === "enter") &&
@@ -709,21 +708,19 @@ function MapView({
       mapRef.current = null;
       setMapLoaded(false);
     };
-  }, [ensureEmojiImage, scheduleLayout]);
+  }, [ensureEmojiImage]);
 
   useEffect(() => {
-    if (!mapLoaded) return;
     scheduleLayout();
-  }, [combinedPins, mapLoaded, scheduleLayout]);
+  }, [combinedPins, scheduleLayout]);
 
   useEffect(() => {
-    if (!mapLoaded) return;
     const map = mapRef.current;
     if (!map) return;
     const handleMove = () => scheduleLayout();
     map.on("move", handleMove);
     return () => map.off("move", handleMove);
-  }, [mapLoaded, scheduleLayout]);
+  }, [scheduleLayout]);
 
   useEffect(() => {
     if (!mapLoaded) return;
