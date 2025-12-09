@@ -1,5 +1,5 @@
 import { Chip, ChipGroup } from './Chip';
-import { getGenderList, buildContactLink } from '../pinUtils';
+import { getGenderList, buildContactLink } from './pinUtils';
 
 /**
  * PinInfoPanel Component

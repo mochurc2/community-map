@@ -1,3 +1,5 @@
+import { useFeedbackContext } from '../context/FeedbackContext';
+
 /**
  * InfoPanel Component
  *
@@ -9,7 +11,6 @@
  * @param {string} props.pendingPinsLabel - Label for pending pins status
  * @param {string} props.pinsError - Error message if pins failed to load
  * @param {Function} props.onOpenPolicy - Callback to open policy modal (receives 'tos' or 'privacy')
- * @param {Function} props.onOpenFeedback - Callback to open feedback modal (receives 'site_feedback')
  */
 export function InfoPanel({
   loadingPins,
@@ -17,8 +18,8 @@ export function InfoPanel({
   pendingPinsLabel,
   pinsError,
   onOpenPolicy,
-  onOpenFeedback,
 }) {
+  const { openFeedback } = useFeedbackContext();
   return (
     <div className="panel-body info-panel-body">
       <div className="panel-section">
@@ -96,7 +97,7 @@ export function InfoPanel({
               <button
                 type="button"
                 className="tiny-button"
-                onClick={() => onOpenFeedback("site_feedback")}
+                onClick={() => openFeedback("site_feedback")}
               >
                 Give site feedback
               </button>

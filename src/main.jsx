@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx"; // main map page
-import ModerationPage from "./ModerationPage.jsx"; // we'll create this next
-import EntryGate from "./EntryGate.jsx";
+import ModerationPage from "./components/ModerationPage.jsx"; // we'll create this next
+import EntryGate from "./components/EntryGate.jsx";
 import "./index.css";
 
 const GATE_STORAGE_KEY = "map-entry-gate-passed";

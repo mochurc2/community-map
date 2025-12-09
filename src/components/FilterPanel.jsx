@@ -1,4 +1,6 @@
 import BubbleSelector from './BubbleSelector';
+import { useFilterContext } from '../context';
+import { useAppContext } from '../context';
 
 const MIN_AGE = 18;
 const MAX_AGE = 100;
@@ -7,25 +9,20 @@ const MAX_AGE = 100;
  * FilterPanel Component
  *
  * Panel for filtering pins by gender, seeking, age range, and interests.
- *
- * @param {Object} props
- * @param {Object} props.filters - Current filter values
- * @param {Object} props.bubbleOptions - Available options (gender_identity, seeking)
- * @param {Array<string>} props.orderedInterestOptions - Ordered interest tag options
- * @param {Function} props.onFilterChange - Callback when filter changes (field, value)
- * @param {Function} props.onAgeRangeChange - Callback when age range changes (index, value)
- * @param {Function} props.onClearFilters - Callback to reset all filters
- * @param {Object} props.ageRangeStyle - Inline style for age range track
+ * Uses FilterContext and AppContext to access filter state and handlers.
  */
-export function FilterPanel({
-  filters,
-  bubbleOptions,
-  orderedInterestOptions,
-  onFilterChange,
-  onAgeRangeChange,
-  onClearFilters,
-  ageRangeStyle,
-}) {
+export function FilterPanel() {
+  const {
+    filters,
+    ageRangeStyle,
+    handleFilterChange,
+    handleAgeRangeChange,
+    clearFilters,
+    orderedInterestOptions,
+  } = useFilterContext();
+
+  const { bubbleOptions } = useAppContext();
+
   return (
     <div className="panel-body">
       <div className="panel-section">
@@ -37,14 +34,14 @@ export function FilterPanel({
           options={bubbleOptions.gender_identity}
           multiple
           value={filters.genders}
-          onChange={(value) => onFilterChange("genders", value)}
+          onChange={(value) => handleFilterChange("genders", value)}
         />
         <BubbleSelector
           label="Interested in"
           options={bubbleOptions.seeking}
           multiple
           value={filters.seeking}
-          onChange={(value) => onFilterChange("seeking", value)}
+          onChange={(value) => handleFilterChange("seeking", value)}
         />
         <div className="label age-filter">
           <div className="label-heading">
@@ -60,7 +57,7 @@ export function FilterPanel({
               min={MIN_AGE}
               max={MAX_AGE}
               value={filters.ageRange[0]}
-              onChange={(e) => onAgeRangeChange(0, e.target.value)}
+              onChange={(e) => handleAgeRangeChange(0, e.target.value)}
             />
             <input
               type="range"
@@ -68,7 +65,7 @@ export function FilterPanel({
               max={MAX_AGE}
               value={filters.ageRange[1]}
               className="upper-thumb"
-              onChange={(e) => onAgeRangeChange(1, e.target.value)}
+              onChange={(e) => handleAgeRangeChange(1, e.target.value)}
             />
           </div>
         </div>
@@ -77,10 +74,10 @@ export function FilterPanel({
           options={orderedInterestOptions}
           multiple
           value={filters.interest_tags}
-          onChange={(value) => onFilterChange("interest_tags", value)}
+          onChange={(value) => handleFilterChange("interest_tags", value)}
         />
         <div className="filter-actions">
-          <button type="button" className="ghost" onClick={onClearFilters}>
+          <button type="button" className="ghost" onClick={clearFilters}>
             Reset filters
           </button>
         </div>

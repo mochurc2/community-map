@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import PolicyModal from "./PolicyModal";
-import privacyPolicyContent from "../PrivacyPolicy.md?raw";
-import termsContent from "../ToS.md?raw";
+import privacyPolicyContent from "../../PrivacyPolicy.md?raw";
+import termsContent from "../../ToS.md?raw";
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
@@ -66,16 +66,11 @@ function EntryGate({ onComplete }) {
       });
     } catch (err) {
       console.error("Error rendering Turnstile", err);
-      setError("We couldn't start the verification challenge. Please refresh and try again.");
     }
 
     return () => {
       if (widgetIdRef.current && window.turnstile) {
-        try {
           window.turnstile.remove(widgetIdRef.current);
-        } catch {
-          // ignore cleanup errors
-        }
       }
       widgetIdRef.current = null;
     };

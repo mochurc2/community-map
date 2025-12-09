@@ -7,9 +7,8 @@ import {
   getDefaultBubbleOptions,
   updateBubbleOption,
 } from "./bubbleOptions";
-import ConfigErrorNotice from "./ConfigErrorNotice";
-import { tokens, helpers } from "./styles/tokens";
-import { supabase, supabaseAdmin, supabaseConfigError } from "./supabaseClient";
+import { tokens, helpers } from "../styles/tokens";
+import { supabase, supabaseAdmin, supabaseConfigError } from "../supabaseClient";
 const moderationClient = supabaseAdmin || supabase;
 
 const normalizeStatus = (value) => {
@@ -118,9 +117,6 @@ function formatDate(value) {
 }
 
 function ModerationPage() {
-  if (supabaseConfigError) {
-    return <ConfigErrorNotice message={supabaseConfigError.message} />;
-  }
 
   const [pins, setPins] = useState([]);
   const [loadingPins, setLoadingPins] = useState(false);
@@ -608,7 +604,7 @@ function ModerationPage() {
     [messageGroups.open.length, messageGroups.resolved.length, messages.length]
   );
 
-  if (!hasAccess) {
+  if (!hasAccess && !supabaseConfigError) {
     return (
       <div className="map-placeholder" style={{ alignItems: "flex-start", paddingTop: "4rem" }}>
         <div style={{ maxWidth: 520 }}>

@@ -2,8 +2,9 @@ import { CalendarClock } from 'lucide-react';
 import BubbleSelector from './BubbleSelector';
 import EmojiSelector from './EmojiSelector';
 import { EMOJI_CHOICES } from '../constants/constants';
-
-
+import { defaultExpiryDate } from '../util.js';
+import { usePinFormContext } from '../context';
+import { useAppContext } from '../context';
 
 const contactPlaceholders = {
   Email: "name@example.com",
@@ -18,73 +19,47 @@ const contactPlaceholders = {
   OnlyFans: "@username",
 };
 
-const defaultExpiryDate = () => {
-  const now = new Date();
-  now.setFullYear(now.getFullYear() + 1);
-  return now.toISOString().split("T")[0];
-};
-
 /**
  * AddPinPanel Component
  *
  * Complete panel for adding a new pin with location, emoji, profile, and contact info.
- *
- * @param {Object} props
- * @param {string} props.panelPlacement - "side" or "bottom"
- * @param {boolean} props.hasSubmitted - Whether form has been submitted
- * @param {string} props.submitMsg - Success message to display
- * @param {string} props.submitError - Error message to display
- * @param {boolean} props.showFullAddForm - Whether to show full form
- * @param {Function} props.onShowFullAddForm - Callback to show full form
- * @param {Object} props.selectedLocation - Selected map location {lat, lng}
- * @param {string} props.locationLabel - Formatted location coordinates
- * @param {string} props.locationDetails - City, state, country details
- * @param {Object} props.form - Form state object
- * @param {Function} props.onFormChange - Generic form change handler
- * @param {Function} props.onFormUpdate - Direct form setter
- * @param {string} props.selectedBaseEmoji - Base emoji (without skin tone)
- * @param {Array<string>} props.skinToneOptions - Skin tone variants for selected emoji
- * @param {boolean} props.hasSkinToneOptions - Whether skin tones available
- * @param {Function} props.onEmojiSelect - Emoji selection handler
- * @param {Object} props.bubbleOptions - Available bubble options (gender_identity, seeking)
- * @param {Function} props.onGenderChange - Gender change handler
- * @param {Array<string>} props.interestOptionsForForm - Ordered interest options
- * @param {Function} props.onCustomOption - Custom option handler
- * @param {Array<string>} props.orderedContactOptions - Ordered contact method options
- * @param {Function} props.onContactChannels - Contact channels change handler
- * @param {Function} props.onContactInput - Contact input change handler
- * @param {Object} props.contactErrors - Contact validation errors by channel
- * @param {boolean} props.submitting - Whether form is submitting
- * @param {Function} props.onSubmit - Form submit handler
+ * Uses PinFormContext and AppContext to access form state and handlers.
  */
-export function AddPinPanel({
-  panelPlacement,
-  hasSubmitted,
-  submitMsg,
-  submitError,
-  showFullAddForm,
-  onShowFullAddForm,
-  selectedLocation,
-  locationLabel,
-  locationDetails,
-  form,
-  onFormChange,
-  onFormUpdate,
-  selectedBaseEmoji,
-  skinToneOptions,
-  hasSkinToneOptions,
-  onEmojiSelect,
-  bubbleOptions,
-  onGenderChange,
-  interestOptionsForForm,
-  onCustomOption,
-  orderedContactOptions,
-  onContactChannels,
-  onContactInput,
-  contactErrors,
-  submitting,
-  onSubmit,
-}) {
+export function AddPinPanel() {
+  // Get form state and handlers from context
+  const {
+    form,
+    setForm,
+    contactErrors,
+    submitMsg,
+    submitError,
+    hasSubmitted,
+    submitting,
+    selectedBaseEmoji,
+    skinToneOptions,
+    hasSkinToneOptions,
+    locationLabel,
+    locationDetails,
+    interestOptionsForForm,
+    handleChange,
+    handleContactChannels,
+    handleContactInput,
+    handleGenderChange,
+    handleEmojiSelect,
+    handleSubmit,
+    selectedLocation,
+  } = usePinFormContext();
+
+  // Get app-level state from context
+  const {
+    bubbleOptions,
+    handleCustomOption,
+    orderedContactOptions,
+    panelPlacement,
+    showFullAddForm,
+    setShowFullAddForm,
+  } = useAppContext();
+
   const addPanelIntro = hasSubmitted ? null : (
     <div className="panel-section">
       <div className="label location-label">
@@ -104,7 +79,7 @@ export function AddPinPanel({
         <button
           type="button"
           className="primary"
-          onClick={onShowFullAddForm}
+          onClick={() => setShowFullAddForm(true)}
           disabled={!selectedLocation}
         >
           Continue to form
@@ -131,12 +106,12 @@ export function AddPinPanel({
       </div>
 
       {showFullAddForm && !hasSubmitted && (
-        <form onSubmit={onSubmit} className="form-grid compact">
+        <form onSubmit={handleSubmit} className="form-grid compact">
           <EmojiSelector
             emojis={EMOJI_CHOICES}
             selectedIcon={form.icon}
             selectedBaseEmoji={selectedBaseEmoji}
-            onSelect={onEmojiSelect}
+            onSelect={handleEmojiSelect}
             skinToneOptions={skinToneOptions}
             hasSkinToneOptions={hasSkinToneOptions}
           />
@@ -147,7 +122,7 @@ export function AddPinPanel({
               type="text"
               name="nickname"
               value={form.nickname}
-              onChange={onFormChange}
+              onChange={handleChange}
               placeholder="Up to 12 characters"
               className="input"
               maxLength={12}
@@ -161,7 +136,7 @@ export function AddPinPanel({
               type="number"
               name="age"
               value={form.age}
-              onChange={onFormChange}
+              onChange={handleChange}
               className="input"
               min={18}
               max={120}
@@ -175,7 +150,7 @@ export function AddPinPanel({
             options={bubbleOptions.gender_identity}
             multiple
             value={form.genders}
-            onChange={onGenderChange}
+            onChange={handleGenderChange}
           />
 
           <BubbleSelector
@@ -184,7 +159,7 @@ export function AddPinPanel({
             options={bubbleOptions.seeking}
             multiple
             value={form.seeking}
-            onChange={(value) => onFormUpdate((f) => ({ ...f, seeking: value }))}
+            onChange={(value) => setForm((f) => ({ ...f, seeking: value }))}
           />
 
           <BubbleSelector
@@ -193,8 +168,8 @@ export function AddPinPanel({
             options={interestOptionsForForm}
             multiple
             value={form.interest_tags}
-            onChange={(value) => onFormUpdate((f) => ({ ...f, interest_tags: value }))}
-            onAddOption={(option) => onCustomOption("interest_tags", option)}
+            onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
+            onAddOption={(option) => handleCustomOption("interest_tags", option)}
             allowCustom
             prioritizeSelected
             footnote="Custom interests are subject to moderation and may not appear until they are approved."
@@ -205,7 +180,7 @@ export function AddPinPanel({
             <textarea
               name="note"
               value={form.note}
-              onChange={onFormChange}
+              onChange={handleChange}
               rows={3}
               maxLength={250}
               placeholder="Anything you want others to know."
@@ -221,7 +196,7 @@ export function AddPinPanel({
               options={orderedContactOptions}
               multiple
               value={form.contact_channels}
-              onChange={onContactChannels}
+              onChange={handleContactChannels}
             />
 
             {form.contact_channels.length > 0 && (
@@ -235,7 +210,7 @@ export function AddPinPanel({
                         type="text"
                         className="input"
                         value={form.contact_methods[channel] || ""}
-                        onChange={(e) => onContactInput(channel, e.target.value)}
+                        onChange={(e) => handleContactInput(channel, e.target.value)}
                         placeholder={contactPlaceholders[channel] || "Add handle or link"}
                       />
                       {contactError && <span className="field-error">{contactError}</span>}
@@ -260,7 +235,7 @@ export function AddPinPanel({
                   value={form.expires_at}
                   disabled={form.never_delete}
                   onChange={(e) =>
-                    onFormUpdate((prev) => ({
+                    setForm((prev) => ({
                       ...prev,
                       expires_at: e.target.value,
                     }))
@@ -274,7 +249,7 @@ export function AddPinPanel({
                 type="checkbox"
                 checked={form.never_delete}
                 onChange={(e) =>
-                  onFormUpdate((prev) => ({
+                  setForm((prev) => ({
                     ...prev,
                     never_delete: e.target.checked,
                     expires_at: e.target.checked
