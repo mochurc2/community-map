@@ -1642,12 +1642,13 @@ function App() {
     <div className="app-shell">
       <MapView
         pins={filteredPins}
-        pendingPins={filtersActive ? [] : pendingPins}
+        pendingPins={pendingPins}
         onMapClick={handleMapClick}
         onPinSelect={handlePinSelect}
         pendingLocation={!hasSubmitted && activePanel === "add" ? selectedLocation : null}
         pendingIcon={!hasSubmitted && activePanel === "add" ? form.icon : null}
         selectedPinId={visibleSelectedPin?.id}
+        enableAddMode={activePanel === "add" && !hasSubmitted}
       />
 
       <div className="overlay-rail">

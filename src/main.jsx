@@ -34,7 +34,7 @@ function Root() {
         <Route path="/" element={<App />} />
         <Route path="/moderate" element={<ModerationPage />} />
       </Routes>
-      {!gatePassed && <EntryGate onComplete={handleGateComplete} />}
+      {/* {!gatePassed && <EntryGate onComplete={handleGateComplete} />} */}
     </BrowserRouter>
   );
 }

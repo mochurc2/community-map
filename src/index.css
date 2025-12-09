@@ -199,6 +199,111 @@ textarea {
   inset: 0;
 }
 
+.pin-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 4;
+}
+
+.pin-node {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  outline: none;
+  will-change: transform, opacity;
+}
+
+.pin-node .pin-circle {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #d1d5db;
+  box-shadow:
+    0 6px 18px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.pin-node.cluster-member .pin-circle {
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.9);
+}
+
+.pin-node.plus .pin-circle {
+  border-color: #2563eb;
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.25),
+    0 8px 22px rgba(37, 99, 235, 0.35);
+}
+
+.pin-node.pending .pin-circle {
+  border-color: #cbd5e1;
+}
+
+.pin-node.selected .pin-circle {
+  border-color: #22c55e;
+  box-shadow:
+    0 0 0 3px rgba(34, 197, 94, 0.25),
+    0 8px 22px rgba(34, 197, 94, 0.28);
+}
+
+.pin-node:focus-visible .pin-circle,
+.pin-node:hover .pin-circle {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.95);
+}
+
+.pin-emoji {
+  font-size: 18px;
+  line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", system-ui, -apple-system, sans-serif;
+}
+
+.pin-label {
+  position: absolute;
+  padding: 6px 9px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+  color: #0f172a;
+  text-shadow:
+    -1px -1px 0 rgba(255, 255, 255, 0.75),
+    1px -1px 0 rgba(255, 255, 255, 0.75),
+    -1px 1px 0 rgba(255, 255, 255, 0.75),
+    1px 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.pin-label.pending {
+  color: #1e293b;
+}
+
+.pin-label-line {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
 .map-banner {
   position: absolute;
   top: 16px;
