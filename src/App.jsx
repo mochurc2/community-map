@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, Filter, Info, Plus, Scissors, X } from "lucide-react";
+import { X, Info, Plus, Filter } from "lucide-react";
 import ConfigErrorNotice from "./ConfigErrorNotice";
 import { supabase, supabaseConfigError } from "./supabaseClient";
 import MapView from "./MapView";
 import PolicyModal from "./PolicyModal";
+import TitleCard from "./components/TitleCard";
+import FilterPanel from "./components/FilterPanel";
+import InfoPanel from "./components/InfoPanel";
+import PinInfoPanel from "./components/PinInfoPanel";
+import PinCard from "./components/PinCard";
+import AddPinPanel, { defaultExpiryDate } from "./components/AddPinPanel";
+import FeedbackModal from "./components/FeedbackModal";
 import privacyPolicyContent from "../PrivacyPolicy.md?raw";
 import termsContent from "../ToS.md?raw";
 import {
@@ -12,106 +19,10 @@ import {
   getDefaultBubbleOptions,
   getDefaultStatusMap,
 } from "./bubbleOptions";
-import {
-  buildContactLink,
-  getGenderList,
-  randomizeLocation,
-  validateContactValue,
-} from "./pinUtils";
+import { randomizeLocation, validateContactValue } from "./pinUtils";
+import { SKIN_TONE_GROUPS } from "./constants/constants";
 
-const MAX_VISIBLE_BUBBLES = 6;
 
-const SKIN_TONE_GROUPS = {
-  "👋": ["👋", "👋🏻", "👋🏼", "👋🏽", "👋🏾", "👋🏿"],
-  "💅": ["💅", "💅🏻", "💅🏼", "💅🏽", "💅🏾", "💅🏿"],
-  "👱‍♀️": ["👱‍♀️", "👱🏻‍♀️", "👱🏼‍♀️", "👱🏽‍♀️", "👱🏾‍♀️", "👱🏿‍♀️"],
-  "👱‍♂️": ["👱‍♂️", "👱🏻‍♂️", "👱🏼‍♂️", "👱🏽‍♂️", "👱🏾‍♂️", "👱🏿‍♂️"],
-  "👨": ["👨", "👨🏻", "👨🏼", "👨🏽", "👨🏾", "👨🏿"],
-  "👩": ["👩", "👩🏻", "👩🏼", "👩🏽", "👩🏾", "👩🏿"],
-  "👴": ["👴", "👴🏻", "👴🏼", "👴🏽", "👴🏾", "👴🏿"],
-  "👵": ["👵", "👵🏻", "👵🏼", "👵🏽", "👵🏾", "👵🏿"],
-  "👸": ["👸", "👸🏻", "👸🏼", "👸🏽", "👸🏾", "👸🏿"],
-  "🤴": ["🤴", "🤴🏻", "🤴🏼", "🤴🏽", "🤴🏾", "🤴🏿"],
-  "💇‍♂️": ["💇‍♂️", "💇🏻‍♂️", "💇🏼‍♂️", "💇🏽‍♂️", "💇🏾‍♂️", "💇🏿‍♂️"],
-  "💇‍♀️": ["💇‍♀️", "💇🏻‍♀️", "💇🏼‍♀️", "💇🏽‍♀️", "💇🏾‍♀️", "💇🏿‍♀️"],
-  "👭": ["👭", "👭🏻", "👭🏼", "👭🏽", "👭🏾", "👭🏿"],
-  "👩‍🤝‍👨": ["👩‍🤝‍👨", "👩🏻‍🤝‍👨🏻", "👩🏼‍🤝‍👨🏼", "👩🏽‍🤝‍👨🏽", "👩🏾‍🤝‍👨🏾", "👩🏿‍🤝‍👨🏿"],
-  "👬": ["👬", "👬🏻", "👬🏼", "👬🏽", "👬🏾", "👬🏿"],
-};
-
-const EMOJI_CHOICES = [
-  "😊",
-  "😅",
-  "😁",
-  "😉",
-  "😇",
-  "😘",
-  "😍",
-  "😋",
-  "😜",
-  "😏",
-  "😵",
-  "😎",
-  "😳",
-  "😈",
-  "👻",
-  "🤠",
-  "😺",
-  "😽",
-  "🙈",
-  "🙉",
-  "🙊",
-  "👽",
-  "💋",
-  "💦",
-  "👋",
-  "💅",
-  "👀",
-  "👅",
-  "👄",
-  "👱‍♀️",
-  "👱‍♂️",
-  "👨",
-  "👩",
-  "👴",
-  "👵",
-  "👸",
-  "🤴",
-  "💇‍♂️",
-  "💇‍♀️",
-  "👭",
-  "👩‍🤝‍👨",
-  "👬",
-  "🐵",
-  "🐺",
-  "🐱",
-  "🐴",
-  "🐷",
-  "🐖",
-  "🐽",
-  "🍆",
-  "🍑",
-  "💈",
-  "🌚",
-  "🌝",
-  "🌞",
-  "🌈",
-  "🔥",
-  "✨",
-  "🔒",
-  "⛓️",
-  "❤️",
-  "🧡",
-  "💛",
-  "💚",
-  "💙",
-  "💜",
-  "🤎",
-  "🖤",
-  "🤍",
-  "🪒",
-  "✂️",
-];
 
 const getBaseEmoji = (emoji) => {
   if (!emoji) return "";
@@ -119,25 +30,6 @@ const getBaseEmoji = (emoji) => {
     Object.entries(SKIN_TONE_GROUPS).find(([, variants]) => variants.includes(emoji))?.[0] ||
     emoji
   );
-};
-
-const contactPlaceholders = {
-  Email: "name@example.com",
-  Discord: "username1234",
-  Reddit: "u/username",
-  Instagram: "@username",
-  Snapchat: "@username",
-  Tumblr: "username",
-  "X/Twitter": "@username",
-  Youtube: "Full YouTube link",
-  Website: "https://example.com",
-  OnlyFans: "@username",
-};
-
-const defaultExpiryDate = () => {
-  const now = new Date();
-  now.setFullYear(now.getFullYear() + 1);
-  return now.toISOString().split("T")[0];
 };
 
 const MIN_AGE = 18;
@@ -187,133 +79,7 @@ const buildInitialFormState = () => ({
   never_delete: false,
 });
 
-function BubbleSelector({
-  label,
-  helper,
-  options,
-  multiple = false,
-  value,
-  onChange,
-  allowCustom = false,
-  onAddOption = () => {},
-  prioritizeSelected = false,
-  alwaysShowAll = false,
-  footnote,
-}) {
-  const [userShowAll, setUserShowAll] = useState(alwaysShowAll);
-  const [customInput, setCustomInput] = useState("");
-
-  const showAll = alwaysShowAll || userShowAll;
-
-  const selectedValues = useMemo(() => {
-    if (multiple) {
-      return new Set(Array.isArray(value) ? value : []);
-    }
-    return value ? new Set([value]) : new Set();
-  }, [multiple, value]);
-
-  const orderedOptions = useMemo(() => {
-    const base = Array.isArray(options) ? [...options] : [];
-    if (!prioritizeSelected) return base;
-
-    return base.sort((a, b) => {
-      const aSelected = selectedValues.has(a);
-      const bSelected = selectedValues.has(b);
-      if (aSelected === bSelected) return a.localeCompare(b);
-      return aSelected ? -1 : 1;
-    });
-  }, [options, prioritizeSelected, selectedValues]);
-
-  const displayOptions = useMemo(
-    () => (showAll ? orderedOptions : orderedOptions.slice(0, MAX_VISIBLE_BUBBLES)),
-    [orderedOptions, showAll]
-  );
-
-  const toggleOption = (option) => {
-    if (multiple) {
-      if (value.includes(option)) {
-        onChange(value.filter((v) => v !== option));
-      } else {
-        onChange([...value, option]);
-      }
-    } else {
-      onChange(value === option ? "" : option);
-    }
-  };
-
-  const handleAddCustom = (e) => {
-    e?.preventDefault?.();
-    const normalized = customInput.trim();
-    if (!normalized) return;
-    if (multiple) {
-      onChange(value.includes(normalized) ? value : [...value, normalized]);
-    } else {
-      onChange(normalized);
-    }
-    if (!options.includes(normalized)) {
-      onAddOption(normalized);
-    }
-    setCustomInput("");
-  };
-
-  return (
-    <div className="label">
-      <div className="label-heading">
-        <span>{label}</span>
-      </div>
-      {helper && <p className="helper-text label-helper">{helper}</p>}
-      <div className="bubble-grid">
-        {displayOptions.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`bubble ${
-              multiple
-                ? value.includes(option)
-                  ? "selected"
-                  : ""
-                : value === option
-                  ? "selected"
-                  : ""
-            }`}
-            onClick={() => toggleOption(option)}
-          >
-            {option}
-          </button>
-        ))}
-        {orderedOptions.length > MAX_VISIBLE_BUBBLES && !alwaysShowAll && (
-          <button
-            type="button"
-            className="bubble ghost"
-            onClick={() => setUserShowAll((v) => !v)}
-          >
-            {showAll ? "Show less" : "+ more"}
-          </button>
-        )}
-      </div>
-      {allowCustom && (
-        <div className="custom-row">
-          <input
-            type="text"
-            className="input"
-            placeholder="Add interest"
-            value={customInput}
-            onChange={(e) => setCustomInput(e.target.value)}
-          />
-          <button type="button" className="bubble add" onClick={handleAddCustom}>
-            +
-          </button>
-        </div>
-      )}
-      {footnote && <p className="subtle-footnote">{footnote}</p>}
-    </div>
-  );
-}
-
 function App() {
-  if (supabaseConfigError) {
-    return <ConfigErrorNotice message={supabaseConfigError.message} />;
-  }
 
   const [pins, setPins] = useState([]);
   const [pinsError, setPinsError] = useState(null);
@@ -1103,401 +869,58 @@ function App() {
       }`
     : "Tap the map to pick a spot and fill in the details.";
 
-  const addPanelIntro = hasSubmitted ? null : (
-    <div className="panel-section">
-      <div className="label location-label">
-        <div className="label-heading">
-          <span>Location *</span>
-          <p className="helper-text label-helper">
-            We randomize your pin within 1,500 ft of this spot to help keep your exact
-            location private.
-          </p>
-        </div>
-        <div className="location-chip-row">
-          <span className="location-chip">{locationLabel}</span>
-          <span className="location-chip subdued">{locationDetails}</span>
-        </div>
-      </div>
-      {panelPlacement === "bottom" && !showFullAddForm && !hasSubmitted && (
-        <button
-          type="button"
-          className="primary"
-          onClick={() => setShowFullAddForm(true)}
-          disabled={!selectedLocation}
-        >
-          Continue to form
-        </button>
-      )}
-    </div>
-  );
-
   const infoPanel = (
-    <div className="panel-body info-panel-body">
-      <div className="panel-section">
-        <div className="title-meta">
-          <span className="pill">
-            {loadingPins ? "Loading pins..." : `${approvedPinsCount} Pins on the map!`}
-          </span>
-          <span className="pill">{pendingPinsLabel}</span>
-          {pinsError && <span className="pill error">Error loading pins</span>}
-        </div>
-        <div className="panel-stack info-panel-stack">
-          <div className="panel-subsection">
-            <span className="eyebrow">Welcome!</span>
-            <p className="panel-copy">
-              This community map lets people share a quick intro and the area they call home. Pins
-              are lightly randomized for privacy, and moderators approve submissions so browsing
-              stays safe and friendly.
-            </p>
-          </div>
-          <div className="panel-subsection">
-            <span className="eyebrow">Create your pin</span>
-            <p className="panel-copy">
-              Tap the map, choose an emoji, and share a short intro. Your pin will stay hidden until
-              a moderator approves your submission.
-            </p>
-          </div>
-          <div className="panel-subsection">
-            <span className="eyebrow">Browse others</span>
-            <p className="panel-copy">
-              Select pins on the map to read their notes and see their interests and contact options.
-            </p>
-          </div>
-          <div className="panel-subsection">
-            <span className="eyebrow">Filter what you see</span>
-            <p className="panel-copy">
-              Use the filter tool to narrow pins by gender, seeking preferences, interests, or age
-              range. Reset anytime to view everyone again.
-            </p>
-          </div>
-          <div className="panel-subsection">
-            <span className="eyebrow">House rules</span>
-            <ul className="panel-copy list">
-              <li>You must be 18 or older to use this map.</li>
-              <li>Share truthful information only about yourself and stay respectful.</li>
-              <li>
-                Protect your privacy - only share what you are comfortable with and be mindful of the
-                randomized pin placement.
-              </li>
-              <li>Do not use this site for stalking, harassment, or other harm.</li>
-              <li>No explicit sexual content and no advertising or soliciting paid sexual services.</li>
-              <li>
-                By browsing or posting, you agree to these guidelines and take responsibility for your
-                own safety.
-              </li>
-            </ul>
-          </div>
-          <div className="panel-subsection">
-            <span className="eyebrow">Policies</span>
-            <p className="panel-copy">
-              Review the Terms of Service and Privacy Policy before using the site.
-            </p>
-            <div className="panel-button-row">
-              <button type="button" className="tiny-button" onClick={() => openPolicy("tos")}>
-                View Terms of Service
-              </button>
-              <button type="button" className="tiny-button" onClick={() => openPolicy("privacy")}>
-                View Privacy Policy
-              </button>
-            </div>
-          </div>
-          <div className="panel-subsection">
-            <span className="eyebrow">Need to share feedback?</span>
-            <p className="panel-copy">Send a quick note to the moderators.</p>
-            <div className="panel-button-row">
-              <button
-                type="button"
-                className="tiny-button"
-                onClick={() => openFeedback("site_feedback")}
-              >
-                Give site feedback
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <InfoPanel
+      loadingPins={loadingPins}
+      approvedPinsCount={approvedPinsCount}
+      pendingPinsLabel={pendingPinsLabel}
+      pinsError={pinsError}
+      onOpenPolicy={openPolicy}
+      onOpenFeedback={openFeedback}
+    />
   );
 
   const addPanel = (
-    <div className="panel-body">
-      <div className="panel-section">
-        {panelPlacement !== "bottom" && !hasSubmitted && (
-          <p className="muted">
-            Select location for your pin and fill out the form. All pins are subject to
-            moderation before appearing on the map.
-          </p>
-        )}
-        {addPanelIntro}
-        {hasSubmitted && submitMsg && (
-          <p className="status success" style={{ marginTop: "0.35rem" }}>
-            {submitMsg}
-          </p>
-        )}
-      </div>
-
-      {showFullAddForm && !hasSubmitted && (
-        <form onSubmit={handleSubmit} className="form-grid compact">
-          <div className="label">
-            <div className="label-heading">
-              <span>Icon *</span>
-            </div>
-            <p className="helper-text label-helper">Required. Pick an emoji for your pin.</p>
-            <div className="emoji-scroll" role="listbox" aria-label="Pick an emoji">
-              <div className="emoji-grid">
-                {EMOJI_CHOICES.map((emoji) => {
-                  const isSelected = selectedBaseEmoji === emoji;
-                  return (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className={`emoji-chip ${isSelected ? "selected" : ""}`}
-                      aria-pressed={isSelected}
-                      onClick={() => handleEmojiSelect(emoji)}
-                    >
-                      {emoji}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {hasSkinToneOptions && (
-              <div className="emoji-tone-panel">
-                <p className="helper-text label-helper">Choose a skin tone.</p>
-                <div className="emoji-scroll" role="listbox" aria-label="Pick a skin tone">
-                  <div className="emoji-grid">
-                    {skinToneOptions.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        className={`emoji-chip ${form.icon === emoji ? "selected" : ""}`}
-                        aria-pressed={form.icon === emoji}
-                        onClick={() => handleEmojiSelect(emoji)}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <label className="label">
-            Nickname *
-            <input
-              type="text"
-              name="nickname"
-              value={form.nickname}
-              onChange={handleChange}
-              placeholder="Up to 12 characters"
-              className="input"
-              maxLength={12}
-              required
-            />
-          </label>
-
-          <label className="label">
-            Age *
-            <input
-              type="number"
-              name="age"
-              value={form.age}
-              onChange={handleChange}
-              className="input"
-              min={18}
-              max={120}
-              required
-            />
-          </label>
-
-          <BubbleSelector
-            label="Gender *"
-            helper="Required. Select all that apply."
-            options={bubbleOptions.gender_identity}
-            multiple
-            value={form.genders}
-            onChange={handleGenderChange}
-          />
-
-          <BubbleSelector
-            label="Interested in"
-            helper="Select all that apply"
-            options={bubbleOptions.seeking}
-            multiple
-            value={form.seeking}
-            onChange={(value) => setForm((f) => ({ ...f, seeking: value }))}
-          />
-
-          <BubbleSelector
-            label="Interests"
-            helper="Select all that apply"
-            options={interestOptionsForForm}
-            multiple
-            value={form.interest_tags}
-          onChange={(value) => setForm((f) => ({ ...f, interest_tags: value }))}
-          onAddOption={(option) => handleCustomOption("interest_tags", option)}
-          allowCustom
-          prioritizeSelected
-          footnote="Custom interests are subject to moderation and may not appear until they are approved."
-        />
-
-          <label className="label">
-            Short note
-            <textarea
-              name="note"
-              value={form.note}
-              onChange={handleChange}
-              rows={3}
-              maxLength={250}
-              placeholder="Anything you want others to know."
-              className="input"
-            />
-            <span className="helper-text">{form.note.length}/250</span>
-          </label>
-
-          <div className="contact-section">
-            <BubbleSelector
-              label="Contact info"
-              helper="Select services to show and add your handle or link"
-              options={orderedContactOptions}
-              multiple
-              value={form.contact_channels}
-              onChange={handleContactChannels}
-            />
-
-            {form.contact_channels.length > 0 && (
-              <div className="contact-grid">
-                {form.contact_channels.map((channel) => {
-                  const contactError = contactErrors[channel];
-                  return (
-                    <label key={channel} className="label">
-                      {channel}
-                      <input
-                        type="text"
-                        className="input"
-                        value={form.contact_methods[channel] || ""}
-                        onChange={(e) => handleContactInput(channel, e.target.value)}
-                        placeholder={contactPlaceholders[channel] || "Add handle or link"}
-                      />
-                      {contactError && <span className="field-error">{contactError}</span>}
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="delete-row">
-            <label className="label">
-              <div className="label-heading">
-                <span>Delete pin after</span>
-              </div>
-              <p className="helper-text label-helper">We will remove at 11:59 PM on that date.</p>
-              <div className="input-with-icon">
-                <CalendarClock size={18} />
-                <input
-                  type="date"
-                  className="input"
-                  value={form.expires_at}
-                  disabled={form.never_delete}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      expires_at: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-            </label>
-
-            <label className="checkbox-label below-date">
-              <input
-                type="checkbox"
-                checked={form.never_delete}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    never_delete: e.target.checked,
-                    expires_at: e.target.checked
-                      ? ""
-                      : prev.expires_at || defaultExpiryDate(),
-                  }))
-                }
-              />
-              <span>Never delete</span>
-            </label>
-          </div>
-
-          {submitError && <p className="status error">{submitError}</p>}
-          {submitMsg && <p className="status success">{submitMsg}</p>}
-
-          <button type="submit" disabled={submitting} className="primary">
-            {submitting ? "Submitting…" : "Submit pin for review"}
-          </button>
-        </form>
-      )}
-    </div>
+    <AddPinPanel
+      panelPlacement={panelPlacement}
+      hasSubmitted={hasSubmitted}
+      submitMsg={submitMsg}
+      submitError={submitError}
+      showFullAddForm={showFullAddForm}
+      onShowFullAddForm={() => setShowFullAddForm(true)}
+      selectedLocation={selectedLocation}
+      locationLabel={locationLabel}
+      locationDetails={locationDetails}
+      form={form}
+      onFormChange={handleChange}
+      onFormUpdate={setForm}
+      selectedBaseEmoji={selectedBaseEmoji}
+      skinToneOptions={skinToneOptions}
+      hasSkinToneOptions={hasSkinToneOptions}
+      onEmojiSelect={handleEmojiSelect}
+      bubbleOptions={bubbleOptions}
+      onGenderChange={handleGenderChange}
+      interestOptionsForForm={interestOptionsForForm}
+      onCustomOption={handleCustomOption}
+      orderedContactOptions={orderedContactOptions}
+      onContactChannels={handleContactChannels}
+      onContactInput={handleContactInput}
+      contactErrors={contactErrors}
+      submitting={submitting}
+      onSubmit={handleSubmit}
+    />
   );
 
   const filterPanel = (
-    <div className="panel-body">
-      <div className="panel-section">
-        <p className="muted">Narrow down visible pins by selecting the traits below.</p>
-      </div>
-      <div className="form-grid compact">
-        <BubbleSelector
-          label="Gender"
-          options={bubbleOptions.gender_identity}
-          multiple
-          value={filters.genders}
-          onChange={(value) => handleFilterChange("genders", value)}
-        />
-        <BubbleSelector
-          label="Interested in"
-          options={bubbleOptions.seeking}
-          multiple
-          value={filters.seeking}
-          onChange={(value) => handleFilterChange("seeking", value)}
-        />
-        <div className="label age-filter">
-          <div className="label-heading">
-            <span>Age range</span>
-            <span className="helper-text label-helper">{filters.ageRange[0]}–{filters.ageRange[1]}</span>
-          </div>
-          <div className="age-range-slider">
-            <div className="age-range-track" style={ageRangeStyle} aria-hidden="true" />
-            <input
-              type="range"
-              min={MIN_AGE}
-              max={MAX_AGE}
-              value={filters.ageRange[0]}
-              onChange={(e) => handleAgeRangeChange(0, e.target.value)}
-            />
-            <input
-              type="range"
-              min={MIN_AGE}
-              max={MAX_AGE}
-              value={filters.ageRange[1]}
-              className="upper-thumb"
-              onChange={(e) => handleAgeRangeChange(1, e.target.value)}
-            />
-          </div>
-        </div>
-        <BubbleSelector
-          label="Interests"
-          options={orderedInterestOptions}
-          multiple
-          value={filters.interest_tags}
-          onChange={(value) => handleFilterChange("interest_tags", value)}
-        />
-        <div className="filter-actions">
-          <button type="button" className="ghost" onClick={clearFilters}>
-            Reset filters
-          </button>
-        </div>
-      </div>
-    </div>
+    <FilterPanel
+      filters={filters}
+      bubbleOptions={bubbleOptions}
+      orderedInterestOptions={orderedInterestOptions}
+      onFilterChange={handleFilterChange}
+      onAgeRangeChange={handleAgeRangeChange}
+      onClearFilters={clearFilters}
+      ageRangeStyle={ageRangeStyle}
+    />
   );
 
   const panelTitle =
@@ -1509,29 +932,6 @@ function App() {
 
   const isCompactAdd = panelPlacement === "bottom";
 
-  const selectedSeeking = Array.isArray(visibleSelectedPin?.seeking)
-    ? visibleSelectedPin.seeking
-    : [];
-  const selectedInterestTags = Array.isArray(visibleSelectedPin?.interest_tags)
-    ? visibleSelectedPin.interest_tags.filter(isInterestApproved)
-    : [];
-  const selectedGenderList = visibleSelectedPin
-    ? getGenderList(visibleSelectedPin.genders, visibleSelectedPin.gender_identity)
-    : [];
-  const pinLocationText = visibleSelectedPin
-    ? [
-        visibleSelectedPin.city,
-        visibleSelectedPin.state_province,
-        visibleSelectedPin.country || visibleSelectedPin.country_code,
-      ]
-        .filter(Boolean)
-        .join(", ")
-    : "";
-  const pinContactLinks = visibleSelectedPin
-    ? Object.entries(visibleSelectedPin.contact_methods || {})
-      .map(([channel, value]) => buildContactLink(channel, value))
-      .filter(Boolean)
-    : [];
   const policyTitle = policyModal === "tos" ? "Terms of Service" : "Privacy Policy";
   const policyContent = policyModal === "tos" ? termsContent : privacyPolicyContent;
 
@@ -1553,92 +953,9 @@ function App() {
         )
       : null;
 
-  const pinInfoPanel =
-    visibleSelectedPin && (
-      <div className="panel-body pin-panel-body">
-        <div className="pin-chip-row top-row">
-          {visibleSelectedPin.age && (
-            <span className="bubble static">Age {visibleSelectedPin.age}</span>
-          )}
-          {selectedGenderList.map((gender) => (
-            <span key={gender} className="bubble static">
-              {gender}
-            </span>
-          ))}
-          {!visibleSelectedPin.age && selectedGenderList.length === 0 && (
-            <span className="bubble static">No age or gender shared</span>
-          )}
-        </div>
+  const pinInfoPanel = <PinInfoPanel pin={visibleSelectedPin} isInterestApproved={isInterestApproved} />;
 
-        <div className="pin-chip-row">
-          {pinLocationText ? (
-            <span className="bubble static">{pinLocationText}</span>
-          ) : (
-            <span className="bubble static">Location not shared</span>
-          )}
-        </div>
-
-        {selectedSeeking.length > 0 && (
-          <div className="pin-section">
-            <span className="eyebrow">Interested in</span>
-            <div className="bubble-row">
-              {selectedSeeking.map((item) => (
-                <span key={item} className="bubble static">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {selectedInterestTags.length > 0 && (
-          <div className="pin-section">
-            <span className="eyebrow">Interests</span>
-            <div className="bubble-row">
-              {selectedInterestTags.map((item) => (
-                <span key={item} className="bubble static">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {visibleSelectedPin.note && (
-          <div className="pin-section">
-            <span className="eyebrow">Note</span>
-            <p className="pin-note">{visibleSelectedPin.note}</p>
-          </div>
-        )}
-
-        {pinContactLinks.length > 0 && (
-          <div className="pin-section">
-            <span className="eyebrow">Contact</span>
-            <div className="bubble-row">
-              {pinContactLinks.map(({ label, href, displayText }) => (
-                href ? (
-                  <a
-                    key={`${label}-${href}`}
-                    className="bubble link-bubble"
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {displayText || label}
-                  </a>
-                ) : (
-                  <span key={`${label}-${displayText}`} className="bubble static">
-                    {displayText || label}
-                  </span>
-                )
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-
-  return (
+  return supabaseConfigError ? <ConfigErrorNotice message={supabaseConfigError.message} /> : (
     <div className="app-shell">
       <MapView
         pins={filteredPins}
@@ -1651,41 +968,11 @@ function App() {
       />
 
       <div className="overlay-rail">
-        <div className="title-card" ref={titleCardRef}>
-          <div className="title-row">
-            <Scissors className="title-icon" aria-hidden />
-            <div className="title-text">
-              <h1>The Hair Fetish Map</h1>
-            </div>
-          </div>
-
-          <div className="title-actions">
-            <button
-              type="button"
-              className={`icon-pill ${activePanel === "info" ? "active" : ""}`}
-              onClick={() => togglePanel("info")}
-            >
-              <Info size={18} />
-              <span>Info</span>
-            </button>
-            <button
-              type="button"
-              className={`icon-pill ${activePanel === "add" ? "active" : ""}`}
-              onClick={() => togglePanel("add")}
-            >
-              <Plus size={18} />
-              <span>Add pin</span>
-            </button>
-            <button
-              type="button"
-              className={`icon-pill ${activePanel === "filter" ? "active" : ""}`}
-              onClick={() => togglePanel("filter")}
-            >
-              <Filter size={18} />
-              <span>Filter</span>
-            </button>
-          </div>
-        </div>
+        <TitleCard
+          ref={titleCardRef}
+          activePanel={activePanel}
+          onTogglePanel={togglePanel}
+        />
 
         {activePanel && panelPlacement === "side" && (
           <div
@@ -1712,26 +999,14 @@ function App() {
         )}
 
         {panelPlacement === "side" && visibleSelectedPin && (
-          <div className="floating-panel side pin-panel">
-            <div className="panel-top">
-              <div className="panel-title">
-                <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
-                <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
-              </div>
-              <div className="panel-actions">
-                {reportPinButton}
-                <button
-                  type="button"
-                  className="close-button"
-                  onClick={() => setSelectedPin(null)}
-                >
-                  <X size={24} />
-                </button>
-              </div>
-            </div>
-
+          <PinCard
+            pin={visibleSelectedPin}
+            placement="side"
+            onClose={() => setSelectedPin(null)}
+            reportButton={reportPinButton}
+          >
             {pinInfoPanel}
-          </div>
+          </PinCard>
         )}
       </div>
 
@@ -1771,96 +1046,32 @@ function App() {
       )}
 
       {panelPlacement === "bottom" && visibleSelectedPin && (
-        <div className="floating-panel bottom pin-panel">
-          <div className="panel-top">
-            <div className="panel-title">
-              <div className="panel-icon">{visibleSelectedPin.icon || "📍"}</div>
-              <h3>{visibleSelectedPin.nickname || "Unnamed pin"}</h3>
-            </div>
-            <div className="panel-actions">
-              {reportPinButton}
-              <button
-                type="button"
-                className="close-button"
-                onClick={() => setSelectedPin(null)}
-              >
-                <X size={24} />
-              </button>
-            </div>
-          </div>
-
+        <PinCard
+          pin={visibleSelectedPin}
+          placement="bottom"
+          onClose={() => setSelectedPin(null)}
+          reportButton={reportPinButton}
+        >
           {pinInfoPanel}
-        </div>
+        </PinCard>
       )}
 
       {policyModal && (
         <PolicyModal title={policyTitle} content={policyContent} onClose={closePolicy} />
       )}
 
-      {feedbackPrompt && (
-        <div className="feedback-overlay" role="dialog" aria-modal="true">
-          <div className="feedback-backdrop" onClick={closeFeedback} />
-          <div className="feedback-card">
-            <div className="panel-top" style={{ marginBottom: "0.5rem" }}>
-              <div className="panel-title">
-                <div className="panel-icon">💬</div>
-                <h3>{feedbackPrompt.kind === "pin_report" ? "Report pin" : "Share site feedback"}</h3>
-              </div>
-              <button type="button" className="close-button" onClick={closeFeedback}>
-                <X size={22} />
-              </button>
-            </div>
-            <div className="panel-section" style={{ padding: 0 }}>
-              {feedbackPrompt.kind === "pin_report" && feedbackPrompt.pinNickname && (
-                <p className="muted" style={{ marginBottom: "0.5rem" }}>
-                  Reporting: <strong>{feedbackPrompt.pinNickname}</strong>
-                </p>
-              )}
-              <form onSubmit={handleFeedbackSubmit} className="form-grid compact">
-                <label className="label">
-                  Message *
-                  <textarea
-                    className="input"
-                    rows={4}
-                    value={feedbackMessage}
-                    onChange={(e) => setFeedbackMessage(e.target.value)}
-                    placeholder={
-                      feedbackPrompt.kind === "pin_report"
-                        ? "Describe what's wrong with this pin."
-                        : "Share bugs, ideas, or anything else."
-                    }
-                  />
-                </label>
-                <label className="label">
-                  Contact info (optional)
-                  <input
-                    type="text"
-                    className="input"
-                    value={feedbackContact}
-                    onChange={(e) => setFeedbackContact(e.target.value)}
-                    placeholder="Discord @name, email, or other way to reach you"
-                  />
-                  <span className="helper-text">
-                    Include platform + handle if you want a moderator to follow up.
-                  </span>
-                </label>
-
-                {feedbackError && <p className="status error">{feedbackError}</p>}
-                {feedbackStatus && <p className="status success">{feedbackStatus}</p>}
-
-                <div className="feedback-actions">
-                  <button type="button" className="ghost" onClick={closeFeedback} disabled={feedbackSubmitting}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="primary" disabled={feedbackSubmitting}>
-                    {feedbackSubmitting ? "Sending…" : "Send"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      <FeedbackModal
+        prompt={feedbackPrompt}
+        message={feedbackMessage}
+        contact={feedbackContact}
+        error={feedbackError}
+        status={feedbackStatus}
+        submitting={feedbackSubmitting}
+        onClose={closeFeedback}
+        onMessageChange={setFeedbackMessage}
+        onContactChange={setFeedbackContact}
+        onSubmit={handleFeedbackSubmit}
+      />
     </div>
   );
 }

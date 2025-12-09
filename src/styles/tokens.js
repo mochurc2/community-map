@@ -159,6 +159,38 @@ export const tokens = {
   },
 
   // ========================================
+  // CHIPS / BUBBLES / PILLS
+  // ========================================
+  chip: {
+    // Standard chip/bubble/pill styling
+    padding: '0.45rem 0.85rem',
+    borderRadius: '999px',
+    fontSize: '0.95rem',
+    fontWeight: 500,
+
+    // Backgrounds
+    bg: {
+      default: '#f6f7fb',
+      white: '#ffffff',
+      ghost: '#f3f4f6',
+    },
+
+    // States
+    selected: {
+      bg: '#2563eb',
+      color: '#ffffff',
+      border: '#1d4ed8',
+      shadow: '0 8px 20px rgba(37, 99, 235, 0.22)',
+    },
+
+    active: {
+      bg: '#e5f0ff',
+      border: '#c3ddff',
+      color: '#1d4ed8',
+    },
+  },
+
+  // ========================================
   // TRANSITIONS
   // ========================================
   transition: {

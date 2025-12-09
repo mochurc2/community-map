@@ -438,9 +438,9 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.65rem;
+  padding: 0.45rem 0.85rem;
   border-radius: var(--radius-full);
-  background: #f3f4f6;
+  background: #f6f7fb;
   color: #0f172a;
   font-size: var(--chip-font-size);
   font-weight: var(--chip-font-weight);
@@ -464,12 +464,20 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: #f8fafc;
+  background: #f6f7fb;
   border: 1px solid #e5e7eb;
+  border-radius: var(--radius-full);
   color: #0f172a;
-  padding: 0.55rem 0.85rem;
+  padding: 0.45rem 0.85rem;
   font-size: var(--chip-font-size);
   font-weight: var(--chip-font-weight);
+  cursor: pointer;
+  transition: background 120ms ease, border 120ms ease, transform 120ms ease;
+}
+
+.icon-pill:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
 }
 
 .icon-pill svg {
@@ -917,18 +925,19 @@ textarea {
 .location-chip {
   display: inline-flex;
   align-items: center;
-  padding: 0.35rem 0.75rem;
+  padding: 0.45rem 0.85rem;
   border-radius: var(--radius-full);
   border: 1px solid #e5e7eb;
   background: #ffffff;
   font-weight: 600;
+  font-size: var(--chip-font-size);
   color: #0f172a;
   max-width: 100%;
   word-break: break-word;
 }
 
 .location-chip.subdued {
-  background: #f1f5f9;
+  background: #f6f7fb;
   color: #374151;
 }
 
@@ -953,16 +962,23 @@ textarea {
 }
 
 .emoji-chip {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: 1px solid #e5e7eb;
   padding: 0.55rem;
   font-size: 1.25rem;
   background: #ffffff;
+  cursor: pointer;
+  transition: border 120ms ease, box-shadow 120ms ease;
+}
+
+.emoji-chip:hover {
+  border-color: #cbd5e1;
 }
 
 .emoji-chip.selected {
-  border-color: #2563eb;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.16);
+  background: #2563eb;
+  border-color: #1d4ed8;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
 }
 
 .emoji-tone-panel {
@@ -1284,12 +1300,19 @@ textarea {
 }
 
 .status-button {
-  padding: 0.55rem 0.9rem;
-  border-radius: 10px;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
   font-weight: 700;
   text-transform: capitalize;
   border-color: #e5e7eb;
-  background: #f8fafc;
+  background: #f6f7fb;
+  cursor: pointer;
+  transition: background 120ms ease, border 120ms ease, transform 120ms ease;
+}
+
+.status-button:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
 }
 
 .status-button.active {
@@ -1417,10 +1440,10 @@ textarea {
 
 .tiny-button {
   padding: 0.45rem 0.7rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
   border: 1px solid #e5e7eb;
-  background: #f3f4f6;
+  background: #f6f7fb;
   font-weight: 700;
   box-shadow: none;
 }
@@ -1494,7 +1517,7 @@ textarea {
   width: min(640px, 100%);
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   padding: 1.2rem 1.35rem;
   box-shadow: 0 22px 48px rgba(15, 23, 42, 0.22);
   display: grid;

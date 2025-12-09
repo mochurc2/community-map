@@ -28,13 +28,16 @@ function Root() {
     setGatePassed(true);
   };
 
+  const isDev = import.meta.env.MODE === "development";
+  const shouldShowGate = !isDev && !gatePassed;
+
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/moderate" element={<ModerationPage />} />
       </Routes>
-      {!gatePassed && <EntryGate onComplete={handleGateComplete} />}
+      {shouldShowGate && <EntryGate onComplete={handleGateComplete} />}
     </BrowserRouter>
   );
 }
