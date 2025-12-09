@@ -143,12 +143,12 @@ function AppContent() {
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
     : null;
 
-  const panelTitle =
-    activePanel === "info"
-      ? { icon: <Info />, label: "About this map" }
-      : activePanel === "add"
-        ? { icon: <Plus />, label: "Add your pin" }
-        : { icon: <Filter />, label: "Filter pins" };
+  const getPanelTitle = () => {
+    if (activePanel === "info") return { icon: <Info />, label: "About this map" };
+    if (activePanel === "add") return { icon: <Plus />, label: "Add your pin" };
+    return { icon: <Filter />, label: "Filter pins" };
+  };
+  const panelTitle = getPanelTitle();
 
   const isCompactAdd = panelPlacement === "bottom";
   const policyTitle = policyModal === "tos" ? "Terms of Service" : "Privacy Policy";
