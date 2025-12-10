@@ -133,6 +133,14 @@ function AppContent() {
     setSelectedLocation(null);
   }, []);
 
+  const handleSearchLocationSelect = useCallback(
+    (result) => {
+      setSelectedPin(null);
+      setSelectedLocation({ lng: result.lng, lat: result.lat });
+    },
+    []
+  );
+
   // Policy modal hook
   const { policyModal, openPolicy, closePolicy } = usePolicyModal();
 
@@ -246,6 +254,7 @@ function AppContent() {
                     pendingPinsLabel={pendingPinsLabel}
                     pinsError={pinsError}
                     onOpenPolicy={openPolicy}
+                    onLocationSelect={handleSearchLocationSelect}
                   />
                 </Panel>
               )}
@@ -279,6 +288,7 @@ function AppContent() {
                   pendingPinsLabel={pendingPinsLabel}
                   pinsError={pinsError}
                   onOpenPolicy={openPolicy}
+                  onLocationSelect={handleSearchLocationSelect}
                 />
               </Panel>
             )}

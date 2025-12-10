@@ -28,12 +28,14 @@ export function Panel({
   onClose,
   children,
 }) {
-  const panelTitle = PANEL_ICONS[activePanel];
+  const panelTitle = PANEL_ICONS[activePanel] || PANEL_ICONS.info;
 
   const style =
     placement === "bottom" && activePanel === "add" && showFullAddForm
       ? { top: `${Math.max(titleCardHeight + 42, 150)}px` }
       : undefined;
+
+  if (!panelTitle) return null;
 
   return (
     <div

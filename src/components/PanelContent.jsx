@@ -1,6 +1,7 @@
 import InfoPanel from "./InfoPanel";
 import AddPinPanel from "./AddPinPanel";
 import FilterPanel from "./FilterPanel";
+import SearchPanel from "./SearchPanel";
 
 /**
  * PanelContent Component
@@ -9,7 +10,7 @@ import FilterPanel from "./FilterPanel";
  * Handles panel-specific wrapper classes and rendering logic.
  *
  * @param {Object} props
- * @param {string} props.activePanel - Active panel type: 'info', 'add', or 'filter'
+ * @param {string} props.activePanel - Active panel type: 'info', 'search', 'add', or 'filter'
  * @param {string} props.panelPlacement - Panel placement: 'side' or 'bottom'
  * @param {boolean} props.showFullAddForm - Whether add form is expanded
  * @param {boolean} props.loadingPins - Whether pins are loading
@@ -17,6 +18,7 @@ import FilterPanel from "./FilterPanel";
  * @param {string} props.pendingPinsLabel - Label for pending pins
  * @param {string} props.pinsError - Error message if pins failed to load
  * @param {Function} props.onOpenPolicy - Handler to open policy modal
+ * @param {Function} props.onLocationSelect - Handler for when a search result is selected
  */
 export function PanelContent({
   activePanel,
@@ -27,6 +29,7 @@ export function PanelContent({
   pendingPinsLabel,
   pinsError,
   onOpenPolicy,
+  onLocationSelect,
 }) {
   if (activePanel === "info") {
     return (
@@ -38,6 +41,10 @@ export function PanelContent({
         onOpenPolicy={onOpenPolicy}
       />
     );
+  }
+
+  if (activePanel === "search") {
+    return <SearchPanel onLocationSelect={onLocationSelect} />;
   }
 
   if (activePanel === "add") {

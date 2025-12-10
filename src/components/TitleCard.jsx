@@ -1,4 +1,4 @@
-import { Info, Plus, Filter, Scissors } from 'lucide-react';
+import { Info, Plus, Filter, Search, Scissors } from 'lucide-react';
 import { forwardRef } from 'react';
 
 /**
@@ -7,7 +7,7 @@ import { forwardRef } from 'react';
  * The header card with app title and panel toggle buttons.
  *
  * @param {Object} props
- * @param {string} props.activePanel - Currently active panel ('info', 'add', 'filter', or null)
+ * @param {string} props.activePanel - Currently active panel ('info', 'search', 'add', 'filter', or null)
  * @param {Function} props.onTogglePanel - Callback to toggle panel (receives panel name)
  * @param {React.Ref} ref - Forwarded ref to the title card element
  */
@@ -32,6 +32,14 @@ export const TitleCard = forwardRef(function TitleCard(
         >
           <Info size={18} />
           <span>Info</span>
+        </button>
+        <button
+          type="button"
+          className={`icon-pill ${activePanel === "search" ? "active" : ""}`}
+          onClick={() => onTogglePanel("search")}
+        >
+          <Search size={18} />
+          <span>Search</span>
         </button>
         <button
           type="button"
