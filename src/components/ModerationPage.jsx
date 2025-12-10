@@ -6,6 +6,7 @@ import {
   fetchBubbleOptionsWithIds,
   updateBubbleOption,
 } from "./bubbleOptions";
+import PendingPinEditor from "./PendingPinEditor";
 import { tokens, helpers } from "../styles/tokens";
 import { supabase, supabaseConfigError } from "../supabaseClient";
 
@@ -144,6 +145,9 @@ function ModerationPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [editingPinId, setEditingPinId] = useState(null);
+  const [editingPinError, setEditingPinError] = useState(null);
+  const [editingPinSaving, setEditingPinSaving] = useState(false);
 
   const mapRowsToBubbles = useCallback(
     (rows) => {
@@ -343,6 +347,50 @@ function ModerationPage() {
     fetchMessages();
   };
 
+  const startEditingPin = (pin) => {
+    if (!pin || pin.status !== "pending") return;
+    setEditingPinError(null);
+    setEditingPinId(pin.id);
+  };
+
+  const cancelEditingPin = () => {
+    setEditingPinError(null);
+    setEditingPinId(null);
+  };
+
+  const savePinEdits = async (pinId, updates) => {
+    setEditingPinError(null);
+    setEditingPinSaving(true);
+
+    try {
+      const currentPin = pins.find((p) => p.id === pinId);
+      if (currentPin && currentPin.status !== "pending") {
+        const message = "This pin is no longer pending.";
+        setEditingPinError(message);
+        setEditingPinId(null);
+        return { ok: false, message };
+      }
+
+      const { error: supaError } = await supabase.from("pins").update(updates).eq("id", pinId);
+      if (supaError) {
+        console.error(supaError);
+        setEditingPinError(supaError.message);
+        return { ok: false, message: supaError.message };
+      }
+
+      await fetchPins();
+      await fetchMessages();
+      setEditingPinId(null);
+      return { ok: true };
+    } catch (err) {
+      console.error(err);
+      setEditingPinError(err.message);
+      return { ok: false, message: err.message };
+    } finally {
+      setEditingPinSaving(false);
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError(null);
@@ -358,6 +406,9 @@ function ModerationPage() {
     await supabase.auth.signOut();
     setEmail("");
     setPassword("");
+    setEditingPinId(null);
+    setEditingPinError(null);
+    setEditingPinSaving(false);
   };
 
   const handleAddOption = (field) => {
@@ -414,6 +465,52 @@ function ModerationPage() {
     }),
     [serverBubbleRows]
   );
+
+  const editorBubbleOptions = useMemo(() => {
+    const fallback = getDefaultBubbleOptions();
+    if (!serverBubbleRows || serverBubbleRows.length === 0) return fallback;
+
+    const options = {
+      gender_identity: [],
+      seeking: [],
+      interest_tags: [],
+      contact_methods: [],
+    };
+
+    serverBubbleRows.forEach((row) => {
+      if (!options[row.field]) return;
+      const status = normalizeStatus(row.status);
+      if (status === "rejected") return;
+      if (!options[row.field].includes(row.label)) {
+        options[row.field].push(row.label);
+      }
+    });
+
+    Object.keys(options).forEach((field) => {
+      if (options[field].length === 0) {
+        options[field] = [...fallback[field]];
+      }
+    });
+
+    return options;
+  }, [serverBubbleRows]);
+
+  const bubbleStatusMap = useMemo(() => {
+    const defaults = getDefaultStatusMap();
+    const status = {
+      gender_identity: { ...defaults.gender_identity },
+      seeking: { ...defaults.seeking },
+      interest_tags: { ...defaults.interest_tags },
+      contact_methods: { ...defaults.contact_methods },
+    };
+
+    serverBubbleRows.forEach((row) => {
+      if (!status[row.field]) return;
+      status[row.field][row.label.toLowerCase()] = normalizeStatus(row.status);
+    });
+
+    return status;
+  }, [serverBubbleRows]);
 
   const pendingChanges = useMemo(() => {
     const changes = [];
@@ -628,6 +725,22 @@ function ModerationPage() {
     );
   }
 
+  const renderPendingEditor = (pin) => {
+    if (!pin || pin.status !== "pending" || editingPinId !== pin.id) return null;
+
+    return (
+      <PendingPinEditor
+        pin={pin}
+        bubbleOptions={editorBubbleOptions}
+        statusMap={bubbleStatusMap}
+        onSave={savePinEdits}
+        onCancel={cancelEditingPin}
+        saving={editingPinSaving}
+        serverError={editingPinError}
+      />
+    );
+  };
+
   const renderPins = (list) => {
     if (loadingPins) {
       return <p style={{ margin: 0 }}>Loading pins…</p>;
@@ -704,7 +817,20 @@ function ModerationPage() {
                   {status === "rejected" && "Reject"}
                 </button>
               ))}
+              {pin.status === "pending" && (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => (editingPinId === pin.id ? cancelEditingPin() : startEditingPin(pin))}
+                  disabled={editingPinSaving && editingPinId === pin.id}
+                >
+                  {editingPinId === pin.id ? "Close editor" : "Edit pin"}
+                </button>
+              )}
             </div>
+
+            {renderPendingEditor(pin)}
+
             {pin.status === "rejected" && (
               <div className="pin-status-row" style={{ justifyContent: "flex-end" }}>
                 <button
@@ -828,7 +954,18 @@ function ModerationPage() {
                         {status === "rejected" && "Reject"}
                       </button>
                     ))}
+                    {pin.status === "pending" && (
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => (editingPinId === pin.id ? cancelEditingPin() : startEditingPin(pin))}
+                        disabled={editingPinSaving && editingPinId === pin.id}
+                      >
+                        {editingPinId === pin.id ? "Close editor" : "Edit pin"}
+                      </button>
+                    )}
                   </div>
+                  {renderPendingEditor(pin)}
                 </div>
               )}
 
