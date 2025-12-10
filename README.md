@@ -2,7 +2,7 @@
 
 An interactive community map where visitors can explore user-submitted pins and optionally add their own. Submissions are anonymous, go into a moderation queue, and only appear on the public map after approval.
 
-The app is built as a lightweight SPA with **React + Vite**, uses **MapLibre GL** with **MapTiler** tiles for the basemap, and stores data in **Supabase** (Postgres + Row-Level Security).
+The app is built as a lightweight SPA with **React + Vite**, uses **MapLibre GL** with the hosted **Protomaps** basemap, and stores data in **Supabase** (Postgres + Row-Level Security).
 
 ---
 
@@ -13,7 +13,9 @@ The app is built as a lightweight SPA with **React + Vite**, uses **MapLibre GL*
 ```bash
 VITE_SUPABASE_URL=<your supabase project url>
 VITE_SUPABASE_ANON_KEY=<anon key>
-VITE_MAPTILER_STYLE_URL=<maptiler style url>
+VITE_PROTOMAPS_KEY=<protomaps api key>
+# Optional: override the default light theme style URL
+VITE_PROTOMAPS_STYLE_URL=<protomaps style url>
 # Optional: protects /moderate with a shared secret
 VITE_MODERATION_PASSCODE=<passcode>
 ```
@@ -30,14 +32,14 @@ npm run dev
 
 3. Open `http://localhost:5173` to view the map.
 
-If the map fails to load, check that `VITE_MAPTILER_STYLE_URL` is set. If the moderation page prompts for a passcode, it comes from `VITE_MODERATION_PASSCODE`.
+If the map fails to load, check that `VITE_PROTOMAPS_KEY` or `VITE_PROTOMAPS_STYLE_URL` is set. If the moderation page prompts for a passcode, it comes from `VITE_MODERATION_PASSCODE`.
 
 ---
 
 ## Features
 
 - 🗺 **Interactive world map**
-  - Pan/zoom basemap using MapLibre GL + MapTiler.
+  - Pan/zoom basemap using MapLibre GL + Protomaps.
   - Approved pins rendered as circle markers.
   - Inline banner messaging if the map fails to load.
 

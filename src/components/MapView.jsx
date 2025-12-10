@@ -75,8 +75,223 @@ const centerThenZoom = (map, center, targetZoom, animationFrameRef) => {
 const LABEL_FONT_PRIMARY = '600 13px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 const LABEL_FONT_SECONDARY = '12px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 
+const MAP_PALETTE = {
+  background: "#f6f4ef",
+  earth: "#f1efea",
+  land: "#ece9e2",
+  urban: "#e8e4dd",
+  farmland: "#e6eadb",
+  scrub: "#dfe6d6",
+  glacier: "#f7f7f5",
+  beach: "#e9e3d5",
+  park: "#cddbcf",
+  parkDeep: "#c4d1c5",
+  pier: "#dedad2",
+  pedestrian: "#eae6df",
+  runway: "#e5e3dd",
+  water: "#b6c8d9",
+  waterLine: "#9fb5c8",
+  building: "#d8d3c9",
+  roadMain: "#fdfbf8",
+  roadMinor: "#f3f0ea",
+  roadCasing: "#d5cfc6",
+  rail: "#a1a8b3",
+  boundary: "#c6c0b5",
+  boundaryBold: "#b8b1a3",
+  labelPrimary: "#4b5563",
+  labelSecondary: "#606776",
+  labelHalo: "#f6f4ef",
+  poi: "#4f6277",
+  waterLabel: "#4f657a",
+  overlayRadiusFill: "rgba(92, 115, 141, 0.18)",
+  overlayRadiusStroke: "#74859d",
+  overlayPendingStroke: "#4a5f82",
+};
+
+const applyMutedBasemapPalette = (style) => {
+  if (!style?.layers) return style;
+
+  const layers = style.layers.map((layer) => {
+    const next = { ...layer };
+    if (layer.paint) {
+      next.paint = { ...layer.paint };
+    } else {
+      delete next.paint;
+    }
+    if (layer.layout) {
+      next.layout = { ...layer.layout };
+    } else {
+      delete next.layout;
+    }
+    return next;
+  });
+
+  const setPaint = (id, paintUpdates) => {
+    const layer = layers.find((candidate) => candidate.id === id);
+    if (!layer) return;
+    layer.paint = { ...(layer.paint || {}), ...paintUpdates };
+  };
+
+  const setTextColors = (id, textColor, haloColor = MAP_PALETTE.labelHalo) => {
+    const layer = layers.find((candidate) => candidate.id === id);
+    if (!layer) return;
+    layer.paint = {
+      ...(layer.paint || {}),
+      ...(textColor ? { "text-color": textColor } : {}),
+      ...(haloColor ? { "text-halo-color": haloColor } : {}),
+    };
+  };
+
+  setPaint("background", { "background-color": MAP_PALETTE.background });
+  setPaint("earth", { "fill-color": MAP_PALETTE.earth });
+
+  const landcoverOpacity =
+    layers.find((layer) => layer.id === "landcover")?.paint?.["fill-opacity"] ||
+    ["interpolate", ["linear"], ["zoom"], 5, 1, 7, 0];
+  setPaint("landcover", {
+    "fill-color": [
+      "match",
+      ["get", "kind"],
+      "grassland",
+      MAP_PALETTE.park,
+      "barren",
+      MAP_PALETTE.beach,
+      "urban_area",
+      MAP_PALETTE.urban,
+      "farmland",
+      MAP_PALETTE.farmland,
+      "glacier",
+      MAP_PALETTE.glacier,
+      "scrub",
+      MAP_PALETTE.scrub,
+      MAP_PALETTE.land,
+    ],
+    "fill-opacity": landcoverOpacity,
+  });
+
+  setPaint("landuse_park", { "fill-color": MAP_PALETTE.park });
+  setPaint("landuse_urban_green", { "fill-color": MAP_PALETTE.park });
+  setPaint("landuse_hospital", { "fill-color": MAP_PALETTE.urban });
+  setPaint("landuse_industrial", { "fill-color": "#d6dcdf" });
+  setPaint("landuse_school", { "fill-color": MAP_PALETTE.urban });
+  setPaint("landuse_beach", { "fill-color": MAP_PALETTE.beach });
+  setPaint("landuse_zoo", { "fill-color": MAP_PALETTE.parkDeep });
+  setPaint("landuse_aerodrome", { "fill-color": MAP_PALETTE.runway });
+  setPaint("landuse_runway", { "fill-color": MAP_PALETTE.runway });
+  setPaint("landuse_pedestrian", { "fill-color": MAP_PALETTE.pedestrian });
+  setPaint("landuse_pier", { "fill-color": MAP_PALETTE.pier });
+
+  setPaint("water", { "fill-color": MAP_PALETTE.water });
+  setPaint("water_stream", { "line-color": MAP_PALETTE.waterLine });
+  setPaint("water_river", { "line-color": MAP_PALETTE.waterLine });
+
+  setPaint("roads_runway", { "line-color": MAP_PALETTE.runway });
+  setPaint("roads_taxiway", { "line-color": MAP_PALETTE.runway });
+  setPaint("roads_rail", { "line-color": MAP_PALETTE.rail });
+
+  layers.forEach((layer) => {
+    if (!layer.id.startsWith("roads_") || layer.type !== "line") return;
+    if (layer.id.includes("rail") || layer.id.includes("runway") || layer.id.includes("taxiway")) return;
+
+    if (layer.id.includes("casing")) {
+      layer.paint = { ...(layer.paint || {}), "line-color": MAP_PALETTE.roadCasing };
+      return;
+    }
+
+    const isMajor =
+      layer.id.includes("highway") ||
+      layer.id.includes("major") ||
+      layer.id.includes("link") ||
+      layer.id.includes("bridge");
+    layer.paint = { ...(layer.paint || {}), "line-color": isMajor ? MAP_PALETTE.roadMain : MAP_PALETTE.roadMinor };
+  });
+
+  setPaint("buildings", { "fill-color": MAP_PALETTE.building, "fill-opacity": 0.55 });
+
+  setPaint("boundaries", { "line-color": MAP_PALETTE.boundary });
+  setPaint("boundaries_country", { "line-color": MAP_PALETTE.boundaryBold });
+
+  setTextColors("address_label", MAP_PALETTE.labelSecondary);
+  setTextColors("water_waterway_label", MAP_PALETTE.waterLabel);
+  setTextColors("places_subplace", MAP_PALETTE.labelSecondary);
+  setTextColors("places_region", MAP_PALETTE.labelSecondary);
+  setTextColors("places_locality", MAP_PALETTE.labelPrimary);
+  setTextColors("places_country", MAP_PALETTE.labelSecondary);
+
+  const hiddenLayers = new Set([
+    "address_label",
+    "water_waterway_label",
+    "places_subplace",
+    "places_region",
+  ]);
+  layers.forEach((layer) => {
+    if (hiddenLayers.has(layer.id)) {
+      layer.layout = { ...(layer.layout || {}), visibility: "none" };
+    }
+    if (layer.id === "places_locality") {
+      layer.minzoom = 4.5;
+      const nextLayout = { ...(layer.layout || {}), "icon-image": "" };
+      // Remove any accidental minzoom from layout to avoid validation errors.
+      if ("minzoom" in nextLayout) delete nextLayout.minzoom;
+      layer.layout = nextLayout;
+    }
+  });
+
+  // Strip most symbols except core place + road labels to keep the map calm.
+  layers.forEach((layer) => {
+    if (layer.type !== "symbol") return;
+    const keep =
+      layer.id === "places_locality" ||
+      layer.id === "places_country" ||
+      (typeof layer.id === "string" && layer.id.includes("road"));
+    if (!keep) {
+      layer.layout = { ...(layer.layout || {}), visibility: "none" };
+    }
+  });
+
+  return { ...style, layers };
+};
+
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
+
+const normalizePadding = (padding) => {
+  const source = padding || {};
+  return {
+    top: Number(source.top) || 0,
+    bottom: Number(source.bottom) || 0,
+    left: Number(source.left) || 0,
+    right: Number(source.right) || 0,
+  };
+};
+
+const paddingEquals = (a, b, epsilon = 0.25) => {
+  const padA = normalizePadding(a);
+  const padB = normalizePadding(b);
+  return (
+    Math.abs(padA.top - padB.top) <= epsilon &&
+    Math.abs(padA.bottom - padB.bottom) <= epsilon &&
+    Math.abs(padA.left - padB.left) <= epsilon &&
+    Math.abs(padA.right - padB.right) <= epsilon
+  );
+};
+
+const cameraMatches = (map, destination, zoom, padding) => {
+  if (!map || !destination) return false;
+  const currentCenter = map.getCenter();
+  const currentZoom = map.getZoom();
+  const currentPadding = map.getPadding ? map.getPadding() : null;
+  const epsilonCenter = 1e-6;
+  const epsilonZoom = 0.01;
+  return (
+    Math.abs(currentCenter.lng - destination[0]) <= epsilonCenter &&
+    Math.abs(currentCenter.lat - destination[1]) <= epsilonCenter &&
+    Math.abs(currentZoom - zoom) <= epsilonZoom &&
+    paddingEquals(currentPadding, padding)
+  );
+};
+
+const styleCache = new Map();
 
 const buildCircleFeatureCollection = (center, radiusFeet) => {
   if (!center) return { type: "FeatureCollection", features: [] };
@@ -409,6 +624,7 @@ function MapView({
   const enableAddModeRef = useRef(enableAddMode);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
+  const [resolvedStyle, setResolvedStyle] = useState(null);
   const [isInteracting, setIsInteracting] = useState(false);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
@@ -421,13 +637,21 @@ function MapView({
   const lastGoodLabelsRef = useRef([]);
   const lastGoodCacheRef = useRef(new Map());
   const pinOffsetCacheRef = useRef(new Map());
+  const styleUrlMemo = useMemo(() => styleUrl, []);
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
   const dataAnimationUntilRef = useRef(0);
   const activeTouchIdsRef = useRef(new Set());
   const cachedTouchEventsRef = useRef(new Map());
   const forwardingMultiTouchRef = useRef(false);
-  const lastMobileCenterRef = useRef("");
+  const lastFocusedPinRef = useRef(null);
+  const prevSelectedPinIdRef = useRef(null);
+  const lastCameraRef = useRef({
+    center: [0, 20],
+    zoom: 2,
+    padding: null,
+  });
+  const cameraEaseFrameRef = useRef(null);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -497,6 +721,34 @@ function MapView({
 
     return [...approved, ...pending];
   }, [pins, pendingPins]);
+
+  const requestCameraEase = useCallback(
+    ({ center, zoom, padding, duration, easing, force = false }) => {
+      const map = mapRef.current;
+      if (!map || !center || typeof zoom !== "number") return;
+      const normalizedPadding = normalizePadding(padding);
+      if (!force && cameraMatches(map, center, zoom, normalizedPadding)) {
+        lastCameraRef.current = { center, zoom, padding: normalizedPadding };
+        return;
+      }
+      if (cameraEaseFrameRef.current) {
+        cancelAnimationFrame(cameraEaseFrameRef.current);
+        cameraEaseFrameRef.current = null;
+      }
+      cameraEaseFrameRef.current = requestAnimationFrame(() => {
+        cameraEaseFrameRef.current = null;
+        map.easeTo({
+          center,
+          zoom,
+          duration,
+          easing,
+          ...(normalizedPadding ? { padding: normalizedPadding } : {}),
+        });
+        lastCameraRef.current = { center, zoom, padding: normalizedPadding };
+      });
+    },
+    []
+  );
 
   const applyVisualNodes = useCallback((nextNodes) => {
     setVisualNodes(nextNodes.map((node) => ({ ...node, phase: "active" })));
@@ -1002,6 +1254,12 @@ function MapView({
     });
   }, [computeLayout]);
 
+  const scheduleLayoutRef = useRef(scheduleLayout);
+
+  useEffect(() => {
+    scheduleLayoutRef.current = scheduleLayout;
+  }, [scheduleLayout]);
+
   useEffect(() => {
     const map = mapRef.current;
     const canvas = map?.getCanvas?.();
@@ -1014,13 +1272,65 @@ function MapView({
   }, [enableAddMode]);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
+    let cancelled = false;
+
+    const loadStyle = async () => {
+      if (!styleUrlMemo) {
+        setResolvedStyle(null);
+        return;
+      }
+      try {
+        setMapError(null);
+        const cached = styleCache.get(styleUrlMemo);
+        const stylePromise = cached || (async () => {
+          const response = await fetch(styleUrlMemo, { cache: "force-cache" });
+          if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
+          const baseStyle = await response.json();
+          return applyMutedBasemapPalette(baseStyle);
+        })();
+        if (!cached) styleCache.set(styleUrlMemo, stylePromise);
+        const styled = await stylePromise;
+        if (!cancelled) {
+          setResolvedStyle(styled);
+        }
+      } catch (error) {
+        console.error("map style load error", error);
+        if (!cancelled) {
+          setResolvedStyle(null);
+          setMapError("Map style failed to load");
+        }
+      }
+    };
+
+    loadStyle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [styleUrlMemo]);
+
+  // Initialize the map once; keep dependencies minimal so the instance persists.
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current || !resolvedStyle) return;
+
+    const runLayout = () => scheduleLayoutRef.current?.();
+
+    if (import.meta.env.DEV) {
+      console.debug("[MapView] initializing MapLibre map once");
+    }
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: styleUrl,
-      center: [0, 20],
-      zoom: 2,
+      style: resolvedStyle,
+      center: lastCameraRef.current?.center || [0, 20],
+      zoom: lastCameraRef.current?.zoom || 2,
+      padding: lastCameraRef.current?.padding || undefined,
+      minZoom: 2,
+      maxZoom: 16,
+      fadeDuration: 0,
+      maxTileCacheSize: 2048,
+      reuseMaps: true,
+      renderWorldCopies: false,
     });
 
     mapRef.current = map;
@@ -1041,8 +1351,8 @@ function MapView({
         type: "fill",
         source: "pending-radius",
         paint: {
-          "fill-color": "#bfdbfe",
-          "fill-opacity": 0.2,
+          "fill-color": MAP_PALETTE.overlayRadiusFill,
+          "fill-opacity": 1,
         },
       });
 
@@ -1051,7 +1361,7 @@ function MapView({
         type: "line",
         source: "pending-radius",
         paint: {
-          "line-color": "#60a5fa",
+          "line-color": MAP_PALETTE.overlayRadiusStroke,
           "line-width": 2,
           "line-dasharray": [2, 2],
         },
@@ -1065,7 +1375,7 @@ function MapView({
           "circle-radius": 14,
           "circle-color": "#ffffff",
           "circle-stroke-width": 3,
-          "circle-stroke-color": "#2563eb",
+          "circle-stroke-color": MAP_PALETTE.overlayPendingStroke,
         },
       });
 
@@ -1087,7 +1397,7 @@ function MapView({
       await ensureEmojiImage(DEFAULT_EMOJI);
       await ensureEmojiImage(PENDING_REVIEW_EMOJI);
       setMapLoaded(true);
-      scheduleLayout();
+      runLayout();
     });
 
     map.on("error", (evt) => {
@@ -1100,10 +1410,21 @@ function MapView({
       setIsInteracting(true);
     });
 
+    const recordCamera = () => {
+      const center = map.getCenter();
+      const padding = map.getPadding && map.getPadding();
+      lastCameraRef.current = {
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+        padding: padding || null,
+      };
+    };
+
     map.on("moveend", () => {
       isMapMovingRef.current = false;
       setIsInteracting(false);
-      scheduleLayout();
+      recordCamera();
+      runLayout();
     });
 
     map.on("zoomstart", () => {
@@ -1114,15 +1435,17 @@ function MapView({
     map.on("zoomend", () => {
       isMapMovingRef.current = false;
       setIsInteracting(false);
-      scheduleLayout();
+      recordCamera();
+      runLayout();
     });
 
     map.on("idle", () => {
       isMapMovingRef.current = false;
       setIsInteracting(false);
-      scheduleLayout();
+      recordCamera();
+      runLayout();
     });
-    map.on("resize", scheduleLayout);
+    map.on("resize", runLayout);
 
     map.on("click", (e) => {
       if (!enableAddModeRef.current) return;
@@ -1136,17 +1459,23 @@ function MapView({
         onMapClickRef.current(e.lngLat);
       }
     });
+  }, [resolvedStyle, ensureEmojiImage]);
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-      map.remove();
+  useEffect(() => () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (cameraEaseFrameRef.current) {
+      cancelAnimationFrame(cameraEaseFrameRef.current);
+      cameraEaseFrameRef.current = null;
+    }
+    if (mapRef.current) {
+      mapRef.current.remove();
       mapRef.current = null;
-      setMapLoaded(false);
-    };
-  }, [ensureEmojiImage]);
+    }
+    setMapLoaded(false);
+  }, []);
 
   useEffect(() => {
     const signature = `${combinedPins.length}:${combinedPins
@@ -1185,6 +1514,8 @@ function MapView({
     const overlayEl = overlayRef.current;
     const map = mapRef.current;
     const canvas = map?.getCanvas?.();
+    const activeTouchIds = activeTouchIdsRef.current;
+    const cachedTouchEvents = cachedTouchEventsRef.current;
     if (!overlayEl || !map || !canvas) return undefined;
     if (typeof PointerEvent === "undefined") return undefined;
 
@@ -1364,8 +1695,8 @@ function MapView({
       overlayEl.removeEventListener("touchcancel", handleTouchEnd, listenerOptions);
       overlayEl.removeEventListener("wheel", handleWheel, listenerOptions);
       forwardingMultiTouchRef.current = false;
-      activeTouchIdsRef.current.clear();
-      cachedTouchEventsRef.current.clear();
+      activeTouchIds.clear();
+      cachedTouchEvents.clear();
     };
   }, [mapLoaded]);
 
@@ -1400,12 +1731,12 @@ function MapView({
   }, [
     applyLabelNodes,
     applyVisualNodes,
-    combinedPins.length,
+    combinedPins,
     isInteracting,
-    labelNodes.length,
+    labelNodes,
     mapLoaded,
     selectedPinId,
-    visualNodes.length,
+    visualNodes,
   ]);
 
   useEffect(() => {
@@ -1481,45 +1812,35 @@ function MapView({
   }, [panelPlacement, pinPanelBounds, titleCardBounds]);
 
   useEffect(() => {
-    if (panelPlacement !== "bottom") {
-      lastMobileCenterRef.current = "";
-      return;
-    }
     if (!mapLoaded) return;
-    if (!selectedPinId) {
-      lastMobileCenterRef.current = "";
-      return;
-    }
-    if (isInteracting) return;
+    if (selectedPinId === null || selectedPinId === undefined) return;
+    if (prevSelectedPinIdRef.current === selectedPinId) return;
+    if (lastFocusedPinRef.current === selectedPinId) return; // click already handled centering
+    prevSelectedPinIdRef.current = selectedPinId;
     const map = mapRef.current;
     if (!map) return;
-    const padding = computeMobilePadding();
-    if (!padding) return;
-
     const selectedPin = combinedPins.find((pin) => pin.id === selectedPinId);
     if (!selectedPin || typeof selectedPin.lng !== "number" || typeof selectedPin.lat !== "number") return;
 
-    const signature = `${selectedPinId}:${padding.top}-${padding.bottom}-${padding.left}-${padding.right}:${map.getZoom()}`;
-    if (lastMobileCenterRef.current === signature) return;
-    lastMobileCenterRef.current = signature;
+    const destination = [selectedPin.lng, selectedPin.lat];
+    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+    const targetZoom = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
-    map.easeTo({
-      center: [selectedPin.lng, selectedPin.lat],
-      zoom: map.getZoom(),
-      padding,
-      duration: 320,
+    requestCameraEase({
+      center: destination,
+      zoom: targetZoom,
+      padding: mobilePadding || undefined,
+      duration: smoothDuration(map.getZoom(), targetZoom),
       easing: easeInOut,
     });
-  }, [
-    combinedPins,
-    computeMobilePadding,
-    isInteracting,
-    mapLoaded,
-    panelPlacement,
-    pinPanelBounds,
-    selectedPinId,
-    titleCardBounds,
-  ]);
+  }, [combinedPins, computeMobilePadding, mapLoaded, panelPlacement, requestCameraEase, selectedPinId]);
+
+  useEffect(() => {
+    if (selectedPinId === null || selectedPinId === undefined) {
+      prevSelectedPinIdRef.current = null;
+      lastFocusedPinRef.current = null;
+    }
+  }, [selectedPinId]);
 
   const handleNodeClick = useCallback(
     (event, node) => {
@@ -1543,38 +1864,36 @@ function MapView({
       }
 
       const destination = node.pin
-        ? [node.pin.lng, node.pin.lat]
+        ? [Number(node.pin.lng), Number(node.pin.lat)]
         : node.center
-          ? [node.center.lng, node.center.lat]
+          ? [Number(node.center.lng), Number(node.center.lat)]
           : null;
 
       if (node.pin && onPinSelectRef.current) {
         onPinSelectRef.current(node.pin);
       }
+      if (node.pin?.id !== undefined && node.pin?.id !== null) {
+        lastFocusedPinRef.current = node.pin.id;
+      }
 
       const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
-
-      if (mobilePadding && destination) {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        map.easeTo({
-          center: destination,
-          zoom: targetZoom,
-          padding: mobilePadding,
-          duration: smoothDuration(map.getZoom(), targetZoom),
-          easing: easeInOut,
-        });
-        return;
-      }
+      const currentZoom = map.getZoom();
+      const targetZoomForClick = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
       if (destination) {
-        centerThenZoom(map, destination, targetZoom, animationFrameRef);
-      }
-    },
-    [computeMobilePadding, panelPlacement]
-  );
+      const normalizedPadding = mobilePadding ? normalizePadding(mobilePadding) : null;
+      requestCameraEase({
+        center: destination,
+        zoom: targetZoomForClick,
+        padding: normalizedPadding || undefined,
+        duration: smoothDuration(currentZoom, targetZoomForClick),
+        easing: easeInOut,
+        force: true,
+      });
+    }
+  },
+  [computeMobilePadding, panelPlacement, requestCameraEase]
+);
 
   if (!styleUrl) {
     return (
@@ -1582,8 +1901,8 @@ function MapView({
         <div>
           <h2>Map style missing</h2>
           <p style={{ marginTop: "0.5rem", maxWidth: 480 }}>
-            Set <code>VITE_MAPTILER_STYLE_URL</code> in your <code>.env</code> file to
-            load the basemap. You can copy a style URL from your MapTiler account.
+            Set <code>VITE_PROTOMAPS_KEY</code> (or <code>VITE_PROTOMAPS_STYLE_URL</code>)
+            in your <code>.env</code> file to load the hosted Protomaps basemap.
           </p>
         </div>
       </div>
@@ -1686,6 +2005,9 @@ function MapView({
   );
 }
 
-const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
+const protomapsKey = import.meta.env.VITE_PROTOMAPS_KEY || import.meta.env.VITE_PROTOMAPS_API_KEY;
+const styleUrl =
+  import.meta.env.VITE_PROTOMAPS_STYLE_URL ||
+  (protomapsKey ? `https://api.protomaps.com/styles/v5/light/en.json?key=${protomapsKey}` : null);
 
 export default MapView;

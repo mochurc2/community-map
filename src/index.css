@@ -383,7 +383,7 @@ textarea {
   height: 100%;
   border-radius: 50%;
   background: #ffffff;
-  border: 2px solid #d1d5db;
+  border: 2px solid #d5cfc6;
   box-shadow:
     0 6px 18px rgba(15, 23, 42, 0.22),
     0 0 0 1px rgba(255, 255, 255, 0.9);
@@ -400,14 +400,14 @@ textarea {
 }
 
 .pin-node.plus .pin-circle {
-  border-color: #2563eb;
+  border-color: #4a5f82;
   box-shadow:
-    0 0 0 3px rgba(37, 99, 235, 0.25),
-    0 8px 22px rgba(37, 99, 235, 0.35);
+    0 0 0 3px rgba(74, 95, 130, 0.26),
+    0 8px 22px rgba(74, 95, 130, 0.36);
 }
 
 .pin-node.pending .pin-circle {
-  border-color: #cbd5e1;
+  border-color: #d1d7df;
 }
 
 .pin-node.selected .pin-circle {

@@ -143,26 +143,32 @@ function AppContent() {
 
   useEffect(() => {
     const node = pinPanelRef.current;
-    if (!node) {
-      setPinPanelBounds(null);
-      return undefined;
-    }
+    let frameId = null;
 
     const updateBounds = () => {
-      const rect = node.getBoundingClientRect();
+      if (!pinPanelRef.current) return;
+      const rect = pinPanelRef.current.getBoundingClientRect();
       setPinPanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
     };
 
-    updateBounds();
+    if (!node) {
+      frameId = requestAnimationFrame(() => setPinPanelBounds(null));
+      return () => {
+        if (frameId) cancelAnimationFrame(frameId);
+      };
+    }
+
+    frameId = requestAnimationFrame(updateBounds);
 
     const resizeObserver =
-      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => updateBounds()) : null;
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateBounds) : null;
     resizeObserver?.observe(node);
 
     window.addEventListener("resize", updateBounds);
     window.visualViewport?.addEventListener("resize", updateBounds);
 
     return () => {
+      if (frameId) cancelAnimationFrame(frameId);
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateBounds);
       window.visualViewport?.removeEventListener("resize", updateBounds);
