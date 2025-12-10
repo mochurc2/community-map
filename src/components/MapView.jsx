@@ -75,6 +75,143 @@ const centerThenZoom = (map, center, targetZoom, animationFrameRef) => {
 const LABEL_FONT_PRIMARY = '600 13px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 const LABEL_FONT_SECONDARY = '12px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 
+const MAP_PALETTE = {
+  background: "#f6f4ef",
+  earth: "#f1efea",
+  land: "#ece9e2",
+  urban: "#e8e4dd",
+  farmland: "#e6eadb",
+  scrub: "#dfe6d6",
+  glacier: "#f7f7f5",
+  beach: "#e9e3d5",
+  park: "#cddbcf",
+  parkDeep: "#c4d1c5",
+  pier: "#dedad2",
+  pedestrian: "#eae6df",
+  runway: "#e5e3dd",
+  water: "#b6c8d9",
+  waterLine: "#9fb5c8",
+  building: "#d8d3c9",
+  roadMain: "#fdfbf8",
+  roadMinor: "#f3f0ea",
+  roadCasing: "#d5cfc6",
+  rail: "#a1a8b3",
+  boundary: "#c6c0b5",
+  boundaryBold: "#b8b1a3",
+  labelPrimary: "#4b5563",
+  labelSecondary: "#606776",
+  labelHalo: "#f6f4ef",
+  poi: "#4f6277",
+  waterLabel: "#4f657a",
+  overlayRadiusFill: "rgba(92, 115, 141, 0.18)",
+  overlayRadiusStroke: "#74859d",
+  overlayPendingStroke: "#4a5f82",
+};
+
+const applyMutedBasemapPalette = (style) => {
+  if (!style?.layers) return style;
+
+  const layers = style.layers.map((layer) => ({
+    ...layer,
+    paint: layer.paint ? { ...layer.paint } : undefined,
+    layout: layer.layout ? { ...layer.layout } : undefined,
+  }));
+
+  const setPaint = (id, paintUpdates) => {
+    const layer = layers.find((candidate) => candidate.id === id);
+    if (!layer) return;
+    layer.paint = { ...(layer.paint || {}), ...paintUpdates };
+  };
+
+  const setTextColors = (id, textColor, haloColor = MAP_PALETTE.labelHalo) => {
+    const layer = layers.find((candidate) => candidate.id === id);
+    if (!layer) return;
+    layer.paint = {
+      ...(layer.paint || {}),
+      ...(textColor ? { "text-color": textColor } : {}),
+      ...(haloColor ? { "text-halo-color": haloColor } : {}),
+    };
+  };
+
+  setPaint("background", { "background-color": MAP_PALETTE.background });
+  setPaint("earth", { "fill-color": MAP_PALETTE.earth });
+
+  const landcoverOpacity =
+    layers.find((layer) => layer.id === "landcover")?.paint?.["fill-opacity"] ||
+    ["interpolate", ["linear"], ["zoom"], 5, 1, 7, 0];
+  setPaint("landcover", {
+    "fill-color": [
+      "match",
+      ["get", "kind"],
+      "grassland",
+      MAP_PALETTE.park,
+      "barren",
+      MAP_PALETTE.beach,
+      "urban_area",
+      MAP_PALETTE.urban,
+      "farmland",
+      MAP_PALETTE.farmland,
+      "glacier",
+      MAP_PALETTE.glacier,
+      "scrub",
+      MAP_PALETTE.scrub,
+      MAP_PALETTE.land,
+    ],
+    "fill-opacity": landcoverOpacity,
+  });
+
+  setPaint("landuse_park", { "fill-color": MAP_PALETTE.park });
+  setPaint("landuse_urban_green", { "fill-color": MAP_PALETTE.park });
+  setPaint("landuse_hospital", { "fill-color": MAP_PALETTE.urban });
+  setPaint("landuse_industrial", { "fill-color": "#d6dcdf" });
+  setPaint("landuse_school", { "fill-color": MAP_PALETTE.urban });
+  setPaint("landuse_beach", { "fill-color": MAP_PALETTE.beach });
+  setPaint("landuse_zoo", { "fill-color": MAP_PALETTE.parkDeep });
+  setPaint("landuse_aerodrome", { "fill-color": MAP_PALETTE.runway });
+  setPaint("landuse_runway", { "fill-color": MAP_PALETTE.runway });
+  setPaint("landuse_pedestrian", { "fill-color": MAP_PALETTE.pedestrian });
+  setPaint("landuse_pier", { "fill-color": MAP_PALETTE.pier });
+
+  setPaint("water", { "fill-color": MAP_PALETTE.water });
+  setPaint("water_stream", { "line-color": MAP_PALETTE.waterLine });
+  setPaint("water_river", { "line-color": MAP_PALETTE.waterLine });
+
+  setPaint("roads_runway", { "line-color": MAP_PALETTE.runway });
+  setPaint("roads_taxiway", { "line-color": MAP_PALETTE.runway });
+  setPaint("roads_rail", { "line-color": MAP_PALETTE.rail });
+
+  layers.forEach((layer) => {
+    if (!layer.id.startsWith("roads_") || layer.type !== "line") return;
+    if (layer.id.includes("rail") || layer.id.includes("runway") || layer.id.includes("taxiway")) return;
+
+    if (layer.id.includes("casing")) {
+      layer.paint = { ...(layer.paint || {}), "line-color": MAP_PALETTE.roadCasing };
+      return;
+    }
+
+    const isMajor =
+      layer.id.includes("highway") ||
+      layer.id.includes("major") ||
+      layer.id.includes("link") ||
+      layer.id.includes("bridge");
+    layer.paint = { ...(layer.paint || {}), "line-color": isMajor ? MAP_PALETTE.roadMain : MAP_PALETTE.roadMinor };
+  });
+
+  setPaint("buildings", { "fill-color": MAP_PALETTE.building, "fill-opacity": 0.55 });
+
+  setPaint("boundaries", { "line-color": MAP_PALETTE.boundary });
+  setPaint("boundaries_country", { "line-color": MAP_PALETTE.boundaryBold });
+
+  setTextColors("address_label", MAP_PALETTE.labelSecondary);
+  setTextColors("water_waterway_label", MAP_PALETTE.waterLabel);
+  setTextColors("places_subplace", MAP_PALETTE.labelSecondary);
+  setTextColors("places_region", MAP_PALETTE.labelSecondary);
+  setTextColors("places_locality", MAP_PALETTE.labelPrimary);
+  setTextColors("places_country", MAP_PALETTE.labelSecondary);
+
+  return { ...style, layers };
+};
+
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
 
@@ -409,6 +546,7 @@ function MapView({
   const enableAddModeRef = useRef(enableAddMode);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
+  const [resolvedStyle, setResolvedStyle] = useState(null);
   const [isInteracting, setIsInteracting] = useState(false);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
@@ -1014,11 +1152,43 @@ function MapView({
   }, [enableAddMode]);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current || !styleUrl) return;
+    let cancelled = false;
+
+    const loadStyle = async () => {
+      if (!styleUrl) {
+        setResolvedStyle(null);
+        return;
+      }
+      try {
+        setMapError(null);
+        const response = await fetch(styleUrl);
+        if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
+        const baseStyle = await response.json();
+        if (!cancelled) {
+          setResolvedStyle(applyMutedBasemapPalette(baseStyle));
+        }
+      } catch (error) {
+        console.error("map style load error", error);
+        if (!cancelled) {
+          setResolvedStyle(null);
+          setMapError("Map style failed to load");
+        }
+      }
+    };
+
+    loadStyle();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [styleUrl]);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current || !resolvedStyle) return;
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: styleUrl,
+      style: resolvedStyle,
       center: [0, 20],
       zoom: 2,
     });
@@ -1041,8 +1211,8 @@ function MapView({
         type: "fill",
         source: "pending-radius",
         paint: {
-          "fill-color": "#bfdbfe",
-          "fill-opacity": 0.2,
+          "fill-color": MAP_PALETTE.overlayRadiusFill,
+          "fill-opacity": 1,
         },
       });
 
@@ -1051,7 +1221,7 @@ function MapView({
         type: "line",
         source: "pending-radius",
         paint: {
-          "line-color": "#60a5fa",
+          "line-color": MAP_PALETTE.overlayRadiusStroke,
           "line-width": 2,
           "line-dasharray": [2, 2],
         },
@@ -1065,7 +1235,7 @@ function MapView({
           "circle-radius": 14,
           "circle-color": "#ffffff",
           "circle-stroke-width": 3,
-          "circle-stroke-color": "#2563eb",
+          "circle-stroke-color": MAP_PALETTE.overlayPendingStroke,
         },
       });
 
@@ -1146,7 +1316,7 @@ function MapView({
       mapRef.current = null;
       setMapLoaded(false);
     };
-  }, [ensureEmojiImage]);
+  }, [ensureEmojiImage, resolvedStyle, scheduleLayout]);
 
   useEffect(() => {
     const signature = `${combinedPins.length}:${combinedPins
