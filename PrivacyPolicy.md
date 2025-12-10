@@ -18,7 +18,7 @@ Approved Pins become public until expiration or removal.
 ## 2. Automatically Collected Data
 To operate the service, the Site may collect:
 - IP address, request headers, and browser details via Cloudflare for security, routing, and abuse prevention  
-- Standard map tile request data handled by MapTiler  
+- Standard map tile request data handled by Protomaps  
 - Server-side logs for debugging and security
 
 Logs are retained for up to 30 days unless required to resolve abuse.
@@ -36,7 +36,7 @@ For users in the EU/EEA, data is processed on the basis of:
 - Legitimate interests — for operating and securing the Site.
 
 ## 5. Data Sharing
-We share data only with essential service providers such as Cloudflare, Supabase, and MapTiler.  
+We share data only with essential service providers such as Cloudflare, Supabase, and Protomaps.  
 We do not sell personal data or share it with advertisers.
 
 ## 6. Your Rights
@@ -60,3 +60,4 @@ This Privacy Policy may be updated periodically. Continued use of the Site indic
 
 ## 10. Contact
 For privacy or content removal requests, use the Site’s Feedback or Report Pin tools.
+

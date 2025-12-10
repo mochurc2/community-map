@@ -45,7 +45,7 @@ You agree not to:
 - Misuse the map for stalking, doxxing, or targeted harassment.
 
 ## 7. Service Providers
-The Site uses third‑party services such as Cloudflare, Supabase, MapTiler, and others for hosting, storage, and map functionality.
+The Site uses third‑party services such as Cloudflare, Supabase, Protomaps, and others for hosting, storage, and map functionality.
 
 ## 8. Disclaimer of Warranties
 The Site is provided **“as is”** without warranties of any kind. Availability, accuracy, and functionality are not guaranteed.
@@ -61,3 +61,4 @@ These Terms may be updated periodically. Continued use of the Site indicates acc
 
 ## 11. Contact
 For moderation issues, content removal, or privacy requests, use the Site’s built‑in Feedback or Report Pin tools.
+

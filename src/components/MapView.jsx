@@ -1582,8 +1582,8 @@ function MapView({
         <div>
           <h2>Map style missing</h2>
           <p style={{ marginTop: "0.5rem", maxWidth: 480 }}>
-            Set <code>VITE_MAPTILER_STYLE_URL</code> in your <code>.env</code> file to
-            load the basemap. You can copy a style URL from your MapTiler account.
+            Set <code>VITE_PROTOMAPS_KEY</code> (or <code>VITE_PROTOMAPS_STYLE_URL</code>)
+            in your <code>.env</code> file to load the hosted Protomaps basemap.
           </p>
         </div>
       </div>
@@ -1686,6 +1686,9 @@ function MapView({
   );
 }
 
-const styleUrl = import.meta.env.VITE_MAPTILER_STYLE_URL;
+const protomapsKey = import.meta.env.VITE_PROTOMAPS_KEY || import.meta.env.VITE_PROTOMAPS_API_KEY;
+const styleUrl =
+  import.meta.env.VITE_PROTOMAPS_STYLE_URL ||
+  (protomapsKey ? `https://api.protomaps.com/styles/v5/light/en.json?key=${protomapsKey}` : null);
 
 export default MapView;
