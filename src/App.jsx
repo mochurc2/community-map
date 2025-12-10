@@ -39,6 +39,11 @@ function AppContent() {
   // UI state for selected pin and location
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
+  const [projectionMode, setProjectionMode] = useState("mercator");
+  // MapLibre instance is kept here so the globe toggle can call setProjection on the live map.
+  const mapInstanceRef = useRef(null);
+  const styleLoadHandlerRef = useRef(null);
+  const projectionModeRef = useRef("mercator");
 
   // Initialize hooks
   useViewport();
@@ -133,6 +138,90 @@ function AppContent() {
     setSelectedLocation(null);
   }, []);
 
+  const applyProjection = useCallback((mode) => {
+    const map = mapInstanceRef.current;
+    const projection =
+      mode === "globe"
+        ? { type: "globe", name: "globe" }
+        : { type: "mercator", name: "mercator" };
+    // Apply projection on the existing map instance; wait for style.load when needed.
+
+    const currentProjection = map?.getProjection?.();
+    const currentType =
+      typeof currentProjection === "string"
+        ? currentProjection
+        : currentProjection?.type || currentProjection?.name;
+
+    console.debug("[ProjectionToggle] applyProjection", {
+      requested: projection.type,
+      mapReady: !!map,
+      hasSetProjection: typeof map?.setProjection,
+      isStyleLoaded: map?.isStyleLoaded?.(),
+      currentType,
+    });
+
+    if (!map || typeof map.setProjection !== "function") return;
+    if (currentType === projection.type) return;
+
+    const performSet = () => {
+      try {
+        map.setProjection(projection);
+      } catch (error) {
+        console.error("[ProjectionToggle] setProjection failed", error);
+      }
+    };
+
+    if (!map.isStyleLoaded || map.isStyleLoaded()) {
+      performSet();
+    } else {
+      map.once("style.load", () => {
+        performSet();
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    projectionModeRef.current = projectionMode;
+  }, [projectionMode]);
+
+  const handleMapReady = useCallback(
+    (map) => {
+      const previous = mapInstanceRef.current;
+      if (previous && styleLoadHandlerRef.current) {
+        previous.off("style.load", styleLoadHandlerRef.current);
+      }
+
+      mapInstanceRef.current = map;
+      if (!map) {
+        styleLoadHandlerRef.current = null;
+        return;
+      }
+
+      const onStyleLoad = () => applyProjection(projectionModeRef.current);
+      styleLoadHandlerRef.current = onStyleLoad;
+      map.on("style.load", onStyleLoad);
+      applyProjection(projectionModeRef.current);
+    },
+    [applyProjection]
+  );
+
+  const toggleProjectionMode = useCallback(() => {
+    setProjectionMode((prev) => {
+      const next = prev === "globe" ? "mercator" : "globe";
+      console.debug("[ProjectionToggle] click", {
+        nextMode: next,
+        mapReady: !!mapInstanceRef.current,
+        hasSetProjection: typeof mapInstanceRef.current?.setProjection,
+      });
+      applyProjection(next);
+      return next;
+    });
+  }, [applyProjection]);
+
+  useEffect(() => {
+    applyProjection(projectionMode);
+  }, [applyProjection, projectionMode]);
+
   // Policy modal hook
   const { policyModal, openPolicy, closePolicy } = usePolicyModal();
 
@@ -226,6 +315,8 @@ function AppContent() {
               panelPlacement={panelPlacement}
               titleCardBounds={titleCardBounds}
               pinPanelBounds={pinPanelBounds}
+              onMapReady={handleMapReady}
+              projection={projectionMode}
             />
 
             <div className="overlay-rail">
@@ -233,6 +324,8 @@ function AppContent() {
                 ref={titleCardRef}
                 activePanel={activePanel}
                 onTogglePanel={togglePanel}
+                projectionMode={projectionMode}
+                onToggleProjection={toggleProjectionMode}
               />
 
               {activePanel && panelPlacement === "side" && (
