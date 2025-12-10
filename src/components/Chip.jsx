@@ -1,5 +1,3 @@
-import { tokens } from '../styles/tokens';
-
 /**
  * Chip Component
  *

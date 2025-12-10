@@ -4,7 +4,6 @@ import {
   addBubbleOption,
   deleteBubbleOption,
   fetchBubbleOptionsWithIds,
-  getDefaultBubbleOptions,
   updateBubbleOption,
 } from "./bubbleOptions";
 import { tokens, helpers } from "../styles/tokens";

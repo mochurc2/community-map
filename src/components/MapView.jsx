@@ -637,6 +637,7 @@ function MapView({
   const lastGoodLabelsRef = useRef([]);
   const lastGoodCacheRef = useRef(new Map());
   const pinOffsetCacheRef = useRef(new Map());
+  const styleUrlMemo = useMemo(() => styleUrl, []);
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
   const dataAnimationUntilRef = useRef(0);
@@ -1274,20 +1275,20 @@ function MapView({
     let cancelled = false;
 
     const loadStyle = async () => {
-      if (!styleUrl) {
+      if (!styleUrlMemo) {
         setResolvedStyle(null);
         return;
       }
       try {
         setMapError(null);
-        const cached = styleCache.get(styleUrl);
+        const cached = styleCache.get(styleUrlMemo);
         const stylePromise = cached || (async () => {
-          const response = await fetch(styleUrl, { cache: "force-cache" });
+          const response = await fetch(styleUrlMemo, { cache: "force-cache" });
           if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
           const baseStyle = await response.json();
           return applyMutedBasemapPalette(baseStyle);
         })();
-        if (!cached) styleCache.set(styleUrl, stylePromise);
+        if (!cached) styleCache.set(styleUrlMemo, stylePromise);
         const styled = await stylePromise;
         if (!cancelled) {
           setResolvedStyle(styled);
@@ -1306,7 +1307,7 @@ function MapView({
     return () => {
       cancelled = true;
     };
-  }, [styleUrl]);
+  }, [styleUrlMemo]);
 
   // Initialize the map once; keep dependencies minimal so the instance persists.
   useEffect(() => {
@@ -1513,6 +1514,8 @@ function MapView({
     const overlayEl = overlayRef.current;
     const map = mapRef.current;
     const canvas = map?.getCanvas?.();
+    const activeTouchIds = activeTouchIdsRef.current;
+    const cachedTouchEvents = cachedTouchEventsRef.current;
     if (!overlayEl || !map || !canvas) return undefined;
     if (typeof PointerEvent === "undefined") return undefined;
 
@@ -1692,8 +1695,8 @@ function MapView({
       overlayEl.removeEventListener("touchcancel", handleTouchEnd, listenerOptions);
       overlayEl.removeEventListener("wheel", handleWheel, listenerOptions);
       forwardingMultiTouchRef.current = false;
-      activeTouchIdsRef.current.clear();
-      cachedTouchEventsRef.current.clear();
+      activeTouchIds.clear();
+      cachedTouchEvents.clear();
     };
   }, [mapLoaded]);
 
@@ -1728,12 +1731,12 @@ function MapView({
   }, [
     applyLabelNodes,
     applyVisualNodes,
-    combinedPins.length,
+    combinedPins,
     isInteracting,
-    labelNodes.length,
+    labelNodes,
     mapLoaded,
     selectedPinId,
-    visualNodes.length,
+    visualNodes,
   ]);
 
   useEffect(() => {
