@@ -8,8 +8,7 @@ import {
   updateBubbleOption,
 } from "./bubbleOptions";
 import { tokens, helpers } from "../styles/tokens";
-import { supabase, supabaseAdmin, supabaseConfigError } from "../supabaseClient";
-const moderationClient = supabaseAdmin || supabase;
+import { supabase, supabaseConfigError } from "../supabaseClient";
 
 const normalizeStatus = (value) => {
   if (value === "pending" || value === "rejected") return value;
@@ -142,27 +141,10 @@ function ModerationPage() {
     contact_methods: "",
   });
   const [savingChanges, setSavingChanges] = useState(false);
-  const defaultBubbleSet = useMemo(() => getDefaultBubbleOptions(), []);
   const [hasAccess, setHasAccess] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
-
-  const buildDefaultModerationOptions = useCallback(
-    () =>
-      Object.fromEntries(
-        Object.entries(defaultBubbleSet).map(([field, labels]) => [
-          field,
-          labels.map((label, idx) => ({
-            id: `default-${field}-${idx}`,
-            label,
-            source: "default",
-            status: "approved",
-          })),
-        ])
-      ),
-    [defaultBubbleSet]
-  );
 
   const mapRowsToBubbles = useCallback(
     (rows) => {
@@ -172,8 +154,6 @@ function ModerationPage() {
         interest_tags: [],
         contact_methods: [],
       };
-
-      const defaults = buildDefaultModerationOptions();
 
       rows?.forEach((row) => {
         if (grouped[row.field]) {
@@ -186,18 +166,9 @@ function ModerationPage() {
         }
       });
 
-      Object.keys(grouped).forEach((field) => {
-        const existingLabels = new Set(grouped[field].map((opt) => opt.label.toLowerCase()));
-        defaults[field].forEach((opt) => {
-          if (!existingLabels.has(opt.label.toLowerCase())) {
-            grouped[field].push(opt);
-          }
-        });
-      });
-
       return grouped;
     },
-    [buildDefaultModerationOptions]
+    []
   );
 
   const refreshBubbleOptions = useCallback(async () => {
@@ -216,10 +187,14 @@ function ModerationPage() {
     } catch (err) {
       console.error(err);
       setBubbleError(err.message);
-      const fallback = buildDefaultModerationOptions();
-      setDraftBubbleOptions(fallback);
+      setDraftBubbleOptions({
+        gender_identity: [],
+        seeking: [],
+        interest_tags: [],
+        contact_methods: [],
+      });
     }
-  }, [buildDefaultModerationOptions, mapRowsToBubbles]);
+  }, [mapRowsToBubbles]);
 
   useEffect(() => {
     supabase.auth
@@ -246,7 +221,7 @@ function ModerationPage() {
 
   const purgeExpiredPins = useCallback(async () => {
     const nowIso = new Date().toISOString();
-    const { error: purgeError } = await moderationClient
+    const { error: purgeError } = await supabase
       .from("pins")
       .delete()
       .lte("expires_at", nowIso)
@@ -261,7 +236,7 @@ function ModerationPage() {
   const fetchPins = useCallback(async () => {
     setLoadingPins(true);
     await purgeExpiredPins();
-    const { data, error: supaError } = await moderationClient
+    const { data, error: supaError } = await supabase
       .from("pins")
       .select("*")
       .order("submitted_at", { ascending: false });
@@ -278,7 +253,7 @@ function ModerationPage() {
 
   const fetchMessages = useCallback(async () => {
     setLoadingMessages(true);
-    const { data, error: supaError } = await moderationClient
+    const { data, error: supaError } = await supabase
       .from("messages")
       .select("*, pin:pins(*)")
       .order("created_at", { ascending: false });
@@ -303,7 +278,7 @@ function ModerationPage() {
   const updateStatus = async (id, status) => {
     const approved = status === "approved";
 
-    const { error: supaError } = await moderationClient
+    const { error: supaError } = await supabase
       .from("pins")
       .update({
         status,
@@ -325,7 +300,7 @@ function ModerationPage() {
     const confirmed = window.confirm("Delete this rejected pin permanently?");
     if (!confirmed) return;
 
-    const { error: supaError } = await moderationClient.from("pins").delete().eq("id", id);
+    const { error: supaError } = await supabase.from("pins").delete().eq("id", id);
 
     if (supaError) {
       console.error(supaError);
@@ -340,7 +315,7 @@ function ModerationPage() {
     const confirmed = window.confirm("Delete all rejected pins permanently? This cannot be undone.");
     if (!confirmed) return;
 
-    const { error: supaError } = await moderationClient.from("pins").delete().eq("status", "rejected");
+    const { error: supaError } = await supabase.from("pins").delete().eq("status", "rejected");
 
     if (supaError) {
       console.error(supaError);
@@ -358,7 +333,7 @@ function ModerationPage() {
 
   const updateMessageStatus = async (id, status) => {
     setMessageError(null);
-    const { error: supaError } = await moderationClient.from("messages").update({ status }).eq("id", id);
+    const { error: supaError } = await supabase.from("messages").update({ status }).eq("id", id);
 
     if (supaError) {
       console.error(supaError);
@@ -487,7 +462,7 @@ function ModerationPage() {
     async (label, replacement = null) => {
       if (!label) return;
       const lowerLabel = label.toLowerCase();
-      const { data: pinsToUpdate, error: fetchPinsError } = await moderationClient
+      const { data: pinsToUpdate, error: fetchPinsError } = await supabase
         .from("pins")
         .select("id, interest_tags")
         .contains("interest_tags", [label]);
@@ -507,7 +482,7 @@ function ModerationPage() {
           }
         }
 
-        await moderationClient.from("pins").update({ interest_tags: filtered }).eq("id", pin.id);
+        await supabase.from("pins").update({ interest_tags: filtered }).eq("id", pin.id);
       }
     },
     []
@@ -1092,7 +1067,7 @@ function ModerationPage() {
               <div>
                 <p className="eyebrow">Pending changes</p>
                 <p className="muted" style={{ marginTop: "0.2rem" }}>
-                  Confirm below to sync to Supabase. Built-in defaults stay local and are not auto-saved.
+                  Confirm below to sync to Supabase.
                 </p>
               </div>
               {pendingChanges.length === 0 ? (

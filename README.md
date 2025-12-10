@@ -18,6 +18,9 @@ VITE_MAPTILER_STYLE_URL=<maptiler style url>
 VITE_MODERATION_PASSCODE=<passcode>
 ```
 
+> **Security note:** Only use the Supabase **anon** key in your `.env`. Do **not** expose the service role key to the browser;
+> RLS policies rely on the client using the anon key combined with Supabase Auth to scope moderator access.
+
 2. Install dependencies and run the dev server:
 
 ```bash
