@@ -256,20 +256,18 @@ const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
 
 const normalizePadding = (padding) => {
-  if (!padding) return null;
+  const source = padding || {};
   return {
-    top: Number(padding.top) || 0,
-    bottom: Number(padding.bottom) || 0,
-    left: Number(padding.left) || 0,
-    right: Number(padding.right) || 0,
+    top: Number(source.top) || 0,
+    bottom: Number(source.bottom) || 0,
+    left: Number(source.left) || 0,
+    right: Number(source.right) || 0,
   };
 };
 
 const paddingEquals = (a, b, epsilon = 0.25) => {
   const padA = normalizePadding(a);
   const padB = normalizePadding(b);
-  if (!padA && !padB) return true;
-  if (!padA || !padB) return false;
   return (
     Math.abs(padA.top - padB.top) <= epsilon &&
     Math.abs(padA.bottom - padB.bottom) <= epsilon &&
@@ -724,11 +722,11 @@ function MapView({
   }, [pins, pendingPins]);
 
   const requestCameraEase = useCallback(
-    ({ center, zoom, padding, duration, easing }) => {
+    ({ center, zoom, padding, duration, easing, force = false }) => {
       const map = mapRef.current;
       if (!map || !center || typeof zoom !== "number") return;
       const normalizedPadding = normalizePadding(padding);
-      if (cameraMatches(map, center, zoom, normalizedPadding)) {
+      if (!force && cameraMatches(map, center, zoom, normalizedPadding)) {
         lastCameraRef.current = { center, zoom, padding: normalizedPadding };
         return;
       }
@@ -1255,6 +1253,12 @@ function MapView({
     });
   }, [computeLayout]);
 
+  const scheduleLayoutRef = useRef(scheduleLayout);
+
+  useEffect(() => {
+    scheduleLayoutRef.current = scheduleLayout;
+  }, [scheduleLayout]);
+
   useEffect(() => {
     const map = mapRef.current;
     const canvas = map?.getCanvas?.();
@@ -1304,8 +1308,15 @@ function MapView({
     };
   }, [styleUrl]);
 
+  // Initialize the map once; keep dependencies minimal so the instance persists.
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current || !resolvedStyle) return;
+
+    const runLayout = () => scheduleLayoutRef.current?.();
+
+    if (import.meta.env.DEV) {
+      console.debug("[MapView] initializing MapLibre map once");
+    }
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -1317,6 +1328,7 @@ function MapView({
       maxZoom: 16,
       fadeDuration: 0,
       maxTileCacheSize: 2048,
+      reuseMaps: true,
       renderWorldCopies: false,
     });
 
@@ -1384,7 +1396,7 @@ function MapView({
       await ensureEmojiImage(DEFAULT_EMOJI);
       await ensureEmojiImage(PENDING_REVIEW_EMOJI);
       setMapLoaded(true);
-      scheduleLayout();
+      runLayout();
     });
 
     map.on("error", (evt) => {
@@ -1411,7 +1423,7 @@ function MapView({
       isMapMovingRef.current = false;
       setIsInteracting(false);
       recordCamera();
-      scheduleLayout();
+      runLayout();
     });
 
     map.on("zoomstart", () => {
@@ -1423,16 +1435,16 @@ function MapView({
       isMapMovingRef.current = false;
       setIsInteracting(false);
       recordCamera();
-      scheduleLayout();
+      runLayout();
     });
 
     map.on("idle", () => {
       isMapMovingRef.current = false;
       setIsInteracting(false);
       recordCamera();
-      scheduleLayout();
+      runLayout();
     });
-    map.on("resize", scheduleLayout);
+    map.on("resize", runLayout);
 
     map.on("click", (e) => {
       if (!enableAddModeRef.current) return;
@@ -1446,17 +1458,23 @@ function MapView({
         onMapClickRef.current(e.lngLat);
       }
     });
+  }, [resolvedStyle, ensureEmojiImage]);
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-      map.remove();
+  useEffect(() => () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (cameraEaseFrameRef.current) {
+      cancelAnimationFrame(cameraEaseFrameRef.current);
+      cameraEaseFrameRef.current = null;
+    }
+    if (mapRef.current) {
+      mapRef.current.remove();
       mapRef.current = null;
-      setMapLoaded(false);
-    };
-  }, [ensureEmojiImage, resolvedStyle, scheduleLayout]);
+    }
+    setMapLoaded(false);
+  }, []);
 
   useEffect(() => {
     const signature = `${combinedPins.length}:${combinedPins
@@ -1794,6 +1812,7 @@ function MapView({
     if (!mapLoaded) return;
     if (selectedPinId === null || selectedPinId === undefined) return;
     if (prevSelectedPinIdRef.current === selectedPinId) return;
+    if (lastFocusedPinRef.current === selectedPinId) return; // click already handled centering
     prevSelectedPinIdRef.current = selectedPinId;
     const map = mapRef.current;
     if (!map) return;
@@ -1816,6 +1835,7 @@ function MapView({
   useEffect(() => {
     if (selectedPinId === null || selectedPinId === undefined) {
       prevSelectedPinIdRef.current = null;
+      lastFocusedPinRef.current = null;
     }
   }, [selectedPinId]);
 
@@ -1841,29 +1861,31 @@ function MapView({
       }
 
       const destination = node.pin
-        ? [node.pin.lng, node.pin.lat]
+        ? [Number(node.pin.lng), Number(node.pin.lat)]
         : node.center
-          ? [node.center.lng, node.center.lat]
+          ? [Number(node.center.lng), Number(node.center.lat)]
           : null;
 
       if (node.pin && onPinSelectRef.current) {
         onPinSelectRef.current(node.pin);
       }
       if (node.pin?.id !== undefined && node.pin?.id !== null) {
-      lastFocusedPinRef.current = node.pin.id;
-    }
+        lastFocusedPinRef.current = node.pin.id;
+      }
 
-    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
-    const currentZoom = map.getZoom();
-    const targetZoomForClick = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
+      const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+      const currentZoom = map.getZoom();
+      const targetZoomForClick = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
-    if (destination) {
+      if (destination) {
+      const normalizedPadding = mobilePadding ? normalizePadding(mobilePadding) : null;
       requestCameraEase({
         center: destination,
         zoom: targetZoomForClick,
-        padding: mobilePadding || undefined,
+        padding: normalizedPadding || undefined,
         duration: smoothDuration(currentZoom, targetZoomForClick),
         easing: easeInOut,
+        force: true,
       });
     }
   },
