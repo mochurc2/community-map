@@ -229,7 +229,23 @@ const applyMutedBasemapPalette = (style) => {
       layer.layout = { ...(layer.layout || {}), visibility: "none" };
     }
     if (layer.id === "places_locality") {
-      layer.layout = { ...(layer.layout || {}), minzoom: 4.5, "icon-image": "" };
+      layer.minzoom = 4.5;
+      const nextLayout = { ...(layer.layout || {}), "icon-image": "" };
+      // Remove any accidental minzoom from layout to avoid validation errors.
+      if ("minzoom" in nextLayout) delete nextLayout.minzoom;
+      layer.layout = nextLayout;
+    }
+  });
+
+  // Strip most symbols except core place + road labels to keep the map calm.
+  layers.forEach((layer) => {
+    if (layer.type !== "symbol") return;
+    const keep =
+      layer.id === "places_locality" ||
+      layer.id === "places_country" ||
+      (typeof layer.id === "string" && layer.id.includes("road"));
+    if (!keep) {
+      layer.layout = { ...(layer.layout || {}), visibility: "none" };
     }
   });
 
@@ -238,6 +254,46 @@ const applyMutedBasemapPalette = (style) => {
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
+
+const normalizePadding = (padding) => {
+  if (!padding) return null;
+  return {
+    top: Number(padding.top) || 0,
+    bottom: Number(padding.bottom) || 0,
+    left: Number(padding.left) || 0,
+    right: Number(padding.right) || 0,
+  };
+};
+
+const paddingEquals = (a, b, epsilon = 0.25) => {
+  const padA = normalizePadding(a);
+  const padB = normalizePadding(b);
+  if (!padA && !padB) return true;
+  if (!padA || !padB) return false;
+  return (
+    Math.abs(padA.top - padB.top) <= epsilon &&
+    Math.abs(padA.bottom - padB.bottom) <= epsilon &&
+    Math.abs(padA.left - padB.left) <= epsilon &&
+    Math.abs(padA.right - padB.right) <= epsilon
+  );
+};
+
+const cameraMatches = (map, destination, zoom, padding) => {
+  if (!map || !destination) return false;
+  const currentCenter = map.getCenter();
+  const currentZoom = map.getZoom();
+  const currentPadding = map.getPadding ? map.getPadding() : null;
+  const epsilonCenter = 1e-6;
+  const epsilonZoom = 0.01;
+  return (
+    Math.abs(currentCenter.lng - destination[0]) <= epsilonCenter &&
+    Math.abs(currentCenter.lat - destination[1]) <= epsilonCenter &&
+    Math.abs(currentZoom - zoom) <= epsilonZoom &&
+    paddingEquals(currentPadding, padding)
+  );
+};
+
+const styleCache = new Map();
 
 const buildCircleFeatureCollection = (center, radiusFeet) => {
   if (!center) return { type: "FeatureCollection", features: [] };
@@ -589,8 +645,14 @@ function MapView({
   const activeTouchIdsRef = useRef(new Set());
   const cachedTouchEventsRef = useRef(new Map());
   const forwardingMultiTouchRef = useRef(false);
-  const lastMobileCenterRef = useRef("");
-  const lastSelectedCenteredRef = useRef(null);
+  const lastFocusedPinRef = useRef(null);
+  const prevSelectedPinIdRef = useRef(null);
+  const lastCameraRef = useRef({
+    center: [0, 20],
+    zoom: 2,
+    padding: null,
+  });
+  const cameraEaseFrameRef = useRef(null);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -660,6 +722,34 @@ function MapView({
 
     return [...approved, ...pending];
   }, [pins, pendingPins]);
+
+  const requestCameraEase = useCallback(
+    ({ center, zoom, padding, duration, easing }) => {
+      const map = mapRef.current;
+      if (!map || !center || typeof zoom !== "number") return;
+      const normalizedPadding = normalizePadding(padding);
+      if (cameraMatches(map, center, zoom, normalizedPadding)) {
+        lastCameraRef.current = { center, zoom, padding: normalizedPadding };
+        return;
+      }
+      if (cameraEaseFrameRef.current) {
+        cancelAnimationFrame(cameraEaseFrameRef.current);
+        cameraEaseFrameRef.current = null;
+      }
+      cameraEaseFrameRef.current = requestAnimationFrame(() => {
+        cameraEaseFrameRef.current = null;
+        map.easeTo({
+          center,
+          zoom,
+          duration,
+          easing,
+          ...(normalizedPadding ? { padding: normalizedPadding } : {}),
+        });
+        lastCameraRef.current = { center, zoom, padding: normalizedPadding };
+      });
+    },
+    []
+  );
 
   const applyVisualNodes = useCallback((nextNodes) => {
     setVisualNodes(nextNodes.map((node) => ({ ...node, phase: "active" })));
@@ -1186,11 +1276,17 @@ function MapView({
       }
       try {
         setMapError(null);
-        const response = await fetch(styleUrl);
-        if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
-        const baseStyle = await response.json();
+        const cached = styleCache.get(styleUrl);
+        const stylePromise = cached || (async () => {
+          const response = await fetch(styleUrl, { cache: "force-cache" });
+          if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
+          const baseStyle = await response.json();
+          return applyMutedBasemapPalette(baseStyle);
+        })();
+        if (!cached) styleCache.set(styleUrl, stylePromise);
+        const styled = await stylePromise;
         if (!cancelled) {
-          setResolvedStyle(applyMutedBasemapPalette(baseStyle));
+          setResolvedStyle(styled);
         }
       } catch (error) {
         console.error("map style load error", error);
@@ -1214,8 +1310,14 @@ function MapView({
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: resolvedStyle,
-      center: [0, 20],
-      zoom: 2,
+      center: lastCameraRef.current?.center || [0, 20],
+      zoom: lastCameraRef.current?.zoom || 2,
+      padding: lastCameraRef.current?.padding || undefined,
+      minZoom: 2,
+      maxZoom: 16,
+      fadeDuration: 0,
+      maxTileCacheSize: 2048,
+      renderWorldCopies: false,
     });
 
     mapRef.current = map;
@@ -1295,9 +1397,20 @@ function MapView({
       setIsInteracting(true);
     });
 
+    const recordCamera = () => {
+      const center = map.getCenter();
+      const padding = map.getPadding && map.getPadding();
+      lastCameraRef.current = {
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+        padding: padding || null,
+      };
+    };
+
     map.on("moveend", () => {
       isMapMovingRef.current = false;
       setIsInteracting(false);
+      recordCamera();
       scheduleLayout();
     });
 
@@ -1309,12 +1422,14 @@ function MapView({
     map.on("zoomend", () => {
       isMapMovingRef.current = false;
       setIsInteracting(false);
+      recordCamera();
       scheduleLayout();
     });
 
     map.on("idle", () => {
       isMapMovingRef.current = false;
       setIsInteracting(false);
+      recordCamera();
       scheduleLayout();
     });
     map.on("resize", scheduleLayout);
@@ -1676,44 +1791,33 @@ function MapView({
   }, [panelPlacement, pinPanelBounds, titleCardBounds]);
 
   useEffect(() => {
-    if (panelPlacement !== "bottom") {
-      lastMobileCenterRef.current = "";
-      return;
-    }
     if (!mapLoaded) return;
-    if (!selectedPinId) {
-      lastMobileCenterRef.current = "";
-      return;
-    }
-    if (isInteracting) return;
+    if (selectedPinId === null || selectedPinId === undefined) return;
+    if (prevSelectedPinIdRef.current === selectedPinId) return;
+    prevSelectedPinIdRef.current = selectedPinId;
     const map = mapRef.current;
     if (!map) return;
-    const padding = computeMobilePadding();
-    if (!padding) return;
-
     const selectedPin = combinedPins.find((pin) => pin.id === selectedPinId);
     if (!selectedPin || typeof selectedPin.lng !== "number" || typeof selectedPin.lat !== "number") return;
 
-    if (lastSelectedCenteredRef.current === selectedPinId) return;
-    lastSelectedCenteredRef.current = selectedPinId;
+    const destination = [selectedPin.lng, selectedPin.lat];
+    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+    const targetZoom = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
-    map.easeTo({
-      center: [selectedPin.lng, selectedPin.lat],
-      zoom: map.getZoom(),
-      padding,
-      duration: 320,
+    requestCameraEase({
+      center: destination,
+      zoom: targetZoom,
+      padding: mobilePadding || undefined,
+      duration: smoothDuration(map.getZoom(), targetZoom),
       easing: easeInOut,
     });
-  }, [
-    combinedPins,
-    computeMobilePadding,
-    isInteracting,
-    mapLoaded,
-    panelPlacement,
-    pinPanelBounds,
-    selectedPinId,
-    titleCardBounds,
-  ]);
+  }, [combinedPins, computeMobilePadding, mapLoaded, panelPlacement, requestCameraEase, selectedPinId]);
+
+  useEffect(() => {
+    if (selectedPinId === null || selectedPinId === undefined) {
+      prevSelectedPinIdRef.current = null;
+    }
+  }, [selectedPinId]);
 
   const handleNodeClick = useCallback(
     (event, node) => {
@@ -1745,26 +1849,26 @@ function MapView({
       if (node.pin && onPinSelectRef.current) {
         onPinSelectRef.current(node.pin);
       }
+      if (node.pin?.id !== undefined && node.pin?.id !== null) {
+      lastFocusedPinRef.current = node.pin.id;
+    }
 
-      const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+    const currentZoom = map.getZoom();
+    const targetZoomForClick = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
-      if (destination) {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        map.stop();
-        map.easeTo({
-          center: destination,
-          zoom: targetZoom,
-          padding: mobilePadding || undefined,
-          duration: smoothDuration(map.getZoom(), targetZoom),
-          easing: easeInOut,
-        });
-      }
-    },
-    [computeMobilePadding, panelPlacement]
-  );
+    if (destination) {
+      requestCameraEase({
+        center: destination,
+        zoom: targetZoomForClick,
+        padding: mobilePadding || undefined,
+        duration: smoothDuration(currentZoom, targetZoomForClick),
+        easing: easeInOut,
+      });
+    }
+  },
+  [computeMobilePadding, panelPlacement, requestCameraEase]
+);
 
   if (!styleUrl) {
     return (
