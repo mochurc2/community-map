@@ -295,6 +295,23 @@ const applyMutedBasemapPalette = (style, palette = MAP_PALETTES.light) => {
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const lngLatToUnitVector = ({ lng, lat }) => {
+  const phi = toRadians(lat);
+  const lambda = toRadians(lng);
+  const cosPhi = Math.cos(phi);
+  return [cosPhi * Math.cos(lambda), cosPhi * Math.sin(lambda), Math.sin(phi)];
+};
+const GLOBE_VISIBILITY_THRESHOLD = 0.12;
+const visibilityAlphaOnGlobe = (centerVec, lng, lat, fadeDegrees = 8) => {
+  if (!centerVec) return 1;
+  const pointVec = lngLatToUnitVector({ lng, lat });
+  const dot = centerVec[0] * pointVec[0] + centerVec[1] * pointVec[1] + centerVec[2] * pointVec[2];
+  if (dot <= 0) return 0;
+  const fadeStartDot = Math.cos(Math.PI / 2 - toRadians(fadeDegrees));
+  if (fadeStartDot <= 0) return dot > 0 ? 1 : 0;
+  return clamp01(dot / fadeStartDot);
+};
 
 const normalizePadding = (padding) => {
   const source = padding || {};
@@ -656,6 +673,8 @@ function MapView({
   panelPlacement = "side",
   titleCardBounds = { top: 0, bottom: 0, height: 0 },
   pinPanelBounds = null,
+  projection = "mercator",
+  onMapReady = () => {},
 }) {
   const { mode: themeMode } = useTheme();
   const mapContainerRef = useRef(null);
@@ -686,6 +705,7 @@ function MapView({
     if (themeMode === "dark") return STYLE_URLS.dark || fallback;
     return STYLE_URLS.light || STYLE_URLS.dark || null;
   }, [themeMode]);
+  const projectionName = projection === "globe" ? "globe" : "mercator";
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
   const dataAnimationUntilRef = useRef(0);
@@ -901,6 +921,19 @@ function MapView({
       const map = mapRef.current;
       if (!map) return;
       const ctx = measureContextRef.current;
+      const projectionInfo = map.getProjection?.();
+      const projectionType =
+        typeof projectionInfo === "string"
+          ? projectionInfo
+          : projectionInfo?.type || projectionInfo?.name;
+      const isGlobeProjection = projectionType === "globe";
+      const mapCenter = map.getCenter();
+      const centerVec =
+        isGlobeProjection && mapCenter
+          ? lngLatToUnitVector({ lng: mapCenter.lng, lat: mapCenter.lat })
+          : null;
+      const zoom = map.getZoom?.() ?? 0;
+      const packingScale = zoom <= 4 ? 0.9 : zoom <= 5.5 ? 0.94 : 1;
 
       const container = map.getContainer();
       const bounds = {
@@ -913,6 +946,11 @@ function MapView({
 
       combinedPins.forEach((pin) => {
         if (typeof pin.lat !== "number" || typeof pin.lng !== "number") return;
+        const visibilityAlpha =
+          isGlobeProjection && centerVec
+            ? visibilityAlphaOnGlobe(centerVec, pin.lng, pin.lat, 10)
+            : 1;
+        if (isGlobeProjection && visibilityAlpha <= GLOBE_VISIBILITY_THRESHOLD) return;
         const { x, y } = map.project([pin.lng, pin.lat]);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return;
         const labelText = formatLabelText(pin);
@@ -923,6 +961,7 @@ function MapView({
           y,
           labelText,
           isSelected: selectedPinId !== null && selectedPinId !== undefined && pin.id === selectedPinId,
+          visibilityAlpha,
         });
       });
 
@@ -990,6 +1029,10 @@ function MapView({
           const centerY = clusterPins.reduce((sum, pin) => sum + pin.y, 0) / clusterPins.length;
           const centerLngLat = map.unproject([centerX, centerY]);
           const clusterKey = buildClusterKey(clusterPins);
+          const clusterAlpha = clusterPins.reduce(
+            (max, pin) => Math.max(max, pin.visibilityAlpha ?? 1),
+            0
+          );
 
           const cache = pinOffsetCacheRef.current;
 
@@ -1009,6 +1052,7 @@ function MapView({
               sortOrder: pin.__order ?? 0,
               isSelected: pin.isSelected,
               clusterRoot: root,
+              visibilityAlpha: clusterAlpha,
             });
             cache.set(pin.__key, { dx: 0, dy: 0, idx: 0 });
             return;
@@ -1048,12 +1092,13 @@ function MapView({
               category: "cluster",
               sortOrder: -1,
               clusterRoot: root,
+              visibilityAlpha: clusterAlpha,
             });
           }
 
           const clusterCache = new Map();
           const occupiedOffsets = new Set();
-          const spacing = PIN_DIAMETER * 1.02 + CLUSTER_COLLISION_PADDING * 0.3;
+          const spacing = (PIN_DIAMETER * 1.02 + CLUSTER_COLLISION_PADDING * 0.3) * packingScale;
           clusterPins.forEach((pin) => {
             const cached = cache.get(pin.__key);
             if (cached && cached.idx !== undefined && cached.idx >= 0) {
@@ -1118,8 +1163,10 @@ function MapView({
             availableOffsets[Math.min(pinCount, availableOffsets.length) - 1]?.radius || PIN_DIAMETER;
           const relaxedRadius =
             availableOffsets[Math.min(pinCount + 3, availableOffsets.length) - 1]?.radius || compactRadius;
-          const desiredRadius = (usingPlus ? compactRadius * 0.92 : compactRadius * 0.74) || PIN_DIAMETER;
-          const radiusHardCap = relaxedRadius + PIN_RADIUS * 0.6;
+          const radiusTightening = packingScale;
+          const desiredRadius =
+            (usingPlus ? compactRadius * 0.92 : compactRadius * 0.74) * radiusTightening || PIN_DIAMETER;
+          const radiusHardCap = (relaxedRadius + PIN_RADIUS * 0.6) * radiusTightening;
           const preferredMaxIdx = Math.max(
             0,
             Math.min(availableOffsets.length - 1, pinCount + 3)
@@ -1132,8 +1179,9 @@ function MapView({
             }
           });
           const dim = Math.max(pinCount, availableOffsets.length);
-          const costMatrix = Array.from({ length: dim }, () => Array(dim).fill(1e6));
+          const pinnedOffsets = new Map();
 
+          const costMatrix = Array.from({ length: dim }, () => Array(dim).fill(1e6));
           visiblePins.forEach((entry, i) => {
             const cached = cache.get(entry.pin.__key);
             const cacheWeight = clusterPins.length <= 6 ? 0.35 : 1;
@@ -1147,7 +1195,8 @@ function MapView({
                 off.idx === 0 &&
                 clusterPins.length > 1 &&
                 !isOwner &&
-                !centerAvailable
+                !centerAvailable &&
+                usingPlus
               ) {
                 costMatrix[i][j] = 1e12;
                 return;
@@ -1161,19 +1210,21 @@ function MapView({
               const overflowPenalty =
                 off.radius > radiusHardCap ? (off.radius - radiusHardCap) ** 2 * 3.4 : 0;
               const slotPenalty = off.idx > preferredMaxIdx ? (off.idx - preferredMaxIdx) * 2600 : 0;
-              const centerBonus = !usingPlus && off.idx === 0 ? -1400 : 0;
-              const centerGuard =
-                off.idx === 0 && clusterPins.length > 1 && (!cached || cached.idx !== 0) ? 24000 : 0;
+              const centerBonus =
+                !usingPlus && off.idx === 0
+                  ? (clusterPins.length <= 7 ? -16000 : -2200)
+                  : 0;
+              const centerGuard = 0;
               const displacementPenalty =
-                occupiedOffsets.has(off.idx) && (!cached || cached.idx !== off.idx) ? 12000 : 0;
+                occupiedOffsets.has(off.idx) && (!cached || cached.idx !== off.idx) ? 6000 : 0;
               const neighborBonus = !occupiedOffsets.has(off.idx) ? -off.neighborCount * 520 : 0;
               const ownerPenalty = owner && owner !== entry.pin.__key ? 1.2e7 : 0;
               const lockedPenalty =
                 owner && owner !== entry.pin.__key && off.neighborCount >= 6 ? 5e8 : 0;
               const cacheBonus =
-                cached && cached.idx !== undefined && cached.idx === off.idx ? -25000 * cacheWeight : 0;
+                cached && cached.idx !== undefined && cached.idx === off.idx ? -42000 * cacheWeight : 0;
               const cachePenalty =
-                cached && cached.idx !== undefined && cached.idx !== off.idx ? 5200 * cacheWeight : 0;
+                cached && cached.idx !== undefined && cached.idx !== off.idx ? 4800 * cacheWeight : 0;
               costMatrix[i][j] =
                 distCost +
                 angleCost +
@@ -1193,7 +1244,6 @@ function MapView({
 
           while (costMatrix.length < dim) costMatrix.push(Array(dim).fill(1e6));
           const assignment = pinCount > 0 ? hungarian(costMatrix).slice(0, pinCount) : [];
-          const pinnedOffsets = new Map();
           assignment.forEach((offsetIdx, pinIdx) => {
             const pin = visiblePins[pinIdx].pin;
             const off = availableOffsets[offsetIdx] || { dx: 0, dy: 0, idx: -1 };
@@ -1206,6 +1256,23 @@ function MapView({
             if (!off || off.idx === undefined || off.idx < 0) return;
             occupancy.set(off.idx, pinKey);
           });
+          // Ensure small clusters fill the center if available to avoid ring gaps.
+          const centerOffset = availableOffsets.find((off) => off.idx === 0);
+          if (centerOffset && !occupancy.has(0) && pinCount > 0 && clusterPins.length <= 8) {
+            let bestKey = null;
+            let bestRadius = Infinity;
+            pinnedOffsets.forEach((off, pinKey) => {
+              const radius = off ? Math.hypot(off.dx, off.dy) : Infinity;
+              if (radius < bestRadius) {
+                bestRadius = radius;
+                bestKey = pinKey;
+              }
+            });
+            if (bestKey) {
+              pinnedOffsets.set(bestKey, centerOffset);
+              occupancy.set(0, bestKey);
+            }
+          }
           // Gentle hole fix: single move from a sparsely connected outer pin into the densest hole.
           const holes = availableOffsets
             .map((off, idx) => {
@@ -1259,6 +1326,7 @@ function MapView({
               sortOrder: pin.__order ?? 0,
               isSelected: pin.isSelected,
               clusterRoot: root,
+              visibilityAlpha: pin.visibilityAlpha ?? clusterAlpha,
             });
             cache.set(pin.__key, { dx: offset.dx, dy: offset.dy, idx: offset.idx });
           });
@@ -1337,6 +1405,7 @@ function MapView({
               priority: basePriority,
               side: "right",
               pinKey: node.key,
+              visibilityAlpha: node.visibilityAlpha ?? 1,
             },
             {
               key: `label-${node.key}-left`,
@@ -1347,6 +1416,7 @@ function MapView({
               priority: basePriority + 1,
               side: "left",
               pinKey: node.key,
+              visibilityAlpha: node.visibilityAlpha ?? 1,
             },
           ];
         });
@@ -1472,9 +1542,11 @@ function MapView({
       maxTileCacheSize: 2048,
       reuseMaps: true,
       renderWorldCopies: false,
+      projection: { type: projectionName, name: projectionName },
     });
 
     mapRef.current = map;
+    onMapReady(map);
 
     map.on("load", async () => {
       await installCustomLayers(map);
@@ -1542,7 +1614,7 @@ function MapView({
         onMapClickRef.current(e.lngLat);
       }
     });
-  }, [resolvedStyle, ensureEmojiImage, installCustomLayers, runLayout, styleUrlMemo, themeMode]);
+  }, [resolvedStyle, ensureEmojiImage, installCustomLayers, projectionName, runLayout, styleUrlMemo, themeMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1583,8 +1655,9 @@ function MapView({
       mapRef.current.remove();
       mapRef.current = null;
     }
+    onMapReady(null);
     setMapLoaded(false);
-  }, []);
+  }, [onMapReady]);
 
   useEffect(() => {
     const signature = `${combinedPins.length}:${combinedPins
@@ -2041,7 +2114,7 @@ function MapView({
           const emoji = node.isPlus ? CLUSTER_PLUS_EMOJI : node.category === "pending" ? PENDING_REVIEW_EMOJI : node.icon || DEFAULT_EMOJI;
           const transitionSpeed = shouldAnimate ? Math.round(ANIMATION_TIMING.move * 1.25) : 0;
           const baseScale = node.isPlus ? 1 : node.clusterSize > 1 ? 0.97 : 1;
-          const opacity = 1;
+          const opacity = node.visibilityAlpha ?? 1;
           const style = {
             transform: `translate(${node.x - PIN_RADIUS}px, ${node.y - PIN_RADIUS}px) scale(${baseScale})`,
             opacity,
@@ -2083,7 +2156,8 @@ function MapView({
           const now = typeof performance !== "undefined" ? performance.now() : Date.now();
           const shouldAnimate = !isInteracting && now < dataAnimationUntilRef.current;
           const transitionSpeed = shouldAnimate ? Math.round(ANIMATION_TIMING.label * 1.1) : 0;
-          const baseOpacity = shouldAnimate && label.phase === "exit" ? 0 : 1;
+          const alpha = label.visibilityAlpha ?? 1;
+          const baseOpacity = alpha * (shouldAnimate && label.phase === "exit" ? 0 : 1);
           const style = {
             left: `${label.anchorX}px`,
             top: `${label.anchorY}px`,

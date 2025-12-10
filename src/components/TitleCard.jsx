@@ -1,6 +1,7 @@
 import { Info, Plus, Filter, Scissors } from 'lucide-react';
 import { forwardRef } from 'react';
 import ThemeToggleButton from './ThemeToggleButton';
+import ProjectionToggleButton from './ProjectionToggleButton';
 
 /**
  * TitleCard Component
@@ -13,7 +14,7 @@ import ThemeToggleButton from './ThemeToggleButton';
  * @param {React.Ref} ref - Forwarded ref to the title card element
  */
 export const TitleCard = forwardRef(function TitleCard(
-  { activePanel, onTogglePanel },
+  { activePanel, onTogglePanel, projectionMode = "mercator", onToggleProjection = () => {} },
   ref
 ) {
   return (
@@ -51,6 +52,7 @@ export const TitleCard = forwardRef(function TitleCard(
           <span>Filter</span>
         </button>
         <ThemeToggleButton />
+        <ProjectionToggleButton projection={projectionMode} onToggle={onToggleProjection} />
       </div>
     </div>
   );
