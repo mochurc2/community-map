@@ -667,6 +667,7 @@ function MapView({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
   const [resolvedStyle, setResolvedStyle] = useState(null);
+  const [resolvedStyleKey, setResolvedStyleKey] = useState(null);
   const [isInteracting, setIsInteracting] = useState(false);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
@@ -1414,6 +1415,7 @@ function MapView({
     const loadStyle = async () => {
     if (!styleUrlMemo) {
       setResolvedStyle(null);
+      setResolvedStyleKey(null);
       return;
     }
     try {
@@ -1431,11 +1433,13 @@ function MapView({
       const styled = await stylePromise;
       if (!cancelled) {
         setResolvedStyle(styled);
+        setResolvedStyleKey(cacheKey || null);
       }
     } catch (error) {
       console.error("map style load error", error);
       if (!cancelled) {
         setResolvedStyle(null);
+        setResolvedStyleKey(null);
         setMapError("Map style failed to load");
       }
     }
@@ -1543,14 +1547,15 @@ function MapView({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !resolvedStyle) return;
-    const nextKey = styleUrlMemo ? `${styleUrlMemo}|${themeMode}` : "inline";
-    if (currentStyleKeyRef.current === nextKey) return;
+    const targetKey = styleUrlMemo ? `${styleUrlMemo}|${themeMode}` : null;
+    if (!targetKey || resolvedStyleKey !== targetKey) return;
+    if (currentStyleKeyRef.current === targetKey) return;
 
     setMapLoaded(false);
 
     const handleStyleData = () => {
       installCustomLayers(map).then(() => {
-        currentStyleKeyRef.current = nextKey;
+        currentStyleKeyRef.current = targetKey;
         setMapLoaded(true);
         scheduleLayoutRef.current?.();
       });
@@ -1563,7 +1568,7 @@ function MapView({
     return () => {
       map.off("styledata", handleStyleData);
     };
-  }, [installCustomLayers, resolvedStyle, styleUrlMemo, themeMode]);
+  }, [installCustomLayers, resolvedStyle, resolvedStyleKey, styleUrlMemo, themeMode]);
 
   useEffect(() => () => {
     if (animationFrameRef.current) {
