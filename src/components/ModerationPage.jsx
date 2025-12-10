@@ -141,27 +141,10 @@ function ModerationPage() {
     contact_methods: "",
   });
   const [savingChanges, setSavingChanges] = useState(false);
-  const defaultBubbleSet = useMemo(() => getDefaultBubbleOptions(), []);
   const [hasAccess, setHasAccess] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
-
-  const buildDefaultModerationOptions = useCallback(
-    () =>
-      Object.fromEntries(
-        Object.entries(defaultBubbleSet).map(([field, labels]) => [
-          field,
-          labels.map((label, idx) => ({
-            id: `default-${field}-${idx}`,
-            label,
-            source: "default",
-            status: "approved",
-          })),
-        ])
-      ),
-    [defaultBubbleSet]
-  );
 
   const mapRowsToBubbles = useCallback(
     (rows) => {
@@ -171,8 +154,6 @@ function ModerationPage() {
         interest_tags: [],
         contact_methods: [],
       };
-
-      const defaults = buildDefaultModerationOptions();
 
       rows?.forEach((row) => {
         if (grouped[row.field]) {
@@ -185,18 +166,9 @@ function ModerationPage() {
         }
       });
 
-      Object.keys(grouped).forEach((field) => {
-        const existingLabels = new Set(grouped[field].map((opt) => opt.label.toLowerCase()));
-        defaults[field].forEach((opt) => {
-          if (!existingLabels.has(opt.label.toLowerCase())) {
-            grouped[field].push(opt);
-          }
-        });
-      });
-
       return grouped;
     },
-    [buildDefaultModerationOptions]
+    []
   );
 
   const refreshBubbleOptions = useCallback(async () => {
@@ -215,10 +187,14 @@ function ModerationPage() {
     } catch (err) {
       console.error(err);
       setBubbleError(err.message);
-      const fallback = buildDefaultModerationOptions();
-      setDraftBubbleOptions(fallback);
+      setDraftBubbleOptions({
+        gender_identity: [],
+        seeking: [],
+        interest_tags: [],
+        contact_methods: [],
+      });
     }
-  }, [buildDefaultModerationOptions, mapRowsToBubbles]);
+  }, [mapRowsToBubbles]);
 
   useEffect(() => {
     supabase.auth
@@ -1091,7 +1067,7 @@ function ModerationPage() {
               <div>
                 <p className="eyebrow">Pending changes</p>
                 <p className="muted" style={{ marginTop: "0.2rem" }}>
-                  Confirm below to sync to Supabase. Built-in defaults stay local and are not auto-saved.
+                  Confirm below to sync to Supabase.
                 </p>
               </div>
               {pendingChanges.length === 0 ? (
