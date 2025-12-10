@@ -190,13 +190,18 @@ export function usePinForm({
       return;
     }
 
-    if (ageNumber < 18) {
-      setSubmitError("You must be 18 or older to post a pin.");
+    if (ageNumber < 18 || ageNumber > 120) {
+      setSubmitError("Enter an age between 18 and 120.");
       return;
     }
 
     if (form.genders.length === 0) {
       setSubmitError("Select at least one gender option.");
+      return;
+    }
+
+    if (!Array.isArray(form.interest_tags) || form.interest_tags.length < 3) {
+      setSubmitError("Select at least three interests so others can find you.");
       return;
     }
 

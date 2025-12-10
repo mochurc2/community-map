@@ -60,13 +60,17 @@ export function AddPinPanel() {
     setShowFullAddForm,
   } = useAppContext();
 
+  const ageNumber = Number(form.age);
+  const showAgeWarning =
+    form.age !== "" && (Number.isNaN(ageNumber) || ageNumber < 18 || ageNumber > 120);
+
   const addPanelIntro = hasSubmitted ? null : (
     <div className="panel-section">
       <div className="label location-label">
         <div className="label-heading">
-          <span>Location *</span>
+          <span>Location</span>
           <p className="helper-text label-helper">
-            We randomize your pin within 1,500 ft of this spot to help keep your exact
+            Required. We randomize your pin within 1,500 ft of this spot to help keep your exact
             location private.
           </p>
         </div>
@@ -117,13 +121,15 @@ export function AddPinPanel() {
           />
 
           <label className="label">
-            Nickname *
+            <div className="label-heading">
+              <span>Nickname</span>
+            </div>
+            <p className="helper-text label-helper">Required. Up to 12 characters.</p>
             <input
               type="text"
               name="nickname"
               value={form.nickname}
               onChange={handleChange}
-              placeholder="Up to 12 characters"
               className="input"
               maxLength={12}
               required
@@ -131,7 +137,10 @@ export function AddPinPanel() {
           </label>
 
           <label className="label">
-            Age *
+            <div className="label-heading">
+              <span>Age</span>
+            </div>
+            <p className="helper-text label-helper">Required. Enter a number between 18 and 120.</p>
             <input
               type="number"
               name="age"
@@ -142,10 +151,13 @@ export function AddPinPanel() {
               max={120}
               required
             />
+            {showAgeWarning && (
+              <span className="field-error">Enter an age between 18 and 120.</span>
+            )}
           </label>
 
           <BubbleSelector
-            label="Gender *"
+            label="Gender"
             helper="Required. Select all that apply."
             options={bubbleOptions.gender_identity}
             multiple
@@ -155,7 +167,7 @@ export function AddPinPanel() {
 
           <BubbleSelector
             label="Interested in"
-            helper="Select all that apply"
+            helper="Optional. Select all that apply."
             options={bubbleOptions.seeking}
             multiple
             value={form.seeking}
@@ -163,8 +175,8 @@ export function AddPinPanel() {
           />
 
           <BubbleSelector
-            label="Interests"
-            helper="Select all that apply"
+            label="Interests and looking for"
+            helper="Required. Select at least 3 interests to continue."
             options={interestOptionsForForm}
             multiple
             value={form.interest_tags}
@@ -172,18 +184,23 @@ export function AddPinPanel() {
             onAddOption={(option) => handleCustomOption("interest_tags", option)}
             allowCustom
             prioritizeSelected
+            showHiddenCount
             footnote="Custom interests are subject to moderation and may not appear until they are approved."
           />
 
           <label className="label">
-            Short note
+            <div className="label-heading">
+              <span>Short note</span>
+            </div>
+            <p className="helper-text label-helper">
+              Anything you want others to know. Your note is subject to moderation.
+            </p>
             <textarea
               name="note"
               value={form.note}
               onChange={handleChange}
               rows={3}
               maxLength={250}
-              placeholder="Anything you want others to know."
               className="input"
             />
             <span className="helper-text">{form.note.length}/250</span>
@@ -192,11 +209,12 @@ export function AddPinPanel() {
           <div className="contact-section">
             <BubbleSelector
               label="Contact info"
-              helper="Select services to show and add your handle or link"
+              helper="Optional. Select services to show and add your handle or link."
               options={orderedContactOptions}
               multiple
               value={form.contact_channels}
               onChange={handleContactChannels}
+              showHiddenCount
             />
 
             {form.contact_channels.length > 0 && (
@@ -226,7 +244,10 @@ export function AddPinPanel() {
               <div className="label-heading">
                 <span>Delete pin after</span>
               </div>
-              <p className="helper-text label-helper">We will remove at 11:59 PM on that date.</p>
+              <p className="helper-text label-helper">
+                We will remove at 11:59 PM on that date. The default is in one year. This feature is
+                great for trips to another city.
+              </p>
               <div className="input-with-icon">
                 <CalendarClock size={18} />
                 <input
@@ -264,6 +285,10 @@ export function AddPinPanel() {
 
           {submitError && <p className="status error">{submitError}</p>}
           {submitMsg && <p className="status success">{submitMsg}</p>}
+          <p className="helper-text label-helper">
+            You will not be able to edit your pin after submission. Please use the report pin feature
+            if you would like your pin removed or changed after submission.
+          </p>
 
           <button type="submit" disabled={submitting} className="primary">
             {submitting ? "Submitting…" : "Submit pin for review"}
