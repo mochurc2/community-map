@@ -218,6 +218,21 @@ const applyMutedBasemapPalette = (style) => {
   setTextColors("places_locality", MAP_PALETTE.labelPrimary);
   setTextColors("places_country", MAP_PALETTE.labelSecondary);
 
+  const hiddenLayers = new Set([
+    "address_label",
+    "water_waterway_label",
+    "places_subplace",
+    "places_region",
+  ]);
+  layers.forEach((layer) => {
+    if (hiddenLayers.has(layer.id)) {
+      layer.layout = { ...(layer.layout || {}), visibility: "none" };
+    }
+    if (layer.id === "places_locality") {
+      layer.layout = { ...(layer.layout || {}), minzoom: 4.5, "icon-image": "" };
+    }
+  });
+
   return { ...style, layers };
 };
 
@@ -575,6 +590,7 @@ function MapView({
   const cachedTouchEventsRef = useRef(new Map());
   const forwardingMultiTouchRef = useRef(false);
   const lastMobileCenterRef = useRef("");
+  const lastSelectedCenteredRef = useRef(null);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -1678,9 +1694,8 @@ function MapView({
     const selectedPin = combinedPins.find((pin) => pin.id === selectedPinId);
     if (!selectedPin || typeof selectedPin.lng !== "number" || typeof selectedPin.lat !== "number") return;
 
-    const signature = `${selectedPinId}:${padding.top}-${padding.bottom}-${padding.left}-${padding.right}:${map.getZoom()}`;
-    if (lastMobileCenterRef.current === signature) return;
-    lastMobileCenterRef.current = signature;
+    if (lastSelectedCenteredRef.current === selectedPinId) return;
+    lastSelectedCenteredRef.current = selectedPinId;
 
     map.easeTo({
       center: [selectedPin.lng, selectedPin.lat],
@@ -1733,23 +1748,19 @@ function MapView({
 
       const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
 
-      if (mobilePadding && destination) {
+      if (destination) {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
           animationFrameRef.current = null;
         }
+        map.stop();
         map.easeTo({
           center: destination,
           zoom: targetZoom,
-          padding: mobilePadding,
+          padding: mobilePadding || undefined,
           duration: smoothDuration(map.getZoom(), targetZoom),
           easing: easeInOut,
         });
-        return;
-      }
-
-      if (destination) {
-        centerThenZoom(map, destination, targetZoom, animationFrameRef);
       }
     },
     [computeMobilePadding, panelPlacement]
