@@ -1,5 +1,6 @@
 import { Info, Plus, Filter, Scissors } from 'lucide-react';
 import { forwardRef } from 'react';
+import ThemeToggleButton from './ThemeToggleButton';
 
 /**
  * TitleCard Component
@@ -49,6 +50,7 @@ export const TitleCard = forwardRef(function TitleCard(
           <Filter size={18} />
           <span>Filter</span>
         </button>
+        <ThemeToggleButton />
       </div>
     </div>
   );

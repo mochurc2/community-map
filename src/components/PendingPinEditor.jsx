@@ -276,8 +276,8 @@ function PendingPinEditor({
         marginTop: "0.75rem",
         padding: "0.9rem 0.85rem 0.4rem",
         borderRadius: 12,
-        border: "1px solid #e5e7eb",
-        background: "#f9fafb",
+        border: "1px solid var(--color-border)",
+        background: "var(--surface-raised)",
       }}
     >
       <div className="flex-between" style={{ alignItems: "flex-start", gap: "0.5rem" }}>

@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { getGenderAbbreviation } from "./pinUtils";
+import { useTheme } from "../context";
 import {
   PIN_DIAMETER,
   PIN_RADIUS,
@@ -75,40 +76,80 @@ const centerThenZoom = (map, center, targetZoom, animationFrameRef) => {
 const LABEL_FONT_PRIMARY = '600 13px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 const LABEL_FONT_SECONDARY = '12px "Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 
-const MAP_PALETTE = {
-  background: "#f6f4ef",
-  earth: "#f1efea",
-  land: "#ece9e2",
-  urban: "#e8e4dd",
-  farmland: "#e6eadb",
-  scrub: "#dfe6d6",
-  glacier: "#f7f7f5",
-  beach: "#e9e3d5",
-  park: "#cddbcf",
-  parkDeep: "#c4d1c5",
-  pier: "#dedad2",
-  pedestrian: "#eae6df",
-  runway: "#e5e3dd",
-  water: "#b6c8d9",
-  waterLine: "#9fb5c8",
-  building: "#d8d3c9",
-  roadMain: "#fdfbf8",
-  roadMinor: "#f3f0ea",
-  roadCasing: "#d5cfc6",
-  rail: "#a1a8b3",
-  boundary: "#c6c0b5",
-  boundaryBold: "#b8b1a3",
-  labelPrimary: "#4b5563",
-  labelSecondary: "#606776",
-  labelHalo: "#f6f4ef",
-  poi: "#4f6277",
-  waterLabel: "#4f657a",
-  overlayRadiusFill: "rgba(92, 115, 141, 0.18)",
-  overlayRadiusStroke: "#74859d",
-  overlayPendingStroke: "#4a5f82",
+const MAP_PALETTES = {
+  light: {
+    background: "#f6f4ef",
+    earth: "#f1efea",
+    land: "#ece9e2",
+    urban: "#e8e4dd",
+    farmland: "#e6eadb",
+    scrub: "#dfe6d6",
+    glacier: "#f7f7f5",
+    beach: "#e9e3d5",
+    park: "#cddbcf",
+    parkDeep: "#c4d1c5",
+    pier: "#dedad2",
+    pedestrian: "#eae6df",
+    runway: "#e5e3dd",
+    airport: "#e5e3dd",
+    industrial: "#d6dcdf",
+    water: "#b6c8d9",
+    waterLine: "#9fb5c8",
+    building: "#d8d3c9",
+    roadMain: "#fdfbf8",
+    roadMinor: "#f3f0ea",
+    roadCasing: "#d5cfc6",
+    rail: "#a1a8b3",
+    boundary: "#c6c0b5",
+    boundaryBold: "#b8b1a3",
+    labelPrimary: "#4b5563",
+    labelSecondary: "#606776",
+    labelHalo: "#f6f4ef",
+    poi: "#4f6277",
+    waterLabel: "#4f657a",
+    overlayRadiusFill: "rgba(92, 115, 141, 0.18)",
+    overlayRadiusStroke: "#74859d",
+    overlayPendingStroke: "#4a5f82",
+    pendingCircle: "#ffffff",
+  },
+  dark: {
+    background: "#0d111c",
+    earth: "#0f1624",
+    land: "#111b2a",
+    urban: "#0f1c2d",
+    farmland: "#1a2531",
+    scrub: "#1c2c35",
+    glacier: "#1a2433",
+    beach: "#1b2531",
+    park: "#1b2f2f",
+    parkDeep: "#18302e",
+    pier: "#1a1f2b",
+    pedestrian: "#172233",
+    runway: "#1b2433",
+    airport: "#1c2739",
+    industrial: "#1d2738",
+    water: "#1f3046",
+    waterLine: "#2a4160",
+    building: "#1d2735",
+    roadMain: "#1c2435",
+    roadMinor: "#141b29",
+    roadCasing: "#2a3547",
+    rail: "#334155",
+    boundary: "#1f2a3d",
+    boundaryBold: "#28354d",
+    labelPrimary: "#cbd5e1",
+    labelSecondary: "#9fb1c8",
+    labelHalo: "#0d111c",
+    poi: "#cbd5e1",
+    waterLabel: "#9fb3cc",
+    overlayRadiusFill: "rgba(124, 157, 255, 0.18)",
+    overlayRadiusStroke: "#6e8ac7",
+    overlayPendingStroke: "#7aa0ff",
+    pendingCircle: "#161f2f",
+  },
 };
 
-const applyMutedBasemapPalette = (style) => {
+const applyMutedBasemapPalette = (style, palette = MAP_PALETTES.light) => {
   if (!style?.layers) return style;
 
   const layers = style.layers.map((layer) => {
@@ -132,7 +173,7 @@ const applyMutedBasemapPalette = (style) => {
     layer.paint = { ...(layer.paint || {}), ...paintUpdates };
   };
 
-  const setTextColors = (id, textColor, haloColor = MAP_PALETTE.labelHalo) => {
+  const setTextColors = (id, textColor, haloColor = palette.labelHalo) => {
     const layer = layers.find((candidate) => candidate.id === id);
     if (!layer) return;
     layer.paint = {
@@ -142,8 +183,8 @@ const applyMutedBasemapPalette = (style) => {
     };
   };
 
-  setPaint("background", { "background-color": MAP_PALETTE.background });
-  setPaint("earth", { "fill-color": MAP_PALETTE.earth });
+  setPaint("background", { "background-color": palette.background });
+  setPaint("earth", { "fill-color": palette.earth });
 
   const landcoverOpacity =
     layers.find((layer) => layer.id === "landcover")?.paint?.["fill-opacity"] ||
@@ -153,48 +194,48 @@ const applyMutedBasemapPalette = (style) => {
       "match",
       ["get", "kind"],
       "grassland",
-      MAP_PALETTE.park,
+      palette.park,
       "barren",
-      MAP_PALETTE.beach,
+      palette.beach,
       "urban_area",
-      MAP_PALETTE.urban,
+      palette.urban,
       "farmland",
-      MAP_PALETTE.farmland,
+      palette.farmland,
       "glacier",
-      MAP_PALETTE.glacier,
+      palette.glacier,
       "scrub",
-      MAP_PALETTE.scrub,
-      MAP_PALETTE.land,
+      palette.scrub,
+      palette.land,
     ],
     "fill-opacity": landcoverOpacity,
   });
 
-  setPaint("landuse_park", { "fill-color": MAP_PALETTE.park });
-  setPaint("landuse_urban_green", { "fill-color": MAP_PALETTE.park });
-  setPaint("landuse_hospital", { "fill-color": MAP_PALETTE.urban });
-  setPaint("landuse_industrial", { "fill-color": "#d6dcdf" });
-  setPaint("landuse_school", { "fill-color": MAP_PALETTE.urban });
-  setPaint("landuse_beach", { "fill-color": MAP_PALETTE.beach });
-  setPaint("landuse_zoo", { "fill-color": MAP_PALETTE.parkDeep });
-  setPaint("landuse_aerodrome", { "fill-color": MAP_PALETTE.runway });
-  setPaint("landuse_runway", { "fill-color": MAP_PALETTE.runway });
-  setPaint("landuse_pedestrian", { "fill-color": MAP_PALETTE.pedestrian });
-  setPaint("landuse_pier", { "fill-color": MAP_PALETTE.pier });
+  setPaint("landuse_park", { "fill-color": palette.park });
+  setPaint("landuse_urban_green", { "fill-color": palette.park });
+  setPaint("landuse_hospital", { "fill-color": palette.urban });
+  setPaint("landuse_industrial", { "fill-color": palette.industrial });
+  setPaint("landuse_school", { "fill-color": palette.urban });
+  setPaint("landuse_beach", { "fill-color": palette.beach });
+  setPaint("landuse_zoo", { "fill-color": palette.parkDeep });
+  setPaint("landuse_aerodrome", { "fill-color": palette.airport || palette.runway });
+  setPaint("landuse_runway", { "fill-color": palette.airport || palette.runway });
+  setPaint("landuse_pedestrian", { "fill-color": palette.pedestrian });
+  setPaint("landuse_pier", { "fill-color": palette.pier });
 
-  setPaint("water", { "fill-color": MAP_PALETTE.water });
-  setPaint("water_stream", { "line-color": MAP_PALETTE.waterLine });
-  setPaint("water_river", { "line-color": MAP_PALETTE.waterLine });
+  setPaint("water", { "fill-color": palette.water });
+  setPaint("water_stream", { "line-color": palette.waterLine });
+  setPaint("water_river", { "line-color": palette.waterLine });
 
-  setPaint("roads_runway", { "line-color": MAP_PALETTE.runway });
-  setPaint("roads_taxiway", { "line-color": MAP_PALETTE.runway });
-  setPaint("roads_rail", { "line-color": MAP_PALETTE.rail });
+  setPaint("roads_runway", { "line-color": palette.runway });
+  setPaint("roads_taxiway", { "line-color": palette.runway });
+  setPaint("roads_rail", { "line-color": palette.rail });
 
   layers.forEach((layer) => {
     if (!layer.id.startsWith("roads_") || layer.type !== "line") return;
     if (layer.id.includes("rail") || layer.id.includes("runway") || layer.id.includes("taxiway")) return;
 
     if (layer.id.includes("casing")) {
-      layer.paint = { ...(layer.paint || {}), "line-color": MAP_PALETTE.roadCasing };
+      layer.paint = { ...(layer.paint || {}), "line-color": palette.roadCasing };
       return;
     }
 
@@ -203,20 +244,20 @@ const applyMutedBasemapPalette = (style) => {
       layer.id.includes("major") ||
       layer.id.includes("link") ||
       layer.id.includes("bridge");
-    layer.paint = { ...(layer.paint || {}), "line-color": isMajor ? MAP_PALETTE.roadMain : MAP_PALETTE.roadMinor };
+    layer.paint = { ...(layer.paint || {}), "line-color": isMajor ? palette.roadMain : palette.roadMinor };
   });
 
-  setPaint("buildings", { "fill-color": MAP_PALETTE.building, "fill-opacity": 0.55 });
+  setPaint("buildings", { "fill-color": palette.building, "fill-opacity": 0.55 });
 
-  setPaint("boundaries", { "line-color": MAP_PALETTE.boundary });
-  setPaint("boundaries_country", { "line-color": MAP_PALETTE.boundaryBold });
+  setPaint("boundaries", { "line-color": palette.boundary });
+  setPaint("boundaries_country", { "line-color": palette.boundaryBold });
 
-  setTextColors("address_label", MAP_PALETTE.labelSecondary);
-  setTextColors("water_waterway_label", MAP_PALETTE.waterLabel);
-  setTextColors("places_subplace", MAP_PALETTE.labelSecondary);
-  setTextColors("places_region", MAP_PALETTE.labelSecondary);
-  setTextColors("places_locality", MAP_PALETTE.labelPrimary);
-  setTextColors("places_country", MAP_PALETTE.labelSecondary);
+  setTextColors("address_label", palette.labelSecondary);
+  setTextColors("water_waterway_label", palette.waterLabel);
+  setTextColors("places_subplace", palette.labelSecondary);
+  setTextColors("places_region", palette.labelSecondary);
+  setTextColors("places_locality", palette.labelPrimary);
+  setTextColors("places_country", palette.labelSecondary);
 
   const hiddenLayers = new Set([
     "address_label",
@@ -616,6 +657,7 @@ function MapView({
   titleCardBounds = { top: 0, bottom: 0, height: 0 },
   pinPanelBounds = null,
 }) {
+  const { mode: themeMode } = useTheme();
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const overlayRef = useRef(null);
@@ -637,7 +679,12 @@ function MapView({
   const lastGoodLabelsRef = useRef([]);
   const lastGoodCacheRef = useRef(new Map());
   const pinOffsetCacheRef = useRef(new Map());
-  const styleUrlMemo = useMemo(() => styleUrl, []);
+  const mapPalette = useMemo(() => MAP_PALETTES[themeMode] || MAP_PALETTES.light, [themeMode]);
+  const styleUrlMemo = useMemo(() => {
+    const fallback = STYLE_URLS.light || STYLE_URLS.dark || null;
+    if (themeMode === "dark") return STYLE_URLS.dark || fallback;
+    return STYLE_URLS.light || STYLE_URLS.dark || null;
+  }, [themeMode]);
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
   const dataAnimationUntilRef = useRef(0);
@@ -651,6 +698,7 @@ function MapView({
     zoom: 2,
     padding: null,
   });
+  const currentStyleKeyRef = useRef(null);
   const cameraEaseFrameRef = useRef(null);
 
   useEffect(() => {
@@ -701,6 +749,94 @@ function MapView({
       loadingIconsRef.current.delete(id);
     }
   }, []);
+
+  const installCustomLayers = useCallback(
+    async (mapInstance) => {
+      const map = mapInstance || mapRef.current;
+      if (!map) return;
+
+      if (!map.getSource("pending-pin")) {
+        map.addSource("pending-pin", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+      }
+
+      if (!map.getSource("pending-radius")) {
+        map.addSource("pending-radius", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+      }
+
+      if (!map.getLayer("pending-radius-fill")) {
+        map.addLayer({
+          id: "pending-radius-fill",
+          type: "fill",
+          source: "pending-radius",
+          paint: {
+            "fill-color": mapPalette.overlayRadiusFill,
+            "fill-opacity": 1,
+          },
+        });
+      } else {
+        map.setPaintProperty("pending-radius-fill", "fill-color", mapPalette.overlayRadiusFill);
+      }
+
+      if (!map.getLayer("pending-radius-outline")) {
+        map.addLayer({
+          id: "pending-radius-outline",
+          type: "line",
+          source: "pending-radius",
+          paint: {
+            "line-color": mapPalette.overlayRadiusStroke,
+            "line-width": 2,
+            "line-dasharray": [2, 2],
+          },
+        });
+      } else {
+        map.setPaintProperty("pending-radius-outline", "line-color", mapPalette.overlayRadiusStroke);
+      }
+
+      if (!map.getLayer("pending-pin-layer")) {
+        map.addLayer({
+          id: "pending-pin-layer",
+          type: "circle",
+          source: "pending-pin",
+          paint: {
+            "circle-radius": 14,
+            "circle-color": mapPalette.pendingCircle || "#ffffff",
+            "circle-stroke-width": 3,
+            "circle-stroke-color": mapPalette.overlayPendingStroke,
+          },
+        });
+      } else {
+        map.setPaintProperty("pending-pin-layer", "circle-stroke-color", mapPalette.overlayPendingStroke);
+        map.setPaintProperty("pending-pin-layer", "circle-color", mapPalette.pendingCircle || "#ffffff");
+      }
+
+      if (!map.getLayer("pending-pin-emoji")) {
+        map.addLayer({
+          id: "pending-pin-emoji",
+          type: "symbol",
+          source: "pending-pin",
+          layout: {
+            "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(DEFAULT_EMOJI)],
+            "icon-size": 0.55,
+            "icon-allow-overlap": true,
+          },
+          paint: {
+            "icon-halo-color": "#ffffff",
+            "icon-halo-width": 1,
+          },
+        });
+      }
+
+      await ensureEmojiImage(DEFAULT_EMOJI);
+      await ensureEmojiImage(PENDING_REVIEW_EMOJI);
+    },
+    [ensureEmojiImage, mapPalette]
+  );
 
   const combinedPins = useMemo(() => {
     const approved = (pins || []).map((pin, index) => ({
@@ -1255,6 +1391,7 @@ function MapView({
   }, [computeLayout]);
 
   const scheduleLayoutRef = useRef(scheduleLayout);
+  const runLayout = useCallback(() => scheduleLayoutRef.current?.(), []);
 
   useEffect(() => {
     scheduleLayoutRef.current = scheduleLayout;
@@ -1275,45 +1412,45 @@ function MapView({
     let cancelled = false;
 
     const loadStyle = async () => {
-      if (!styleUrlMemo) {
+    if (!styleUrlMemo) {
+      setResolvedStyle(null);
+      return;
+    }
+    try {
+      setMapError(null);
+      const cacheKey = `${styleUrlMemo}|${themeMode}`;
+      const cached = cacheKey ? styleCache.get(cacheKey) : null;
+      const stylePromise = cached || (async () => {
+        const response = await fetch(styleUrlMemo, { cache: "force-cache" });
+        if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
+        const baseStyle = await response.json();
+        const styleClone = JSON.parse(JSON.stringify(baseStyle));
+        return applyMutedBasemapPalette(styleClone, mapPalette);
+      })();
+      if (!cached && cacheKey) styleCache.set(cacheKey, stylePromise);
+      const styled = await stylePromise;
+      if (!cancelled) {
+        setResolvedStyle(styled);
+      }
+    } catch (error) {
+      console.error("map style load error", error);
+      if (!cancelled) {
         setResolvedStyle(null);
-        return;
+        setMapError("Map style failed to load");
       }
-      try {
-        setMapError(null);
-        const cached = styleCache.get(styleUrlMemo);
-        const stylePromise = cached || (async () => {
-          const response = await fetch(styleUrlMemo, { cache: "force-cache" });
-          if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
-          const baseStyle = await response.json();
-          return applyMutedBasemapPalette(baseStyle);
-        })();
-        if (!cached) styleCache.set(styleUrlMemo, stylePromise);
-        const styled = await stylePromise;
-        if (!cancelled) {
-          setResolvedStyle(styled);
-        }
-      } catch (error) {
-        console.error("map style load error", error);
-        if (!cancelled) {
-          setResolvedStyle(null);
-          setMapError("Map style failed to load");
-        }
-      }
-    };
+    }
+  };
 
     loadStyle();
 
     return () => {
       cancelled = true;
     };
-  }, [styleUrlMemo]);
+  }, [mapPalette, styleUrlMemo, themeMode]);
 
   // Initialize the map once; keep dependencies minimal so the instance persists.
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current || !resolvedStyle) return;
-
-    const runLayout = () => scheduleLayoutRef.current?.();
 
     if (import.meta.env.DEV) {
       console.debug("[MapView] initializing MapLibre map once");
@@ -1336,66 +1473,8 @@ function MapView({
     mapRef.current = map;
 
     map.on("load", async () => {
-      map.addSource("pending-pin", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-
-      map.addSource("pending-radius", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-
-      map.addLayer({
-        id: "pending-radius-fill",
-        type: "fill",
-        source: "pending-radius",
-        paint: {
-          "fill-color": MAP_PALETTE.overlayRadiusFill,
-          "fill-opacity": 1,
-        },
-      });
-
-      map.addLayer({
-        id: "pending-radius-outline",
-        type: "line",
-        source: "pending-radius",
-        paint: {
-          "line-color": MAP_PALETTE.overlayRadiusStroke,
-          "line-width": 2,
-          "line-dasharray": [2, 2],
-        },
-      });
-
-      map.addLayer({
-        id: "pending-pin-layer",
-        type: "circle",
-        source: "pending-pin",
-        paint: {
-          "circle-radius": 14,
-          "circle-color": "#ffffff",
-          "circle-stroke-width": 3,
-          "circle-stroke-color": MAP_PALETTE.overlayPendingStroke,
-        },
-      });
-
-      map.addLayer({
-        id: "pending-pin-emoji",
-        type: "symbol",
-        source: "pending-pin",
-        layout: {
-          "icon-image": ["coalesce", ["get", "iconImageId"], emojiId(DEFAULT_EMOJI)],
-          "icon-size": 0.55,
-          "icon-allow-overlap": true,
-        },
-        paint: {
-          "icon-halo-color": "#ffffff",
-          "icon-halo-width": 1,
-        },
-      });
-
-      await ensureEmojiImage(DEFAULT_EMOJI);
-      await ensureEmojiImage(PENDING_REVIEW_EMOJI);
+      await installCustomLayers(map);
+      currentStyleKeyRef.current = styleUrlMemo ? `${styleUrlMemo}|${themeMode}` : "inline";
       setMapLoaded(true);
       runLayout();
     });
@@ -1459,7 +1538,32 @@ function MapView({
         onMapClickRef.current(e.lngLat);
       }
     });
-  }, [resolvedStyle, ensureEmojiImage]);
+  }, [resolvedStyle, ensureEmojiImage, installCustomLayers, runLayout, styleUrlMemo, themeMode]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !resolvedStyle) return;
+    const nextKey = styleUrlMemo ? `${styleUrlMemo}|${themeMode}` : "inline";
+    if (currentStyleKeyRef.current === nextKey) return;
+
+    setMapLoaded(false);
+
+    const handleStyleData = () => {
+      installCustomLayers(map).then(() => {
+        currentStyleKeyRef.current = nextKey;
+        setMapLoaded(true);
+        scheduleLayoutRef.current?.();
+      });
+    };
+
+    map.once("styledata", handleStyleData);
+    const nextStyle = JSON.parse(JSON.stringify(resolvedStyle));
+    map.setStyle(nextStyle, { diff: false });
+
+    return () => {
+      map.off("styledata", handleStyleData);
+    };
+  }, [installCustomLayers, resolvedStyle, styleUrlMemo, themeMode]);
 
   useEffect(() => () => {
     if (animationFrameRef.current) {
@@ -1715,18 +1819,16 @@ function MapView({
     if (labelNodes.length === 0 && lastGoodLabelsRef.current.length > 0) {
       applyLabelNodes(lastGoodLabelsRef.current);
     }
-    const selectedExists =
-      selectedPinId !== null &&
-      selectedPinId !== undefined &&
-      (visualNodes.length ? visualNodes : lastGoodNodesRef.current).some((n) => n.pin?.id === selectedPinId);
-    if (!selectedExists && lastGoodNodesRef.current.length > 0) {
-      applyVisualNodes(
-        lastGoodNodesRef.current.map((node) =>
-          selectedPinId !== null && selectedPinId !== undefined && node.pin?.id === selectedPinId
-            ? { ...node, isSelected: true }
-            : node
-        )
-      );
+    if (selectedPinId !== null && selectedPinId !== undefined) {
+      const selectedExists =
+        (visualNodes.length ? visualNodes : lastGoodNodesRef.current).some((n) => n.pin?.id === selectedPinId);
+      if (!selectedExists && lastGoodNodesRef.current.length > 0) {
+        applyVisualNodes(
+          lastGoodNodesRef.current.map((node) =>
+            node.pin?.id === selectedPinId ? { ...node, isSelected: true } : node
+          )
+        );
+      }
     }
   }, [
     applyLabelNodes,
@@ -1895,7 +1997,7 @@ function MapView({
   [computeMobilePadding, panelPlacement, requestCameraEase]
 );
 
-  if (!styleUrl) {
+  if (!styleUrlMemo) {
     return (
       <div className="map-placeholder">
         <div>
@@ -2006,8 +2108,13 @@ function MapView({
 }
 
 const protomapsKey = import.meta.env.VITE_PROTOMAPS_KEY || import.meta.env.VITE_PROTOMAPS_API_KEY;
-const styleUrl =
-  import.meta.env.VITE_PROTOMAPS_STYLE_URL ||
-  (protomapsKey ? `https://api.protomaps.com/styles/v5/light/en.json?key=${protomapsKey}` : null);
+const STYLE_URLS = {
+  light:
+    import.meta.env.VITE_PROTOMAPS_STYLE_URL ||
+    (protomapsKey ? `https://api.protomaps.com/styles/v5/light/en.json?key=${protomapsKey}` : null),
+  dark:
+    import.meta.env.VITE_PROTOMAPS_DARK_STYLE_URL ||
+    (protomapsKey ? `https://api.protomaps.com/styles/v5/dark/en.json?key=${protomapsKey}` : null),
+};
 
 export default MapView;
