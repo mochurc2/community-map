@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx"; // main map page
 import ModerationPage from "./components/ModerationPage.jsx"; // we'll create this next
 import EntryGate from "./components/EntryGate.jsx";
+import { ThemeProvider } from "./context";
 import "./index.css";
 
 const GATE_STORAGE_KEY = "map-entry-gate-passed";
@@ -42,6 +43,10 @@ function Root() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <ThemeProvider>
+    <Root />
+  </ThemeProvider>
+);
 
 export default Root;

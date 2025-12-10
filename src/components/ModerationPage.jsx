@@ -7,6 +7,7 @@ import {
   updateBubbleOption,
 } from "./bubbleOptions";
 import PendingPinEditor from "./PendingPinEditor";
+import ThemeToggleButton from "./ThemeToggleButton";
 import { tokens, helpers } from "../styles/tokens";
 import { supabase, supabaseConfigError } from "../supabaseClient";
 
@@ -669,11 +670,14 @@ function ModerationPage() {
     return (
       <div className="map-placeholder" style={{ alignItems: "flex-start", paddingTop: "4rem" }}>
         <div style={{ maxWidth: 520 }}>
-          <p className="badge" style={{ background: "#0f172a", color: "#fff" }}>
+          <p
+            className="badge"
+            style={{ background: "var(--color-primary)", color: "var(--color-bg-primary)" }}
+          >
             Moderators only
           </p>
           <h1 style={{ marginTop: "0.35rem" }}>Moderator login</h1>
-          <p style={{ marginTop: "0.4rem", color: "#374151" }}>
+          <p style={{ marginTop: "0.4rem", color: "var(--color-text-secondary)" }}>
             Sign in with the Supabase moderator account to manage submissions and bubble options.
           </p>
 
@@ -738,7 +742,7 @@ function ModerationPage() {
 
     if (!loadingPins && list.length === 0) {
       return (
-        <p style={{ margin: 0, color: "#16a34a", fontWeight: 700 }}>
+        <p style={{ margin: 0, color: "var(--status-success-text)", fontWeight: 700 }}>
           Nothing to show here 🎉
         </p>
       );
@@ -785,11 +789,11 @@ function ModerationPage() {
                       .join(" · ")}
                   </p>
                 )}
-                <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "#6b7280" }}>
+                <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "var(--color-text-muted)" }}>
                   Delete after: {pin.never_delete ? "Never" : formatDate(pin.expires_at)}
                 </p>
               </div>
-              <div style={{ textAlign: "right", color: "#4b5563", fontSize: "0.9rem" }}>
+              <div style={{ textAlign: "right", color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>
                 <p style={{ margin: 0, fontWeight: 700 }}>{pin.status}</p>
                 <p style={{ margin: "0.1rem 0 0" }}>Submitted {new Date(pin.submitted_at).toLocaleString()}</p>
               </div>
@@ -826,7 +830,7 @@ function ModerationPage() {
                 <button
                   type="button"
                   className="ghost-button"
-                  style={{ color: "#b91c1c" }}
+                  style={{ color: "var(--status-error-text)" }}
                   onClick={() => deletePin(pin.id)}
                 >
                   Delete pin
@@ -846,7 +850,7 @@ function ModerationPage() {
 
     if (!loadingMessages && list.length === 0) {
       return (
-        <p style={{ margin: 0, color: "#16a34a", fontWeight: 700 }}>
+        <p style={{ margin: 0, color: "var(--status-success-text)", fontWeight: 700 }}>
           Nothing to review 🎉
         </p>
       );
@@ -889,8 +893,8 @@ function ModerationPage() {
                     marginTop: "0.65rem",
                     padding: "0.75rem",
                     borderRadius: "12px",
-                    border: "1px solid #e5e7eb",
-                    background: "#f9fafb",
+                    border: "1px solid var(--color-border)",
+                    background: "var(--color-bg-muted)",
                   }}
                 >
                   <div className="flex-between gap-md">
@@ -923,11 +927,11 @@ function ModerationPage() {
                             .join(" · ")}
                         </p>
                       )}
-                      <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "#6b7280" }}>
+                      <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "var(--color-text-muted)" }}>
                         Delete after: {pin.never_delete ? "Never" : formatDate(pin.expires_at)}
                       </p>
                     </div>
-                    <div style={{ textAlign: "right", color: "#4b5563", fontSize: "0.9rem" }}>
+                    <div style={{ textAlign: "right", color: "var(--color-text-secondary)", fontSize: "0.9rem" }}>
                       <p style={{ margin: 0, fontWeight: 700 }}>{pin.status}</p>
                       <p style={{ margin: "0.1rem 0 0" }}>Submitted {new Date(pin.submitted_at).toLocaleString()}</p>
                     </div>
@@ -971,7 +975,11 @@ function ModerationPage() {
                 <button
                   type="button"
                   className="ghost-button"
-                  style={{ background: "#ecfdf3", borderColor: "#bbf7d0", color: "#166534" }}
+                  style={{
+                    background: "var(--status-success-bg)",
+                    borderColor: "var(--status-success-border)",
+                    color: "var(--status-success-text)",
+                  }}
                   disabled={msg.status === "resolved"}
                   onClick={() => updateMessageStatus(msg.id, "resolved")}
                 >
@@ -1009,7 +1017,7 @@ function ModerationPage() {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f6f7fb", padding: "2rem 0" }}>
+    <div className="moderation-page">
       <div
         style={{
           maxWidth: 1080,
@@ -1019,15 +1027,16 @@ function ModerationPage() {
           gap: "1.25rem",
         }}
       >
-        <header className="flex-between">
+        <header className="flex-between moderation-header">
           <div>
-            <p className="m-0 font-bold" style={{ color: "#4f46e5" }}>Moderation</p>
+            <p className="m-0 font-bold" style={{ color: "var(--color-primary)" }}>Moderation</p>
             <h1 style={{ margin: "0.2rem 0 0" }}>Pins & messages</h1>
             <p className="text-muted" style={{ margin: "0.4rem 0 0" }}>
               Review submissions, visitor reports, and keep the bubble library up to date.
             </p>
           </div>
           <div className="flex-row gap-lg">
+            <ThemeToggleButton />
             <button type="button" className="ghost-button" onClick={handleLogout}>
               Sign out
             </button>
@@ -1043,7 +1052,7 @@ function ModerationPage() {
           ))}
         </div>
 
-        {error && <p className="m-0" style={{ color: tokens.colors.status.error.text }}>Error: {error}</p>}
+        {error && <p className="m-0" style={{ color: "var(--status-error-text)" }}>Error: {error}</p>}
 
         {activeTab === "messages" && (
           <section style={{ display: "grid", gap: "0.75rem" }}>
@@ -1059,12 +1068,7 @@ function ModerationPage() {
                   <button
                     key={filter.id}
                     type="button"
-                    className="ghost-button"
-                    style={
-                      activeMessageFilter === filter.id
-                        ? { background: "#eef2ff", borderColor: "#c7d2fe", color: "#3730a3" }
-                        : undefined
-                    }
+                    className={`ghost-button message-filter ${activeMessageFilter === filter.id ? "active" : ""}`}
                     onClick={() => setActiveMessageFilter(filter.id)}
                   >
                     {filter.label}
@@ -1076,7 +1080,7 @@ function ModerationPage() {
               </div>
             </div>
 
-            {messageError && <p style={{ color: "#b91c1c", margin: 0 }}>Error: {messageError}</p>}
+            {messageError && <p style={{ color: "var(--status-error-text)", margin: 0 }}>Error: {messageError}</p>}
             {renderMessages(messageGroups[activeMessageFilter] || [])}
           </section>
         )}
@@ -1090,20 +1094,20 @@ function ModerationPage() {
               gap: "0.75rem",
               padding: "0.9rem 1rem",
               borderRadius: "12px",
-              border: "1px solid #fecaca",
-              background: "#fef2f2",
+              border: "1px solid var(--status-error-border)",
+              background: "var(--status-error-bg)",
             }}
           >
             <div>
-              <p style={{ margin: 0, fontWeight: 700, color: "#991b1b" }}>Rejected pin cleanup</p>
-              <p style={{ margin: "0.25rem 0 0", color: "#b91c1c" }}>
+              <p style={{ margin: 0, fontWeight: 700, color: "var(--status-error-text)" }}>Rejected pin cleanup</p>
+              <p style={{ margin: "0.25rem 0 0", color: "var(--status-error-text)" }}>
                 Delete all rejected pins from the database once you have reviewed them.
               </p>
             </div>
             <button
               type="button"
               className="ghost-button"
-              style={{ color: "#b91c1c", fontWeight: 700 }}
+              style={{ color: "var(--status-error-text)", fontWeight: 700 }}
               onClick={deleteAllRejectedPins}
             >
               Delete all rejected pins
@@ -1145,7 +1149,7 @@ function ModerationPage() {
               </div>
             </div>
 
-            {bubbleError && <p style={{ margin: 0, color: "#b91c1c" }}>Bubble error: {bubbleError}</p>}
+            {bubbleError && <p style={{ margin: 0, color: "var(--status-error-text)" }}>Bubble error: {bubbleError}</p>}
 
             <div className="bubble-moderation-sections">
               {bubbleSections.map(({ id, title }) => (
@@ -1235,9 +1239,9 @@ function ModerationPage() {
             style={{
               padding: "1.25rem 1.1rem",
               borderRadius: "16px",
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              boxShadow: "0 10px 30px rgba(15,23,42,0.05)",
+              background: "var(--surface-panel, var(--color-bg-primary))",
+              border: "1px solid var(--color-border)",
+              boxShadow: "var(--panel-shadow, 0 10px 30px rgba(15,23,42,0.05))",
               display: "grid",
               gap: "0.75rem",
             }}

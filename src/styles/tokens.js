@@ -265,11 +265,11 @@ export const helpers = {
    * Create a card container style
    */
   card: {
-    border: `1px solid ${tokens.colors.border.default}`,
+    border: '1px solid var(--color-border)',
     borderRadius: tokens.radius.md,
     padding: `${tokens.spacing.xl} 1.1rem`,
-    background: tokens.colors.bg.primary,
-    boxShadow: tokens.shadow.sm,
+    background: 'var(--surface-panel, #ffffff)',
+    boxShadow: 'var(--card-shadow, 0 10px 30px rgba(15, 23, 42, 0.08))',
   },
 }
 
