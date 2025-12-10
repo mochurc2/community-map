@@ -34,6 +34,7 @@ export function BubbleSelector({
   prioritizeSelected = false,
   alwaysShowAll = false,
   footnote,
+  showHiddenCount = false,
 }) {
   const [userShowAll, setUserShowAll] = useState(alwaysShowAll);
   const [customInput, setCustomInput] = useState("");
@@ -63,6 +64,11 @@ export function BubbleSelector({
     () => (showAll ? orderedOptions : orderedOptions.slice(0, MAX_VISIBLE_BUBBLES)),
     [orderedOptions, showAll]
   );
+
+  const collapsedHiddenCount = useMemo(() => {
+    if (showAll) return 0;
+    return Math.max(orderedOptions.length - MAX_VISIBLE_BUBBLES, 0);
+  }, [orderedOptions, showAll]);
 
   const toggleOption = (option) => {
     if (multiple) {
@@ -102,7 +108,6 @@ export function BubbleSelector({
           const isSelected = multiple
             ? value.includes(option)
             : value === option;
-
           return (
             <Chip
               key={option}
@@ -118,7 +123,11 @@ export function BubbleSelector({
             variant="ghost"
             onClick={() => setUserShowAll((v) => !v)}
           >
-            {showAll ? "Show less" : "+ more"}
+            {showAll
+              ? "Show less"
+              : showHiddenCount && collapsedHiddenCount > 0
+                ? `+ ${collapsedHiddenCount} more`
+                : "+ more"}
           </Chip>
         )}
       </ChipGroup>

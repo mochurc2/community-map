@@ -20,7 +20,7 @@ export function EmojiSelector({
   onSelect,
   skinToneOptions,
   hasSkinToneOptions,
-  label = "Icon *",
+  label = "Icon",
   helper = "Required. Pick an emoji for your pin.",
 }) {
   return (
