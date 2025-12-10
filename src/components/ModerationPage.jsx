@@ -8,8 +8,8 @@ import {
   updateBubbleOption,
 } from "./bubbleOptions";
 import { tokens, helpers } from "../styles/tokens";
-import { supabase, supabaseAdmin, supabaseConfigError } from "../supabaseClient";
-const moderationClient = supabaseAdmin || supabase;
+import { supabase, supabaseConfigError } from "../supabaseClient";
+const moderationClient = supabase;
 
 const normalizeStatus = (value) => {
   if (value === "pending" || value === "rejected") return value;
