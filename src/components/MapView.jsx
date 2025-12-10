@@ -111,11 +111,20 @@ const MAP_PALETTE = {
 const applyMutedBasemapPalette = (style) => {
   if (!style?.layers) return style;
 
-  const layers = style.layers.map((layer) => ({
-    ...layer,
-    paint: layer.paint ? { ...layer.paint } : undefined,
-    layout: layer.layout ? { ...layer.layout } : undefined,
-  }));
+  const layers = style.layers.map((layer) => {
+    const next = { ...layer };
+    if (layer.paint) {
+      next.paint = { ...layer.paint };
+    } else {
+      delete next.paint;
+    }
+    if (layer.layout) {
+      next.layout = { ...layer.layout };
+    } else {
+      delete next.layout;
+    }
+    return next;
+  });
 
   const setPaint = (id, paintUpdates) => {
     const layer = layers.find((candidate) => candidate.id === id);
