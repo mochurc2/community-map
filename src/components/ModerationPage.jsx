@@ -467,9 +467,6 @@ function ModerationPage() {
   );
 
   const editorBubbleOptions = useMemo(() => {
-    const fallback = getDefaultBubbleOptions();
-    if (!serverBubbleRows || serverBubbleRows.length === 0) return fallback;
-
     const options = {
       gender_identity: [],
       seeking: [],
@@ -477,7 +474,7 @@ function ModerationPage() {
       contact_methods: [],
     };
 
-    serverBubbleRows.forEach((row) => {
+    (serverBubbleRows || []).forEach((row) => {
       if (!options[row.field]) return;
       const status = normalizeStatus(row.status);
       if (status === "rejected") return;
@@ -486,25 +483,18 @@ function ModerationPage() {
       }
     });
 
-    Object.keys(options).forEach((field) => {
-      if (options[field].length === 0) {
-        options[field] = [...fallback[field]];
-      }
-    });
-
     return options;
   }, [serverBubbleRows]);
 
   const bubbleStatusMap = useMemo(() => {
-    const defaults = getDefaultStatusMap();
     const status = {
-      gender_identity: { ...defaults.gender_identity },
-      seeking: { ...defaults.seeking },
-      interest_tags: { ...defaults.interest_tags },
-      contact_methods: { ...defaults.contact_methods },
+      gender_identity: {},
+      seeking: {},
+      interest_tags: {},
+      contact_methods: {},
     };
 
-    serverBubbleRows.forEach((row) => {
+    (serverBubbleRows || []).forEach((row) => {
       if (!status[row.field]) return;
       status[row.field][row.label.toLowerCase()] = normalizeStatus(row.status);
     });
