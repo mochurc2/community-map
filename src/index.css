@@ -529,13 +529,6 @@ textarea {
     0 0 0 1px rgba(255, 255, 255, 0.9);
 }
 
-.pin-node.plus .pin-circle {
-  border-color: #4a5f82;
-  box-shadow:
-    0 0 0 3px rgba(74, 95, 130, 0.26),
-    0 8px 22px rgba(74, 95, 130, 0.36);
-}
-
 .pin-node.pending .pin-circle {
   border-color: #d1d7df;
 }
