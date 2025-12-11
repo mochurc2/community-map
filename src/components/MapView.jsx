@@ -1542,7 +1542,9 @@ function MapView({
       }));
 
       const labelCandidates = nodes
-        .filter((node) => Boolean(node.labelText) && !node.isPlus && node.clusterSize <= 1)
+        .filter(
+          (node) => Boolean(node.labelText) && !node.isPlus && node.clusterSize <= 2
+        )
         .flatMap((node) => {
           const basePriority =
             (node.clusterSize > 1 ? node.clusterSize * 10 : 0) + (node.sortOrder ?? 0);
