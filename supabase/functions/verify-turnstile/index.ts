@@ -11,18 +11,13 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
 
-// PRODUCTION SECRET: This is what your live site uses (the old secret)
-// We check TURNSTILE_SUPABASE_JWT_SECRET first, then fall back to the system default.
-const PROD_JWT_SECRET =
+// SINGLE JWT SECRET: Use one secret for both dev and prod flows.
+// Prefer TURNSTILE_JWT_SECRET; keep the legacy TURNSTILE_SUPABASE_JWT_SECRET, and fall back to the project JWT secret.
+const JWT_SECRET =
+  Deno.env.get("TURNSTILE_JWT_SECRET") ??
   Deno.env.get("TURNSTILE_SUPABASE_JWT_SECRET") ??
-  Deno.env.get("SUPABASE_JWT_SECRET") ??
+  Deno.env.get("SUPABASE_JWT_SECRET") ?? // auto-provided by Supabase, not a custom secret
   "";
-
-// DEV SECRET: This is what your new "sb_publishable" key uses
-// You must set this in your Dashboard Secrets as 'DEV_JWT_SECRET'
-const DEV_JWT_SECRET = Deno.env.get("DEV_JWT_SECRET") ?? "";
-
-const JWT_KID = Deno.env.get("TURNSTILE_JWT_KID") ?? "";
 
 const RATE_LIMIT_WINDOW = parseInt(
   Deno.env.get("TURNSTILE_RATE_WINDOW_SECONDS") ?? "60",
@@ -37,10 +32,10 @@ const SESSION_TTL_SECONDS = parseInt(
   10
 ) || 900;
 
-// Validate that at least the Production secret is present
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !PROD_JWT_SECRET || !TURNSTILE_SECRET_KEY) {
+// Validate that required env vars are present
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !JWT_SECRET || !TURNSTILE_SECRET_KEY) {
   throw new Error(
-    "Missing required environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TURNSTILE_SUPABASE_JWT_SECRET, TURNSTILE_SECRET_KEY)"
+    "Missing required environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TURNSTILE_JWT_SECRET, TURNSTILE_SECRET_KEY)"
   );
 }
 
@@ -110,23 +105,8 @@ Deno.serve(async (req) => {
     return jsonResponse(405, { error: "Method not allowed" });
   }
 
-  // 3. SECRET SWITCHING LOGIC (The "Dual-Mode" Fix)
-  // We check which API key the website sent to determine which secret to use.
-  const incomingApiKey = req.headers.get("apikey") ?? "";
-  let activeSecret = PROD_JWT_SECRET; // Default to Production
-
-  // If the key starts with 'sb_publishable' or 'pk_', it's the new Supabase keys (Dev)
-  if (incomingApiKey.startsWith("sb_publishable") || incomingApiKey.startsWith("pk_")) {
-    if (DEV_JWT_SECRET) {
-      activeSecret = DEV_JWT_SECRET;
-      console.log("Environment: DEV detected (using DEV_JWT_SECRET)");
-    } else {
-      console.error("Critical: Dev key detected but DEV_JWT_SECRET is missing in secrets!");
-      // We fall back to PROD_JWT_SECRET but log the error, or you could throw an error here.
-    }
-  } else {
-    // console.log("Environment: PROD detected (using TURNSTILE_SUPABASE_JWT_SECRET)");
-  }
+  // 3. SECRET SELECTION LOGIC
+  // We now use a single JWT secret for all environments; incoming API key no longer switches secrets.
 
   // 4. Parse Request Body
   let body: { token?: string; fingerprint?: string } = {};
@@ -197,25 +177,19 @@ Deno.serve(async (req) => {
     fingerprint,
   };
 
-  // 8. Sign JWT with the SELECTED Secret (Prod or Dev)
+  // 8. Sign JWT with the single secret
   let signedToken: string;
   try {
-    // Import the secret we selected in Step 3
+    // Import the single JWT secret
     const jwtKey = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(activeSecret),
+      new TextEncoder().encode(JWT_SECRET),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["sign", "verify"]
     );
 
     const header: Record<string, unknown> = { alg: "HS256", typ: "JWT" };
-    
-    // BUG FIX: Only attach the Key ID if we are actually using the Production Secret.
-    // If we are in Dev (using DEV_JWT_SECRET), we should NOT attach the Prod KID.
-    if (JWT_KID && activeSecret === PROD_JWT_SECRET) {
-      header.kid = JWT_KID;
-    }
 
     signedToken = await create(header, payload, jwtKey);
   } catch (err) {

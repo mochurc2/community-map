@@ -42,10 +42,11 @@ export function usePins(filters, isInterestApproved) {
     } finally {
       setPendingPinsLoading(false);
     }
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     async function fetchPins() {
+      if (!supabase) return;
       setLoadingPins(true);
       const nowIso = new Date().toISOString();
       const { data, error } = await supabase
@@ -73,7 +74,7 @@ export function usePins(filters, isInterestApproved) {
 
     fetchPins();
     refreshPendingPins();
-  }, [refreshPendingPins]);
+  }, [refreshPendingPins, supabase]);
 
   const filteredPins = useMemo(() => {
     return filterPins(pins, filters, isInterestApproved);
