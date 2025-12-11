@@ -4,6 +4,10 @@ import privacyPolicyContent from "../../PrivacyPolicy.md?raw";
 import termsContent from "../../ToS.md?raw";
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+const supabaseBaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "") || "";
+const SUPABASE_FUNCTION_URL = supabaseBaseUrl ? `${supabaseBaseUrl}/functions/v1/verify-turnstile` : "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const FINGERPRINT_STORAGE_KEY = "turnstile-fingerprint-id";
 
 function EntryGate({ onComplete }) {
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -17,6 +21,21 @@ function EntryGate({ onComplete }) {
   const widgetContainerRef = useRef(null);
   const widgetIdRef = useRef(null);
   const [token, setToken] = useState("");
+  const fingerprint = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = window.localStorage.getItem(FINGERPRINT_STORAGE_KEY);
+      if (stored) return stored;
+      const generated =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      window.localStorage.setItem(FINGERPRINT_STORAGE_KEY, generated);
+      return generated;
+    } catch {
+      return "";
+    }
+  }, []);
 
   const missingKey = useMemo(() => !TURNSTILE_SITE_KEY, []);
 
@@ -76,7 +95,7 @@ function EntryGate({ onComplete }) {
     };
   }, [turnstileReady]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (!ageConfirmed) {
       setError("You must confirm you are 18 or older.");
@@ -90,16 +109,86 @@ function EntryGate({ onComplete }) {
       setError("Please complete the Cloudflare Turnstile check.");
       return;
     }
+    if (!SUPABASE_FUNCTION_URL || !SUPABASE_ANON_KEY) {
+      setError("Missing Supabase config. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
 
     setSubmitting(true);
     setError("");
+
     try {
-      onComplete(token);
+      console.info("[EntryGate] calling verify-turnstile", {
+        url: SUPABASE_FUNCTION_URL,
+        hasAnon: Boolean(SUPABASE_ANON_KEY),
+        fingerprint: fingerprint?.slice?.(0, 8),
+      });
+
+      const response = await fetch(SUPABASE_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          token,
+          fingerprint,
+        }),
+        cache: "no-store",
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      console.info("[EntryGate] verify-turnstile response", {
+        status: response.status,
+        ok: response.ok,
+        payloadKeys: payload ? Object.keys(payload) : [],
+      });
+
+      if (!response.ok) {
+        const message =
+          payload?.error ||
+          payload?.message ||
+          (response.status === 429
+            ? "Too many attempts. Please wait a minute before trying again."
+            : "Verification failed. Please refresh and try again.");
+        setError(message);
+        if (window.turnstile && widgetIdRef.current) {
+          window.turnstile.reset(widgetIdRef.current);
+        }
+        setToken("");
+        setSubmitting(false);
+        return;
+      }
+
+      const result = await onComplete({
+        token: payload.token,
+        expiresIn: payload.expires_in,
+        sessionId: payload.session_id,
+      });
+
+      if (result?.ok === false) {
+        setError(result?.message || "Unable to start Supabase session. Please retry.");
+        if (window.turnstile && widgetIdRef.current) {
+          window.turnstile.reset(widgetIdRef.current);
+        }
+        setToken("");
+        setSubmitting(false);
+        return;
+      }
     } catch (err) {
       console.error("Entry gate completion failed", err);
       setError("Something went wrong. Please try again.");
+      if (window.turnstile && widgetIdRef.current) {
+        window.turnstile.reset(widgetIdRef.current);
+      }
+      setToken("");
       setSubmitting(false);
+      return;
     }
+
+    setSubmitting(false);
   };
 
   const closePolicy = () => setPolicyModal(null);
