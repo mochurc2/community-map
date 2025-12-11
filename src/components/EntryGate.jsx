@@ -140,6 +140,12 @@ function EntryGate({ onComplete }) {
 
       const payload = await response.json().catch(() => ({}));
 
+      console.info("[EntryGate] verify-turnstile response", {
+        status: response.status,
+        ok: response.ok,
+        payloadKeys: payload ? Object.keys(payload) : [],
+      });
+
       if (!response.ok) {
         const message =
           payload?.error ||
