@@ -118,6 +118,12 @@ function EntryGate({ onComplete }) {
     setError("");
 
     try {
+      console.info("[EntryGate] calling verify-turnstile", {
+        url: SUPABASE_FUNCTION_URL,
+        hasAnon: Boolean(SUPABASE_ANON_KEY),
+        fingerprint: fingerprint?.slice?.(0, 8),
+      });
+
       const response = await fetch(SUPABASE_FUNCTION_URL, {
         method: "POST",
         headers: {
@@ -129,6 +135,7 @@ function EntryGate({ onComplete }) {
           token,
           fingerprint,
         }),
+        cache: "no-store",
       });
 
       const payload = await response.json().catch(() => ({}));
