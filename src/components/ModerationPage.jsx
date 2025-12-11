@@ -149,6 +149,7 @@ function ModerationPage() {
   const [editingPinId, setEditingPinId] = useState(null);
   const [editingPinError, setEditingPinError] = useState(null);
   const [editingPinSaving, setEditingPinSaving] = useState(false);
+  const usingAccessTokenClient = typeof supabase?.accessToken === "function";
 
   const mapRowsToBubbles = useCallback(
     (rows) => {
@@ -201,6 +202,14 @@ function ModerationPage() {
   }, [mapRowsToBubbles]);
 
   useEffect(() => {
+    if (!supabase || supabaseConfigError) return undefined;
+
+    if (usingAccessTokenClient) {
+      // When the client is configured with an access token, Supabase disables auth helpers.
+      setHasAccess(true);
+      return undefined;
+    }
+
     supabase.auth
       .getSession()
       .then(({ data }) => {
@@ -221,7 +230,7 @@ function ModerationPage() {
     return () => {
       listener?.subscription?.unsubscribe();
     };
-  }, []);
+  }, [usingAccessTokenClient]);
 
   const purgeExpiredPins = useCallback(async () => {
     const nowIso = new Date().toISOString();
@@ -394,6 +403,11 @@ function ModerationPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (usingAccessTokenClient) {
+      setAuthError("Login is disabled when using a Supabase access token.");
+      return;
+    }
+
     setAuthError(null);
     setAuthLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -404,7 +418,10 @@ function ModerationPage() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (!usingAccessTokenClient) {
+      await supabase.auth.signOut();
+    }
+
     setEmail("");
     setPassword("");
     setEditingPinId(null);
