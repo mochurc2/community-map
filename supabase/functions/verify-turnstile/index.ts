@@ -35,12 +35,26 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !SUPABASE_JWT_SECRET || !TURNSTILE_SEC
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-const jwtKey = new TextEncoder().encode(SUPABASE_JWT_SECRET);
+const jwtKeyPromise = crypto.subtle.importKey(
+  "raw",
+  new TextEncoder().encode(SUPABASE_JWT_SECRET),
+  { name: "HMAC", hash: "SHA-256" },
+  false,
+  ["sign", "verify"],
+);
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+};
 
 const jsonResponse = (status: number, payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...corsHeaders,
+    },
   });
 
 async function verifyTurnstileToken(token: string, ip: string | null) {
@@ -70,6 +84,14 @@ const hashKey = (fingerprint: string, ip: string | null) =>
   `${fingerprint || "anon"}:${ip || "unknown"}`;
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      headers: {
+        ...corsHeaders,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+      },
+    });
+  }
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "Method not allowed" });
   }
@@ -141,6 +163,7 @@ Deno.serve(async (req) => {
 
   let signedToken: string;
   try {
+    const jwtKey = await jwtKeyPromise;
     signedToken = await create({ alg: "HS256", typ: "JWT" }, payload, jwtKey);
   } catch (err) {
     console.error("JWT creation failed:", err);
