@@ -4,9 +4,9 @@ import privacyPolicyContent from "../../PrivacyPolicy.md?raw";
 import termsContent from "../../ToS.md?raw";
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-const SUPABASE_FUNCTION_URL = import.meta.env.VITE_SUPABASE_URL
-  ? `${import.meta.env.VITE_SUPABASE_URL.replace(/\/$/, "")}/functions/v1/verify-turnstile`
-  : "";
+const supabaseBaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "") || "";
+const SUPABASE_FUNCTION_URL = supabaseBaseUrl ? `${supabaseBaseUrl}/functions/v1/verify-turnstile` : "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const FINGERPRINT_STORAGE_KEY = "turnstile-fingerprint-id";
 
 function EntryGate({ onComplete }) {
@@ -109,8 +109,8 @@ function EntryGate({ onComplete }) {
       setError("Please complete the Cloudflare Turnstile check.");
       return;
     }
-    if (!SUPABASE_FUNCTION_URL) {
-      setError("Missing Supabase URL. Set VITE_SUPABASE_URL in your .env file.");
+    if (!SUPABASE_FUNCTION_URL || !SUPABASE_ANON_KEY) {
+      setError("Missing Supabase config. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
       return;
     }
 
@@ -122,6 +122,8 @@ function EntryGate({ onComplete }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
           token,
@@ -134,6 +136,7 @@ function EntryGate({ onComplete }) {
       if (!response.ok) {
         const message =
           payload?.error ||
+          payload?.message ||
           (response.status === 429
             ? "Too many attempts. Please wait a minute before trying again."
             : "Verification failed. Please refresh and try again.");
