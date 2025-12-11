@@ -9,7 +9,7 @@ import {
 import PendingPinEditor from "./PendingPinEditor";
 import ThemeToggleButton from "./ThemeToggleButton";
 import { tokens, helpers } from "../styles/tokens";
-import { supabase, supabaseConfigError } from "../supabaseClient";
+import { supabaseAuth, supabaseConfigError } from "../supabaseClient";
 
 const normalizeStatus = (value) => {
   if (value === "pending" || value === "rejected") return value;
@@ -149,7 +149,7 @@ function ModerationPage() {
   const [editingPinId, setEditingPinId] = useState(null);
   const [editingPinError, setEditingPinError] = useState(null);
   const [editingPinSaving, setEditingPinSaving] = useState(false);
-  const usingAccessTokenClient = typeof supabase?.accessToken === "function";
+  const client = supabaseAuth;
 
   const mapRowsToBubbles = useCallback(
     (rows) => {
@@ -179,7 +179,7 @@ function ModerationPage() {
   const refreshBubbleOptions = useCallback(async () => {
     setBubbleError(null);
     try {
-      const rows = await fetchBubbleOptionsWithIds();
+      const rows = await fetchBubbleOptionsWithIds(client);
       setServerBubbleRows(rows || []);
       const mapped = mapRowsToBubbles(rows);
       setDraftBubbleOptions(mapped);
@@ -202,15 +202,9 @@ function ModerationPage() {
   }, [mapRowsToBubbles]);
 
   useEffect(() => {
-    if (!supabase || supabaseConfigError) return undefined;
+    if (!client || supabaseConfigError) return undefined;
 
-    if (usingAccessTokenClient) {
-      // When the client is configured with an access token, Supabase disables auth helpers.
-      setHasAccess(true);
-      return undefined;
-    }
-
-    supabase.auth
+    client.auth
       .getSession()
       .then(({ data }) => {
         setHasAccess(Boolean(data?.session?.user));
@@ -220,7 +214,7 @@ function ModerationPage() {
         setAuthError(err.message);
       });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
       setHasAccess(Boolean(session?.user));
       if (!session?.user) {
         setPins([]);
@@ -230,11 +224,11 @@ function ModerationPage() {
     return () => {
       listener?.subscription?.unsubscribe();
     };
-  }, [usingAccessTokenClient]);
+  }, [client]);
 
   const purgeExpiredPins = useCallback(async () => {
     const nowIso = new Date().toISOString();
-    const { error: purgeError } = await supabase
+    const { error: purgeError } = await client
       .from("pins")
       .delete()
       .lte("expires_at", nowIso)
@@ -249,7 +243,7 @@ function ModerationPage() {
   const fetchPins = useCallback(async () => {
     setLoadingPins(true);
     await purgeExpiredPins();
-    const { data, error: supaError } = await supabase
+    const { data, error: supaError } = await client
       .from("pins")
       .select("*")
       .order("submitted_at", { ascending: false });
@@ -266,7 +260,7 @@ function ModerationPage() {
 
   const fetchMessages = useCallback(async () => {
     setLoadingMessages(true);
-    const { data, error: supaError } = await supabase
+    const { data, error: supaError } = await client
       .from("messages")
       .select("*, pin:pins(*)")
       .order("created_at", { ascending: false });
@@ -291,7 +285,7 @@ function ModerationPage() {
   const updateStatus = async (id, status) => {
     const approved = status === "approved";
 
-    const { error: supaError } = await supabase
+    const { error: supaError } = await client
       .from("pins")
       .update({
         status,
@@ -313,7 +307,7 @@ function ModerationPage() {
     const confirmed = window.confirm("Delete this rejected pin permanently?");
     if (!confirmed) return;
 
-    const { error: supaError } = await supabase.from("pins").delete().eq("id", id);
+    const { error: supaError } = await client.from("pins").delete().eq("id", id);
 
     if (supaError) {
       console.error(supaError);
@@ -328,7 +322,7 @@ function ModerationPage() {
     const confirmed = window.confirm("Delete all rejected pins permanently? This cannot be undone.");
     if (!confirmed) return;
 
-    const { error: supaError } = await supabase.from("pins").delete().eq("status", "rejected");
+    const { error: supaError } = await client.from("pins").delete().eq("status", "rejected");
 
     if (supaError) {
       console.error(supaError);
@@ -346,7 +340,7 @@ function ModerationPage() {
 
   const updateMessageStatus = async (id, status) => {
     setMessageError(null);
-    const { error: supaError } = await supabase.from("messages").update({ status }).eq("id", id);
+    const { error: supaError } = await client.from("messages").update({ status }).eq("id", id);
 
     if (supaError) {
       console.error(supaError);
@@ -381,7 +375,7 @@ function ModerationPage() {
         return { ok: false, message };
       }
 
-      const { error: supaError } = await supabase.from("pins").update(updates).eq("id", pinId);
+      const { error: supaError } = await client.from("pins").update(updates).eq("id", pinId);
       if (supaError) {
         console.error(supaError);
         setEditingPinError(supaError.message);
@@ -403,14 +397,10 @@ function ModerationPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (usingAccessTokenClient) {
-      setAuthError("Login is disabled when using a Supabase access token.");
-      return;
-    }
 
     setAuthError(null);
     setAuthLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await client.auth.signInWithPassword({ email, password });
     if (error) {
       setAuthError(error.message);
     }
@@ -418,9 +408,7 @@ function ModerationPage() {
   };
 
   const handleLogout = async () => {
-    if (!usingAccessTokenClient) {
-      await supabase.auth.signOut();
-    }
+    await client.auth.signOut();
 
     setEmail("");
     setPassword("");
@@ -566,7 +554,7 @@ function ModerationPage() {
     async (label, replacement = null) => {
       if (!label) return;
       const lowerLabel = label.toLowerCase();
-      const { data: pinsToUpdate, error: fetchPinsError } = await supabase
+      const { data: pinsToUpdate, error: fetchPinsError } = await client
         .from("pins")
         .select("id, interest_tags")
         .contains("interest_tags", [label]);
@@ -586,10 +574,10 @@ function ModerationPage() {
           }
         }
 
-        await supabase.from("pins").update({ interest_tags: filtered }).eq("id", pin.id);
+        await client.from("pins").update({ interest_tags: filtered }).eq("id", pin.id);
       }
     },
-    []
+    [client]
   );
 
   const applyPendingChanges = useCallback(
@@ -612,10 +600,10 @@ function ModerationPage() {
       try {
         for (const change of changes) {
           if (change.type === "add") {
-            await addBubbleOption(change.field, change.label, change.status || "approved");
+            await addBubbleOption(change.field, change.label, change.status || "approved", client);
           }
           if (change.type === "update") {
-            await updateBubbleOption(change.id, change.to.label, change.to.status);
+            await updateBubbleOption(change.id, change.to.label, change.to.status, client);
 
             if (change.field === "interest_tags") {
               if (normalizeStatus(change.to.status) === "rejected") {
@@ -626,7 +614,7 @@ function ModerationPage() {
             }
           }
           if (change.type === "delete") {
-            await deleteBubbleOption(change.id);
+            await deleteBubbleOption(change.id, client);
 
             if (change.field === "interest_tags") {
               await syncInterestTagsForLabel(change.label);
