@@ -21,11 +21,31 @@ const baseOptions = {
     autoRefreshToken: false,
     detectSessionInUrl: false,
   },
+  global: {
+    headers: {},
+  },
 };
 
 const createClientWithToken = (token) => {
   if (supabaseConfigError) return null;
-  const options = { ...baseOptions };
+  const headers = {
+    apikey: supabaseKey,
+    ...(token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : {}),
+  };
+  const options = {
+    ...baseOptions,
+    global: {
+      ...baseOptions.global,
+      headers: {
+        ...baseOptions.global.headers,
+        ...headers,
+      },
+    },
+  };
   if (token) {
     options.accessToken = async () => token;
   }

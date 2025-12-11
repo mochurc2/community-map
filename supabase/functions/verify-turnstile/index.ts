@@ -8,8 +8,8 @@ import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SUPABASE_JWT_SECRET =
-  Deno.env.get("TURNSTILE_SUPABASE_JWT_SECRET") ??
   Deno.env.get("SUPABASE_JWT_SECRET") ??
+  Deno.env.get("TURNSTILE_SUPABASE_JWT_SECRET") ??
   "";
 const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
 
