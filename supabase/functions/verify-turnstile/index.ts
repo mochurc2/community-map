@@ -11,6 +11,7 @@ const SUPABASE_JWT_SECRET =
   Deno.env.get("SUPABASE_JWT_SECRET") ??
   Deno.env.get("TURNSTILE_SUPABASE_JWT_SECRET") ??
   "";
+const JWT_KID = Deno.env.get("TURNSTILE_JWT_KID") ?? "";
 const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
 
 const RATE_LIMIT_WINDOW = parseInt(
@@ -164,7 +165,11 @@ Deno.serve(async (req) => {
   let signedToken: string;
   try {
     const jwtKey = await jwtKeyPromise;
-    signedToken = await create({ alg: "HS256", typ: "JWT" }, payload, jwtKey);
+    const header: Record<string, unknown> = { alg: "HS256", typ: "JWT" };
+    if (JWT_KID) {
+      header.kid = JWT_KID;
+    }
+    signedToken = await create(header, payload, jwtKey);
   } catch (err) {
     console.error("JWT creation failed:", err);
     return jsonResponse(500, { error: "Internal token error" });
