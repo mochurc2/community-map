@@ -66,8 +66,8 @@ const normalizeStatus = (value) => {
   return "approved";
 };
 
-export async function fetchBubbleOptions() {
-  const { data, error } = await supabase
+export async function fetchBubbleOptions(client = supabase) {
+  const { data, error } = await client
     .from("bubble_options")
     .select("id, field, label, status")
     .order("created_at", { ascending: true });
@@ -104,8 +104,8 @@ export async function fetchBubbleOptions() {
   return { options, statusMap };
 }
 
-export async function fetchBubbleOptionsWithIds() {
-  const { data, error } = await supabase
+export async function fetchBubbleOptionsWithIds(client = supabase) {
+  const { data, error } = await client
     .from("bubble_options")
     .select("id, field, label, status")
     .order("created_at", { ascending: true });
@@ -114,8 +114,8 @@ export async function fetchBubbleOptionsWithIds() {
   return data || [];
 }
 
-export async function addBubbleOption(field, label, status = "approved") {
-  const { data, error } = await supabase
+export async function addBubbleOption(field, label, status = "approved", client = supabase) {
+  const { data, error } = await client
     .from("bubble_options")
     .insert({ field, label, status: normalizeStatus(status) })
     .select()
@@ -125,13 +125,13 @@ export async function addBubbleOption(field, label, status = "approved") {
   return data;
 }
 
-export async function updateBubbleOption(id, label, status) {
+export async function updateBubbleOption(id, label, status, client = supabase) {
   const payload = { label };
   if (status) {
     payload.status = normalizeStatus(status);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from("bubble_options")
     .update(payload)
     .eq("id", id)
@@ -142,8 +142,8 @@ export async function updateBubbleOption(id, label, status) {
   return data;
 }
 
-export async function deleteBubbleOption(id) {
-  const { error } = await supabase
+export async function deleteBubbleOption(id, client = supabase) {
+  const { error } = await client
     .from("bubble_options")
     .delete()
     .eq("id", id);
@@ -151,12 +151,12 @@ export async function deleteBubbleOption(id) {
   return true;
 }
 
-export async function ensurePendingBubbleOption(field, label) {
+export async function ensurePendingBubbleOption(field, label, client = supabase) {
   if (!label) return null;
   const normalizedLabel = label.trim();
   if (!normalizedLabel) return null;
 
-  const { data: existingRows, error: fetchError } = await supabase
+  const { data: existingRows, error: fetchError } = await client
     .from("bubble_options")
     .select("id, status")
     .eq("field", field)
@@ -166,10 +166,10 @@ export async function ensurePendingBubbleOption(field, label) {
   if (!fetchError && existingRows && existingRows.length > 0) {
     const row = existingRows[0];
     if (row.status !== "pending") {
-      await updateBubbleOption(row.id, normalizedLabel, row.status);
+      await updateBubbleOption(row.id, normalizedLabel, row.status, client);
     }
     return row;
   }
 
-  return addBubbleOption(field, normalizedLabel, "pending");
+  return addBubbleOption(field, normalizedLabel, "pending", client);
 }
