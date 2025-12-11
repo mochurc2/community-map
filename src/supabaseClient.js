@@ -23,24 +23,17 @@ const baseOptions = {
   },
 };
 
-const createClientWithToken = (token) =>
-  createClient(supabaseUrl, supabaseKey, {
-    ...baseOptions,
-    ...(token
-      ? {
-          global: {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        }
-      : {}),
-  });
+const createClientWithToken = (token) => {
+  if (supabaseConfigError) return null;
+  const options = { ...baseOptions };
+  if (token) {
+    options.accessToken = async () => token;
+  }
+  return createClient(supabaseUrl, supabaseKey, options);
+};
 
 export let supabase =
-  supabaseConfigError === null && import.meta.env.DEV
-    ? createClientWithToken(null)
-    : null;
+  supabaseConfigError === null && import.meta.env.DEV ? createClientWithToken(null) : null;
 
 export const setSupabaseAccessToken = (token) => {
   if (supabaseConfigError) return null;

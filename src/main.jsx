@@ -30,9 +30,16 @@ const loadStoredSession = () => {
 
 function Root() {
   const isDev = import.meta.env.DEV;
-  const [turnstileSession, setTurnstileSession] = useState(() =>
-    isDev ? { token: "dev-token", expiresAt: Number.MAX_SAFE_INTEGER } : loadStoredSession(),
-  );
+  const [turnstileSession, setTurnstileSession] = useState(() => {
+    if (isDev) {
+      return { token: "dev-token", expiresAt: Number.MAX_SAFE_INTEGER };
+    }
+    const stored = loadStoredSession();
+    if (stored?.token) {
+      setSupabaseAccessToken(stored.token);
+    }
+    return stored;
+  });
 
   const clearSession = useCallback(() => {
     setTurnstileSession(null);
