@@ -5,7 +5,7 @@ import App from "./App.jsx"; // main map page
 import ModerationPage from "./components/ModerationPage.jsx"; // we'll create this next
 import EntryGate from "./components/EntryGate.jsx";
 import { ThemeProvider } from "./context";
-import { supabase, supabaseConfigError } from "./supabaseClient";
+import { supabase, supabaseConfigError, setSupabaseAccessToken } from "./supabaseClient";
 import "./index.css";
 
 const SESSION_STORAGE_KEY = "turnstile-session";
@@ -29,7 +29,10 @@ const loadStoredSession = () => {
 };
 
 function Root() {
-  const [turnstileSession, setTurnstileSession] = useState(() => loadStoredSession());
+  const isDev = import.meta.env.DEV;
+  const [turnstileSession, setTurnstileSession] = useState(() =>
+    isDev ? { token: "dev-token", expiresAt: Number.MAX_SAFE_INTEGER } : loadStoredSession(),
+  );
 
   const clearSession = useCallback(() => {
     setTurnstileSession(null);
@@ -40,30 +43,8 @@ function Root() {
     } catch (err) {
       console.error("Unable to clear Turnstile session", err);
     }
-    if (supabase) {
-      supabase.auth.signOut().catch(() => {});
-    }
+    setSupabaseAccessToken(null);
   }, []);
-
-  useEffect(() => {
-    if (!turnstileSession?.token || !supabase) return;
-    const applySession = async () => {
-      try {
-        const { error } = await supabase.auth.setSession({
-          access_token: turnstileSession.token,
-          refresh_token: turnstileSession.token,
-        });
-        if (error) {
-          console.error("Failed to set Supabase session", error);
-          clearSession();
-        }
-      } catch (err) {
-        console.error("Supabase session error", err);
-        clearSession();
-      }
-    };
-    applySession();
-  }, [turnstileSession, clearSession]);
 
   useEffect(() => {
     if (!turnstileSession?.expiresAt) return;
@@ -85,20 +66,9 @@ function Root() {
       }
       const expiresAt = Date.now() + expiresIn * 1000;
       const nextSession = { token, expiresAt, sessionId };
-      if (supabase) {
-        try {
-          const { error } = await supabase.auth.setSession({
-            access_token: token,
-            refresh_token: token,
-          });
-          if (error) {
-            console.error("Supabase session setup failed", error);
-            return { ok: false, message: "Unable to connect to Supabase. Please retry." };
-          }
-        } catch (err) {
-          console.error("Supabase session setup failed", err);
-          return { ok: false, message: "Unable to connect to Supabase. Please retry." };
-        }
+      const client = setSupabaseAccessToken(token);
+      if (!client) {
+        return { ok: false, message: "Supabase configuration is missing. Check environment variables." };
       }
       try {
         if (typeof window !== "undefined") {
@@ -113,7 +83,12 @@ function Root() {
     [],
   );
 
-  const hasVerifiedSession = Boolean(turnstileSession?.token);
+  useEffect(() => {
+    if (!turnstileSession?.token || isDev) return;
+    setSupabaseAccessToken(turnstileSession.token);
+  }, [turnstileSession, isDev]);
+
+  const hasVerifiedSession = isDev || Boolean(turnstileSession?.token);
   const shouldRenderApp = hasVerifiedSession || Boolean(supabaseConfigError);
 
   return (

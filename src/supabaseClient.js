@@ -15,6 +15,35 @@ export const supabaseConfigError =
       )
     : null;
 
-export const supabase =
-  supabaseConfigError === null ? createClient(supabaseUrl, supabaseKey) : null;
+const baseOptions = {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+};
 
+const createClientWithToken = (token) =>
+  createClient(supabaseUrl, supabaseKey, {
+    ...baseOptions,
+    ...(token
+      ? {
+          global: {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        }
+      : {}),
+  });
+
+export let supabase =
+  supabaseConfigError === null && import.meta.env.DEV
+    ? createClientWithToken(null)
+    : null;
+
+export const setSupabaseAccessToken = (token) => {
+  if (supabaseConfigError) return null;
+  supabase = token ? createClientWithToken(token) : null;
+  return supabase;
+};
