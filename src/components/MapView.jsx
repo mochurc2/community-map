@@ -30,6 +30,28 @@ const CIRCLE_STEPS = 90;
 const MAP_CLICK_TARGET_ZOOM = 15.5;
 const CITY_OVERVIEW_ZOOM = 12.3;
 const CLUSTER_EDGE_DROP_ALPHA = 0.3;
+const DEFAULT_FALLBACK_CENTER = [12, 23];
+const DEFAULT_FALLBACK_ZOOM = 3.3;
+const GEOLOCATION_VIEW_ZOOM = 4.8;
+const MIN_MAP_ZOOM = 2;
+const MAX_MAP_ZOOM = 17;
+const MAX_BASEMAP_SOURCE_ZOOM = 14;
+const MAX_TILE_CACHE_ZOOM_LEVELS = 8;
+const LAND_BOUNDS_COORDS = [
+  [-178, -60],
+  [178, 82],
+];
+const LAND_BOUNDS = new maplibregl.LngLatBounds(
+  LAND_BOUNDS_COORDS[0],
+  LAND_BOUNDS_COORDS[1]
+);
+const buildDefaultCameraState = () => ({
+  center: [...DEFAULT_FALLBACK_CENTER],
+  zoom: DEFAULT_FALLBACK_ZOOM,
+  padding: null,
+});
+const GEOLOCATION_TIMEOUT_MS = 4500;
+const GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000;
 const easeOutHeavy = (t) => 1 - Math.pow(1 - t, 3);
 const easeInOut = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 const smoothDuration = (currentZoom, targetZoom) => {
@@ -290,12 +312,33 @@ const applyMutedBasemapPalette = (style, palette = MAP_PALETTES.light) => {
     }
   });
 
-  return { ...style, layers };
+  const nextStyle = { ...style, layers };
+  if (style?.sources) {
+    const nextSources = {};
+    Object.entries(style.sources).forEach(([sourceId, source]) => {
+      if (!source || typeof source !== "object") {
+        nextSources[sourceId] = source;
+        return;
+      }
+      if (source.type !== "vector") {
+        nextSources[sourceId] = { ...source };
+        return;
+      }
+      const existingMax = typeof source.maxzoom === "number" ? source.maxzoom : MAX_BASEMAP_SOURCE_ZOOM;
+      nextSources[sourceId] = {
+        ...source,
+        maxzoom: Math.min(existingMax, MAX_BASEMAP_SOURCE_ZOOM),
+      };
+    });
+    nextStyle.sources = nextSources;
+  }
+  return nextStyle;
 };
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 const toDegrees = (radians) => (radians * 180) / Math.PI;
-const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const clampValue = (value, min, max) => Math.max(min, Math.min(max, value));
+const clamp01 = (value) => clampValue(value, 0, 1);
 const lngLatToUnitVector = ({ lng, lat }) => {
   const phi = toRadians(lat);
   const lambda = toRadians(lng);
@@ -312,6 +355,10 @@ const visibilityAlphaOnGlobe = (centerVec, lng, lat, fadeDegrees = 8) => {
   if (fadeStartDot <= 0) return dot > 0 ? 1 : 0;
   return clamp01(dot / fadeStartDot);
 };
+const clampLngLatToBounds = (lng, lat, bounds = LAND_BOUNDS_COORDS) => ({
+  lng: clampValue(lng, bounds?.[0]?.[0] ?? -180, bounds?.[1]?.[0] ?? 180),
+  lat: clampValue(lat, bounds?.[0]?.[1] ?? -90, bounds?.[1]?.[1] ?? 90),
+});
 
 const normalizePadding = (padding) => {
   const source = padding || {};
@@ -739,13 +786,10 @@ function MapView({
   const forwardingMultiTouchRef = useRef(false);
   const lastFocusedPinRef = useRef(null);
   const prevSelectedPinIdRef = useRef(null);
-  const lastCameraRef = useRef({
-    center: [0, 20],
-    zoom: 2,
-    padding: null,
-  });
+  const lastCameraRef = useRef(buildDefaultCameraState());
   const currentStyleKeyRef = useRef(null);
   const cameraEaseFrameRef = useRef(null);
+  const geolocationAttemptedRef = useRef(false);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -762,6 +806,57 @@ function MapView({
   useEffect(() => {
     const canvas = document.createElement("canvas");
     measureContextRef.current = canvas.getContext("2d");
+  }, []);
+
+  useEffect(() => {
+    if (geolocationAttemptedRef.current) return undefined;
+    geolocationAttemptedRef.current = true;
+
+    if (typeof window === "undefined" || typeof navigator === "undefined" || !navigator.geolocation) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return;
+        const { lng, lat } = clampLngLatToBounds(
+          Number(position.coords.longitude),
+          Number(position.coords.latitude),
+          LAND_BOUNDS_COORDS
+        );
+        const nextCamera = {
+          center: [lng, lat],
+          zoom: Math.min(GEOLOCATION_VIEW_ZOOM, MAX_MAP_ZOOM),
+          padding: null,
+        };
+        lastCameraRef.current = nextCamera;
+        const map = mapRef.current;
+        if (map) {
+          map.easeTo({
+            center: nextCamera.center,
+            zoom: nextCamera.zoom,
+            duration: 900,
+            essential: true,
+          });
+        }
+      },
+      (error) => {
+        if (import.meta.env.DEV) {
+          console.debug("[MapView] geolocation unavailable", error);
+        }
+      },
+      {
+        enableHighAccuracy: false,
+        maximumAge: GEOLOCATION_MAX_AGE_MS,
+        timeout: GEOLOCATION_TIMEOUT_MS,
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const ensureEmojiImage = useCallback(async (emoji) => {
@@ -1586,20 +1681,25 @@ function MapView({
       console.debug("[MapView] initializing MapLibre map once");
     }
 
+    const initialCamera = lastCameraRef.current || buildDefaultCameraState();
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: resolvedStyle,
-      center: lastCameraRef.current?.center || [0, 20],
-      zoom: lastCameraRef.current?.zoom || 2,
-      padding: lastCameraRef.current?.padding || undefined,
-      minZoom: 2,
-      maxZoom: 16,
+      center: initialCamera.center || [...DEFAULT_FALLBACK_CENTER],
+      zoom:
+        typeof initialCamera.zoom === "number" ? initialCamera.zoom : DEFAULT_FALLBACK_ZOOM,
+      padding: initialCamera.padding || undefined,
+      minZoom: MIN_MAP_ZOOM,
+      maxZoom: MAX_MAP_ZOOM,
       fadeDuration: 0,
       maxTileCacheSize: 2048,
+      maxTileCacheZoomLevels: MAX_TILE_CACHE_ZOOM_LEVELS,
       reuseMaps: true,
       renderWorldCopies: false,
       projection: { type: projectionName, name: projectionName },
     });
+
+    map.setMaxBounds(LAND_BOUNDS);
 
     mapRef.current = map;
     onMapReady(map);
