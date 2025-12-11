@@ -52,11 +52,10 @@ const createClientWithToken = (token) => {
   return createClient(supabaseUrl, supabaseKey, options);
 };
 
-export let supabase =
-  supabaseConfigError === null && import.meta.env.DEV ? createClientWithToken(null) : null;
+export let supabase = supabaseConfigError ? null : createClientWithToken(null);
 
 export const setSupabaseAccessToken = (token) => {
   if (supabaseConfigError) return null;
-  supabase = token ? createClientWithToken(token) : null;
+  supabase = createClientWithToken(token || null);
   return supabase;
 };
