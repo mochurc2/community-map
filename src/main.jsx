@@ -92,11 +92,11 @@ function Root() {
   }, [turnstileSession]);
 
   const hasVerifiedSession = Boolean(turnstileSession?.token);
-  const shouldRenderApp = hasVerifiedSession || Boolean(supabaseConfigError);
+  const shouldRenderRoutes = true;
 
   return (
     <BrowserRouter>
-      {shouldRenderApp && (
+      {shouldRenderRoutes && (
         <Routes>
           <Route path="/" element={<App />} />
           <Route path="/moderate" element={<ModerationPage />} />
