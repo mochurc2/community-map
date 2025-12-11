@@ -29,11 +29,7 @@ const loadStoredSession = () => {
 };
 
 function Root() {
-  const isDev = import.meta.env.DEV;
   const [turnstileSession, setTurnstileSession] = useState(() => {
-    if (isDev) {
-      return { token: "dev-token", expiresAt: Number.MAX_SAFE_INTEGER };
-    }
     const stored = loadStoredSession();
     if (stored?.token) {
       setSupabaseAccessToken(stored.token);
@@ -91,11 +87,11 @@ function Root() {
   );
 
   useEffect(() => {
-    if (!turnstileSession?.token || isDev) return;
+    if (!turnstileSession?.token) return;
     setSupabaseAccessToken(turnstileSession.token);
-  }, [turnstileSession, isDev]);
+  }, [turnstileSession]);
 
-  const hasVerifiedSession = isDev || Boolean(turnstileSession?.token);
+  const hasVerifiedSession = Boolean(turnstileSession?.token);
   const shouldRenderApp = hasVerifiedSession || Boolean(supabaseConfigError);
 
   return (
