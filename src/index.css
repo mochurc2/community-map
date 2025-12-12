@@ -1313,6 +1313,11 @@ textarea {
   background: var(--status-success-bg);
   border-color: var(--status-success-border);
 }
+.status.warning {
+  color: var(--status-warning-text);
+  background: var(--status-warning-bg);
+  border-color: var(--status-warning-border);
+}
 
 .filter-actions {
   display: flex;
@@ -1769,6 +1774,60 @@ textarea {
 }
 
 .feedback-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 70;
+}
+
+.confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.confirm-card {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(90vh, 880px);
+  background: var(--surface-panel);
+  border-radius: var(--radius-md);
+  padding: 1.1rem 1.25rem;
+  box-shadow: var(--panel-shadow);
+  border: 1px solid var(--color-border);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.confirm-preview {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  overflow: auto;
+  padding: 0.35rem;
+  max-height: 60vh;
+}
+
+.confirm-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;

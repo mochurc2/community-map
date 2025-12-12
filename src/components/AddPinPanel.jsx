@@ -1,6 +1,7 @@
 import { CalendarClock } from 'lucide-react';
 import BubbleSelector from './BubbleSelector';
 import EmojiSelector from './EmojiSelector';
+import SubmitConfirmationModal from './SubmitConfirmationModal';
 import { EMOJI_CHOICES } from '../constants/constants';
 import { defaultExpiryDate } from '../util.js';
 import { usePinFormContext } from '../context';
@@ -35,6 +36,7 @@ export function AddPinPanel() {
     submitError,
     hasSubmitted,
     submitting,
+    pendingSubmission,
     selectedBaseEmoji,
     skinToneOptions,
     hasSkinToneOptions,
@@ -48,17 +50,24 @@ export function AddPinPanel() {
     handleEmojiSelect,
     handleSubmit,
     selectedLocation,
+    confirmSubmission,
+    cancelConfirmation,
   } = usePinFormContext();
 
   // Get app-level state from context
   const {
     bubbleOptions,
     handleCustomOption,
+    isInterestApproved,
     orderedContactOptions,
     panelPlacement,
     showFullAddForm,
     setShowFullAddForm,
   } = useAppContext();
+
+  const confirmationPin = pendingSubmission?.previewPin;
+  const confirmationOpen = Boolean(pendingSubmission);
+  const showContactWarning = pendingSubmission ? !pendingSubmission.hasContactInfo : false;
 
   const ageNumber = Number(form.age);
   const showAgeWarning =
@@ -290,11 +299,22 @@ export function AddPinPanel() {
             if you would like your pin removed or changed after submission.
           </p>
 
-          <button type="submit" disabled={submitting} className="primary">
+          <button type="submit" disabled={submitting || confirmationOpen} className="primary">
             {submitting ? "Submitting…" : "Submit pin for review"}
           </button>
         </form>
       )}
+
+      <SubmitConfirmationModal
+        pin={confirmationPin}
+        open={confirmationOpen}
+        submitting={submitting}
+        onConfirm={confirmSubmission}
+        onCancel={cancelConfirmation}
+        isInterestApproved={isInterestApproved}
+        showContactWarning={showContactWarning}
+        errorMessage={submitError}
+      />
     </div>
   );
 }
