@@ -1,7 +1,6 @@
 import { CalendarClock } from 'lucide-react';
 import BubbleSelector from './BubbleSelector';
 import EmojiSelector from './EmojiSelector';
-import SubmitConfirmationModal from './SubmitConfirmationModal';
 import { EMOJI_CHOICES } from '../constants/constants';
 import { defaultExpiryDate } from '../util.js';
 import { usePinFormContext } from '../context';
@@ -32,11 +31,9 @@ export function AddPinPanel() {
     form,
     setForm,
     contactErrors,
-    submitMsg,
     submitError,
     hasSubmitted,
     submitting,
-    pendingSubmission,
     selectedBaseEmoji,
     skinToneOptions,
     hasSkinToneOptions,
@@ -50,8 +47,6 @@ export function AddPinPanel() {
     handleEmojiSelect,
     handleSubmit,
     selectedLocation,
-    confirmSubmission,
-    cancelConfirmation,
   } = usePinFormContext();
 
   // Get app-level state from context
@@ -64,10 +59,6 @@ export function AddPinPanel() {
     showFullAddForm,
     setShowFullAddForm,
   } = useAppContext();
-
-  const confirmationPin = pendingSubmission?.previewPin;
-  const confirmationOpen = Boolean(pendingSubmission);
-  const showContactWarning = pendingSubmission ? !pendingSubmission.hasContactInfo : false;
 
   const ageNumber = Number(form.age);
   const showAgeWarning =
@@ -293,28 +284,16 @@ export function AddPinPanel() {
           </div>
 
           {submitError && <p className="status error">{submitError}</p>}
-          {submitMsg && <p className="status success">{submitMsg}</p>}
           <p className="helper-text label-helper">
             You will not be able to edit your pin after submission. Please use the report pin feature
             if you would like your pin removed or changed after submission.
           </p>
 
-          <button type="submit" disabled={submitting || confirmationOpen} className="primary">
+          <button type="submit" disabled={submitting} className="primary">
             {submitting ? "Submitting…" : "Submit pin for review"}
           </button>
         </form>
       )}
-
-      <SubmitConfirmationModal
-        pin={confirmationPin}
-        open={confirmationOpen}
-        submitting={submitting}
-        onConfirm={confirmSubmission}
-        onCancel={cancelConfirmation}
-        isInterestApproved={isInterestApproved}
-        showContactWarning={showContactWarning}
-        errorMessage={submitError}
-      />
     </div>
   );
 }

@@ -19,6 +19,8 @@ const getBaseEmoji = (emoji) => {
   );
 };
 
+const EMOJI_REGEX = /\p{Extended_Pictographic}/u;
+
 const buildInitialFormState = () => ({
   icon: "",
   nickname: "",
@@ -187,6 +189,10 @@ export function usePinForm({
       setSubmitError("Add a nickname so others can recognize your pin.");
       return;
     }
+    if (EMOJI_REGEX.test(trimmedNickname)) {
+      setSubmitError("Nicknames cannot include emoji characters.");
+      return;
+    }
 
     const ageNumber = Number(form.age);
     if (!form.age || Number.isNaN(ageNumber)) {
@@ -320,7 +326,7 @@ export function usePinForm({
       setHasSubmitted(true);
       setSelectedLocation(null);
       refreshPendingPins();
-      setPendingSubmission(null);
+      setPendingSubmission((prev) => (prev ? { ...prev, submitted: true } : prev));
     } catch (err) {
       console.error(err);
       setSubmitError(err.message || "Failed to submit your pin. Please try again.");

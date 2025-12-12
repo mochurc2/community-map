@@ -8,12 +8,14 @@ import PinInfoPanel from './PinInfoPanel';
 export function SubmitConfirmationModal({
   pin,
   open,
+  submitted = false,
   submitting,
   onConfirm,
   onCancel,
   isInterestApproved,
   showContactWarning,
   errorMessage,
+  successMessage,
 }) {
   if (!open || !pin) return null;
 
@@ -59,24 +61,32 @@ export function SubmitConfirmationModal({
             />
           </div>
 
-          <p className="muted" style={{ margin: "0 0 0.25rem" }}>
+          <p className="status warning" style={{ margin: 0 }}>
             {expiryMessage}
           </p>
 
           {errorMessage && <p className="status error">{errorMessage}</p>}
+          {submitted && successMessage && <p className="status success">{successMessage}</p>}
 
-          {showContactWarning && (
+          {showContactWarning && !submitted && (
             <p className="status warning" style={{ marginBottom: 0 }}>
               Submit without contact information? Other users will not be able to reach you :(
             </p>
           )}
 
           <div className="confirm-actions">
-            <button type="button" className="ghost" onClick={onCancel} disabled={submitting}>
-              Go back
-            </button>
-            <button type="button" className="primary" onClick={onConfirm} disabled={submitting}>
-              {submitting ? "Submitting..." : "Confirm submission"}
+            {!submitted && (
+              <button type="button" className="ghost" onClick={onCancel} disabled={submitting}>
+                Go back
+              </button>
+            )}
+            <button
+              type="button"
+              className="primary"
+              onClick={submitted ? onCancel : onConfirm}
+              disabled={submitting}
+            >
+              {submitted ? "Close" : submitting ? "Submitting..." : "Confirm submission"}
             </button>
           </div>
         </div>

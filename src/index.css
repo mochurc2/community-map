@@ -1799,7 +1799,7 @@ textarea {
 .confirm-card {
   position: relative;
   width: min(720px, 100%);
-  max-height: min(90vh, 880px);
+  max-height: 100vh;
   background: var(--surface-panel);
   border-radius: var(--radius-md);
   padding: 1.1rem 1.25rem;

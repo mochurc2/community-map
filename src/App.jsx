@@ -11,6 +11,7 @@ import PinInfoPanel from "./components/PinInfoPanel";
 import PinCard from "./components/PinCard";
 import ReportPinButton from "./components/ReportPinButton";
 import FeedbackModal from "./components/FeedbackModal";
+import SubmitConfirmationModal from "./components/SubmitConfirmationModal";
 import privacyPolicyContent from "../PrivacyPolicy.md?raw";
 import termsContent from "../ToS.md?raw";
 
@@ -97,6 +98,12 @@ function AppContent() {
     setSubmitMsg,
     setSubmitError,
     hasSubmitted,
+    pendingSubmission,
+    submitting,
+    submitError,
+    submitMsg,
+    confirmSubmission,
+    cancelConfirmation,
     autofillLocation,
   } = pinFormHook;
 
@@ -111,8 +118,30 @@ function AppContent() {
     titleCardHeight,
     titleCardRef,
     togglePanel,
+    openAddPanel,
     closePanel,
   } = panelStateHook;
+
+  useEffect(() => {
+    if (pendingSubmission) {
+      closePanel();
+    }
+  }, [pendingSubmission, closePanel]);
+
+  const confirmationPin = pendingSubmission?.previewPin;
+  const confirmationOpen = Boolean(pendingSubmission);
+  const confirmationSubmitted = Boolean(pendingSubmission?.submitted);
+  const showContactWarning = pendingSubmission ? !pendingSubmission.hasContactInfo : false;
+
+  const handleConfirmationCancel = useCallback(() => {
+    cancelConfirmation();
+    openAddPanel();
+    setShowFullAddForm(true);
+  }, [cancelConfirmation, openAddPanel, setShowFullAddForm]);
+
+  const handleConfirmationClose = useCallback(() => {
+    cancelConfirmation();
+  }, [cancelConfirmation]);
 
   const pinPanelRef = useRef(null);
   const [pinPanelBounds, setPinPanelBounds] = useState(null);
@@ -277,6 +306,8 @@ function AppContent() {
     panelPlacement,
     showFullAddForm,
     setShowFullAddForm,
+    openAddPanel,
+    closePanel,
   }), [
     bubbleOptions,
     isInterestApproved,
@@ -286,6 +317,8 @@ function AppContent() {
     panelPlacement,
     showFullAddForm,
     setShowFullAddForm,
+    openAddPanel,
+    closePanel,
   ]);
 
   const pinFormContextValue = useMemo(() => ({
@@ -397,6 +430,19 @@ function AppContent() {
             {policyModal && (
               <PolicyModal title={policyTitle} content={policyContent} onClose={closePolicy} />
             )}
+
+            <SubmitConfirmationModal
+              pin={confirmationPin}
+              open={confirmationOpen}
+              submitted={confirmationSubmitted}
+              submitting={submitting}
+              onConfirm={confirmSubmission}
+              onCancel={confirmationSubmitted ? handleConfirmationClose : handleConfirmationCancel}
+              isInterestApproved={isInterestApproved}
+              showContactWarning={!confirmationSubmitted && showContactWarning}
+              errorMessage={submitError}
+              successMessage={submitMsg}
+            />
 
             <FeedbackModal />
           </div>
