@@ -5,6 +5,7 @@ import ConfigErrorNotice from "./components/ConfigErrorNotice";
 import MapView from "./components/MapView";
 import PolicyModal from "./components/PolicyModal";
 import TitleCard from "./components/TitleCard";
+import ErrorStack from "./components/ErrorStack";
 import Panel from "./components/Panel";
 import PanelContent from "./components/PanelContent";
 import PinInfoPanel from "./components/PinInfoPanel";
@@ -72,6 +73,7 @@ function AppContent() {
     pinsError,
     approvedPinsCount,
     pendingPinsLabel,
+    pendingPinsError,
     interestPopularity,
     contactPopularity,
     refreshPendingPins,
@@ -145,6 +147,7 @@ function AppContent() {
 
   const pinPanelRef = useRef(null);
   const [pinPanelBounds, setPinPanelBounds] = useState(null);
+  const [mapErrorMessage, setMapErrorMessage] = useState(null);
 
   // Map interaction handlers
   const handleMapClick = useCallback(
@@ -331,6 +334,28 @@ function AppContent() {
     orderedInterestOptions,
   }), [filtersHook, orderedInterestOptions]);
 
+  const appErrors = useMemo(() => {
+    const errors = [];
+    if (mapErrorMessage) {
+      errors.push({ id: "map", source: "Map", message: mapErrorMessage });
+    }
+    if (pinsError) {
+      errors.push({ id: "pins", source: "Pins", message: pinsError });
+    }
+    if (pendingPinsError) {
+      errors.push({
+        id: "pendingPins",
+        source: "Pending pins",
+        message: pendingPinsError,
+      });
+    }
+    return errors;
+  }, [mapErrorMessage, pendingPinsError, pinsError]);
+
+  const handleMapError = useCallback((message) => {
+    setMapErrorMessage(message || null);
+  }, []);
+
   return (
     <AppProvider value={appContextValue}>
       <PinFormProvider value={pinFormContextValue}>
@@ -350,6 +375,7 @@ function AppContent() {
               pinPanelBounds={pinPanelBounds}
               onMapReady={handleMapReady}
               projection={projectionMode}
+              onMapError={handleMapError}
             />
 
             <div className="overlay-rail">
@@ -360,6 +386,8 @@ function AppContent() {
                 projectionMode={projectionMode}
                 onToggleProjection={toggleProjectionMode}
               />
+
+              <ErrorStack errors={appErrors} />
 
               {activePanel && panelPlacement === "side" && (
                 <Panel

@@ -747,6 +747,7 @@ function MapView({
   pinPanelBounds = null,
   projection = "mercator",
   onMapReady = () => {},
+  onMapError = () => {},
 }) {
   const { mode: themeMode } = useTheme();
   const mapContainerRef = useRef(null);
@@ -759,6 +760,7 @@ function MapView({
   const [mapError, setMapError] = useState(null);
   const [resolvedStyle, setResolvedStyle] = useState(null);
   const [resolvedStyleKey, setResolvedStyleKey] = useState(null);
+  const [styleAttemptIndex, setStyleAttemptIndex] = useState(0);
   const [isInteracting, setIsInteracting] = useState(false);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
@@ -773,10 +775,10 @@ function MapView({
   const pinOffsetCacheRef = useRef(new Map());
   const mapPalette = useMemo(() => MAP_PALETTES[themeMode] || MAP_PALETTES.light, [themeMode]);
   const styleUrlMemo = useMemo(() => {
-    const fallback = STYLE_URLS.light || STYLE_URLS.dark || null;
-    if (themeMode === "dark") return STYLE_URLS.dark || fallback;
-    return STYLE_URLS.light || STYLE_URLS.dark || null;
-  }, [themeMode]);
+    const candidates =
+      themeMode === "dark" ? STYLE_CANDIDATES.dark || [] : STYLE_CANDIDATES.light || [];
+    return candidates[styleAttemptIndex] || null;
+  }, [styleAttemptIndex, themeMode]);
   const projectionName = projection === "globe" ? "globe" : "mercator";
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
@@ -790,6 +792,16 @@ function MapView({
   const currentStyleKeyRef = useRef(null);
   const cameraEaseFrameRef = useRef(null);
   const geolocationAttemptedRef = useRef(false);
+  const onMapErrorRef = useRef(onMapError);
+
+  useEffect(() => {
+    onMapErrorRef.current = onMapError;
+  }, [onMapError]);
+
+  const setMapErrorMessage = useCallback((message) => {
+    setMapError(message);
+    onMapErrorRef.current?.(message);
+  }, []);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -1622,6 +1634,11 @@ function MapView({
   }, [scheduleLayout]);
 
   useEffect(() => {
+    // Reset style attempts when theme changes so we start from the primary choice.
+    setStyleAttemptIndex(0);
+  }, [themeMode]);
+
+  useEffect(() => {
     const map = mapRef.current;
     const canvas = map?.getCanvas?.();
     if (!canvas) return undefined;
@@ -1636,44 +1653,70 @@ function MapView({
     let cancelled = false;
 
     const loadStyle = async () => {
-    if (!styleUrlMemo) {
-      setResolvedStyle(null);
-      setResolvedStyleKey(null);
-      return;
-    }
-    try {
-      setMapError(null);
-      const cacheKey = `${styleUrlMemo}|${themeMode}`;
-      const cached = cacheKey ? styleCache.get(cacheKey) : null;
-      const stylePromise = cached || (async () => {
-        const response = await fetch(styleUrlMemo, { cache: "force-cache" });
-        if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
-        const baseStyle = await response.json();
-        const styleClone = JSON.parse(JSON.stringify(baseStyle));
-        return applyMutedBasemapPalette(styleClone, mapPalette);
-      })();
-      if (!cached && cacheKey) styleCache.set(cacheKey, stylePromise);
-      const styled = await stylePromise;
-      if (!cancelled) {
-        setResolvedStyle(styled);
-        setResolvedStyleKey(cacheKey || null);
-      }
-    } catch (error) {
-      console.error("map style load error", error);
-      if (!cancelled) {
+      if (!styleUrlMemo) {
         setResolvedStyle(null);
         setResolvedStyleKey(null);
-        setMapError("Map style failed to load");
+        setMapErrorMessage(null);
+        return;
       }
-    }
-  };
+
+      try {
+        setMapErrorMessage(null);
+        const cacheKey = `${styleUrlMemo}|${themeMode}`;
+        const cached = cacheKey ? styleCache.get(cacheKey) : null;
+        const stylePromise =
+          cached ||
+          (async () => {
+            const response = await fetch(styleUrlMemo, { cache: "force-cache" });
+            if (!response.ok) {
+              let detail = "";
+              try {
+                detail = (await response.text())?.trim();
+              } catch {
+                detail = "";
+              }
+              const statusLabel = response.statusText || `HTTP ${response.status}`;
+              const reason = detail || statusLabel;
+              throw new Error(`Style request failed (${response.status}): ${reason}`);
+            }
+            const baseStyle = await response.json();
+            const styleClone = JSON.parse(JSON.stringify(baseStyle));
+            return applyMutedBasemapPalette(styleClone, mapPalette);
+          })();
+        if (!cached && cacheKey) styleCache.set(cacheKey, stylePromise);
+        const styled = await stylePromise;
+        if (!cancelled) {
+          setResolvedStyle(styled);
+          setResolvedStyleKey(cacheKey || null);
+        }
+      } catch (error) {
+        console.error("map style load error", error);
+        if (!cancelled) {
+          setResolvedStyle(null);
+          setResolvedStyleKey(null);
+          const hasFallback =
+            (themeMode === "dark"
+              ? (STYLE_CANDIDATES.dark || []).length
+              : (STYLE_CANDIDATES.light || []).length) >
+            styleAttemptIndex + 1;
+          if (hasFallback) {
+            setMapErrorMessage(
+              (error?.message || "Map style failed to load") + " - trying fallback style"
+            );
+            setStyleAttemptIndex((prev) => prev + 1);
+            return;
+          }
+          setMapErrorMessage(error?.message || "Map style failed to load");
+        }
+      }
+    };
 
     loadStyle();
 
     return () => {
       cancelled = true;
     };
-  }, [mapPalette, styleUrlMemo, themeMode]);
+  }, [mapPalette, setMapErrorMessage, styleAttemptIndex, styleUrlMemo, themeMode]);
 
   // Initialize the map once; keep dependencies minimal so the instance persists.
   useEffect(() => {
@@ -1710,12 +1753,13 @@ function MapView({
       await installCustomLayers(map);
       currentStyleKeyRef.current = styleUrlMemo ? `${styleUrlMemo}|${themeMode}` : "inline";
       setMapLoaded(true);
+      setMapErrorMessage(null);
       runLayout();
     });
 
     map.on("error", (evt) => {
       const message = evt?.error?.message || "Map could not load";
-      setMapError(message);
+      setMapErrorMessage(message);
     });
 
     map.on("movestart", () => {
@@ -1772,7 +1816,16 @@ function MapView({
         onMapClickRef.current(e.lngLat);
       }
     });
-  }, [resolvedStyle, ensureEmojiImage, installCustomLayers, projectionName, runLayout, styleUrlMemo, themeMode]);
+  }, [
+    resolvedStyle,
+    ensureEmojiImage,
+    installCustomLayers,
+    projectionName,
+    runLayout,
+    setMapErrorMessage,
+    styleUrlMemo,
+    themeMode,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -2281,7 +2334,7 @@ function MapView({
 
   return (
     <div className="map-wrapper">
-      {!mapLoaded && !mapError && <div className="map-banner">Loading map tiles…</div>}
+      {!mapLoaded && !mapError && <div className="map-banner">Loading map tiles...</div>}
       {mapError && (
         <div className="map-banner error">
           <span>{mapError}</span>
@@ -2377,6 +2430,9 @@ function MapView({
 }
 
 const protomapsKey = import.meta.env.VITE_PROTOMAPS_KEY || import.meta.env.VITE_PROTOMAPS_API_KEY;
+const maptilerLightStyle = import.meta.env.VITE_MAPTILER_STYLE_URL || null;
+const maptilerDarkStyle = import.meta.env.VITE_MAPTILER_DARK_STYLE_URL || maptilerLightStyle || null;
+
 const STYLE_URLS = {
   light:
     import.meta.env.VITE_PROTOMAPS_STYLE_URL ||
@@ -2384,6 +2440,11 @@ const STYLE_URLS = {
   dark:
     import.meta.env.VITE_PROTOMAPS_DARK_STYLE_URL ||
     (protomapsKey ? `https://api.protomaps.com/styles/v5/dark/en.json?key=${protomapsKey}` : null),
+};
+
+const STYLE_CANDIDATES = {
+  light: [STYLE_URLS.light, maptilerLightStyle].filter(Boolean),
+  dark: [STYLE_URLS.dark, maptilerDarkStyle].filter(Boolean),
 };
 
 export default MapView;

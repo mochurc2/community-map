@@ -641,6 +641,41 @@ textarea {
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
+.error-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.error-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: var(--status-error-bg);
+  color: var(--status-error-text);
+  border: 1px solid var(--status-error-border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 0.9rem;
+  box-shadow: var(--panel-shadow);
+}
+
+.error-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.error-card__title {
+  font-size: 0.95rem;
+}
+
+.error-card__message {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .title-row {
   display: flex;
   gap: 0.65rem;
