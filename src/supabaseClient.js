@@ -59,16 +59,3 @@ export const setSupabaseAccessToken = (token) => {
   supabase = createClientWithToken(token || null);
   return supabase;
 };
-
-// Separate client for authenticated moderator flows (does not get replaced by Turnstile tokens)
-// Enables password login and keeps its own session state.
-const authClientOptions = {
-  ...baseOptions,
-  auth: {
-    ...baseOptions.auth,
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-};
-
-export const supabaseAuth = supabaseConfigError ? null : createClient(supabaseUrl, supabaseKey, authClientOptions);

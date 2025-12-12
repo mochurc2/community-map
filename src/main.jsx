@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx"; // main map page
-import ModerationPage from "./components/ModerationPage.jsx"; // we'll create this next
 import EntryGate from "./components/EntryGate.jsx";
 import { ThemeProvider } from "./context";
 import { supabase, supabaseConfigError, setSupabaseAccessToken } from "./supabaseClient";
@@ -99,7 +98,6 @@ function Root() {
       {shouldRenderRoutes && (
         <Routes>
           <Route path="/" element={<App />} />
-          <Route path="/moderate" element={<ModerationPage />} />
         </Routes>
       )}
       {!supabaseConfigError && !hasVerifiedSession && (
