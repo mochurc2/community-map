@@ -10,13 +10,15 @@ import { getGenderList, buildContactLink } from './pinUtils';
  * @param {Object} props
  * @param {Object} props.pin - The selected pin object
  * @param {Function} props.isInterestApproved - Callback to check if interest tag is approved
+ * @param {boolean} [props.showAllInterests=false] - When true, bypass interest approval filter
  */
-export function PinInfoPanel({ pin, isInterestApproved }) {
+export function PinInfoPanel({ pin, isInterestApproved, showAllInterests = false }) {
   if (!pin) return null;
 
   const selectedSeeking = Array.isArray(pin.seeking) ? pin.seeking : [];
+  const interestFilter = showAllInterests ? () => true : isInterestApproved || (() => true);
   const selectedInterestTags = Array.isArray(pin.interest_tags)
-    ? pin.interest_tags.filter(isInterestApproved)
+    ? pin.interest_tags.filter(interestFilter)
     : [];
   const selectedGenderList = getGenderList(pin.genders, pin.gender_identity);
   const pinLocationText = [pin.city, pin.state_province, pin.country || pin.country_code]

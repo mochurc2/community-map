@@ -19,6 +19,8 @@ const getBaseEmoji = (emoji) => {
   );
 };
 
+const EMOJI_REGEX = /\p{Extended_Pictographic}/u;
+
 const buildInitialFormState = () => ({
   icon: "",
   nickname: "",
@@ -54,6 +56,7 @@ export function usePinForm({
   const [submitError, setSubmitError] = useState(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -166,8 +169,11 @@ export function usePinForm({
     }
   }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
+    setSubmitError(null);
+    setSubmitMsg(null);
+
     if (!selectedLocation) {
       setSubmitError("Click on the map to choose a location first.");
       return;
@@ -181,6 +187,10 @@ export function usePinForm({
     const trimmedNickname = form.nickname.trim();
     if (!trimmedNickname) {
       setSubmitError("Add a nickname so others can recognize your pin.");
+      return;
+    }
+    if (EMOJI_REGEX.test(trimmedNickname)) {
+      setSubmitError("Nicknames cannot include emoji characters.");
       return;
     }
 
@@ -231,11 +241,6 @@ export function usePinForm({
     }
 
     setContactErrors({});
-    setSubmitting(true);
-    setSubmitError(null);
-    setSubmitMsg(null);
-
-    const randomizedLocation = randomizeLocation(selectedLocation, 500, 1500);
 
     const expiresAt = form.never_delete || !form.expires_at
       ? null
@@ -245,9 +250,7 @@ export function usePinForm({
 
     const primaryGender = getCanonicalBaseGender(baseGenderSelection) || form.genders[0] || "unspecified";
 
-    const { error } = await supabase.from("pins").insert({
-      lat: randomizedLocation.lat,
-      lng: randomizedLocation.lng,
+    const submissionPayload = {
       city: form.city || null,
       state_province: form.state_province || null,
       country: isoCountry || null,
@@ -265,27 +268,71 @@ export function usePinForm({
       never_delete: Boolean(form.never_delete),
       status: "pending",
       approved: false,
-    });
+    };
 
-    if (error) {
-      console.error(error);
-      if (error.message?.includes("age")) {
-        setSubmitError(
-          "The Supabase schema is missing the 'age' column. Please run the latest SQL in supabase/schema.sql to update your database."
-        );
-      } else {
-        setSubmitError(error.message);
+    const previewPin = {
+      ...submissionPayload,
+      contact_methods: contactPayload,
+    };
+
+    setPendingSubmission({
+      previewPin,
+      submissionPayload,
+      location: selectedLocation,
+      hasContactInfo: Object.keys(contactPayload).length > 0,
+    });
+  };
+
+  const cancelConfirmation = () => {
+    setPendingSubmission(null);
+  };
+
+  const confirmSubmission = async () => {
+    if (!pendingSubmission) return;
+    if (!pendingSubmission.location) {
+      setSubmitError("Click on the map to choose a location first.");
+      setPendingSubmission(null);
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+    setSubmitMsg(null);
+
+    try {
+      const randomizedLocation = randomizeLocation(pendingSubmission.location, 500, 1500);
+
+      const { error } = await supabase.from("pins").insert({
+        ...pendingSubmission.submissionPayload,
+        lat: randomizedLocation.lat,
+        lng: randomizedLocation.lng,
+      });
+
+      if (error) {
+        console.error(error);
+        if (error.message?.includes("age")) {
+          setSubmitError(
+            "The Supabase schema is missing the 'age' column. Please run the latest SQL in supabase/schema.sql to update your database."
+          );
+        } else {
+          setSubmitError(error.message);
+        }
+        return;
       }
-    } else {
+
       setSubmitMsg("Thanks! Your pin has been submitted for review. Please only submit one pin at a time.");
       setForm(buildInitialFormState());
       setContactErrors({});
       setHasSubmitted(true);
       setSelectedLocation(null);
       refreshPendingPins();
+      setPendingSubmission((prev) => (prev ? { ...prev, submitted: true } : prev));
+    } catch (err) {
+      console.error(err);
+      setSubmitError(err.message || "Failed to submit your pin. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   };
 
   // Computed form values
@@ -340,6 +387,7 @@ export function usePinForm({
     setSubmitError,
     hasSubmitted,
     submitting,
+    pendingSubmission,
     selectedBaseEmoji,
     skinToneOptions,
     hasSkinToneOptions,
@@ -352,6 +400,8 @@ export function usePinForm({
     handleGenderChange,
     handleEmojiSelect,
     handleSubmit,
+    confirmSubmission,
+    cancelConfirmation,
     autofillLocation,
   };
 }

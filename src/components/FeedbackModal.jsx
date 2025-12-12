@@ -52,7 +52,7 @@ export function FeedbackModal() {
                 onChange={(e) => setFeedbackMessage(e.target.value)}
                 placeholder={
                   feedbackPrompt.kind === "pin_report"
-                    ? "Describe what's wrong with this pin."
+                    ? "Describe what's wrong with this pin. This does NOT contact the pin owner. Please state if this is your pin or someone else's."
                     : "Share bugs, ideas, or anything else."
                 }
               />

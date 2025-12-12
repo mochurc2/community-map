@@ -72,6 +72,11 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
     }
   }, [panelPlacement, selectedLocation, hasSubmitted]);
 
+  const openAddPanel = useCallback(() => {
+    setActivePanel("add");
+    setShowFullAddForm(true);
+  }, []);
+
   const closePanel = useCallback(() => setActivePanel(null), []);
 
   return {
@@ -83,6 +88,7 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
     titleCardBounds,
     titleCardRef,
     togglePanel,
+    openAddPanel,
     closePanel,
   };
 }

@@ -31,7 +31,6 @@ export function AddPinPanel() {
     form,
     setForm,
     contactErrors,
-    submitMsg,
     submitError,
     hasSubmitted,
     submitting,
@@ -54,6 +53,7 @@ export function AddPinPanel() {
   const {
     bubbleOptions,
     handleCustomOption,
+    isInterestApproved,
     orderedContactOptions,
     panelPlacement,
     showFullAddForm,
@@ -284,7 +284,6 @@ export function AddPinPanel() {
           </div>
 
           {submitError && <p className="status error">{submitError}</p>}
-          {submitMsg && <p className="status success">{submitMsg}</p>}
           <p className="helper-text label-helper">
             You will not be able to edit your pin after submission. Please use the report pin feature
             if you would like your pin removed or changed after submission.
