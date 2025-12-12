@@ -17,6 +17,23 @@ export function SubmitConfirmationModal({
 }) {
   if (!open || !pin) return null;
 
+  let expiryMessage = "Your pin will be deleted on the selected date.";
+  if (pin.never_delete) {
+    expiryMessage = "Your pin is set to never delete.";
+  } else if (pin.expires_at) {
+    const expiresDate = new Date(pin.expires_at);
+    const readableDate = Number.isNaN(expiresDate.getTime())
+      ? null
+      : expiresDate.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+    expiryMessage = readableDate
+      ? `Your pin will be deleted on ${readableDate}.`
+      : "Your pin will be deleted on the selected date.";
+  }
+
   return (
     <div className="confirm-overlay" role="dialog" aria-modal="true">
       <div className="confirm-backdrop" onClick={submitting ? undefined : onCancel} />
@@ -26,9 +43,6 @@ export function SubmitConfirmationModal({
             <div className="panel-icon">{pin.icon || "📍"}</div>
             <div>
               <h3>{pin.nickname || "Unnamed pin"}</h3>
-              <p className="muted" style={{ margin: 0 }}>
-                Confirm your pin details before submitting for review.
-              </p>
             </div>
           </div>
           <button type="button" className="close-button" onClick={onCancel} disabled={submitting}>
@@ -37,10 +51,6 @@ export function SubmitConfirmationModal({
         </div>
 
         <div className="confirm-body">
-          <p className="muted" style={{ margin: 0 }}>
-            Review your info exactly as it will appear on the map.
-          </p>
-
           <div className="confirm-preview">
             <PinInfoPanel
               pin={pin}
@@ -48,6 +58,10 @@ export function SubmitConfirmationModal({
               showAllInterests
             />
           </div>
+
+          <p className="muted" style={{ margin: "0 0 0.25rem" }}>
+            {expiryMessage}
+          </p>
 
           {errorMessage && <p className="status error">{errorMessage}</p>}
 
