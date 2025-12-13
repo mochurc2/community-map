@@ -52,7 +52,27 @@ export function usePins(filters, isInterestApproved) {
       const { data, error } = await supabase
         .from("pins")
         .select(
-          "id, lat, lng, city, state_province, country, country_code, icon, nickname, age, genders, gender_identity, seeking, interest_tags, note, contact_methods, expires_at, never_delete"
+          [
+            "id",
+            "lat",
+            "lng",
+            "city",
+            "state_province",
+            "country",
+            "country_code",
+            "icon",
+            "nickname",
+            "age",
+            "genders",
+            "gender_identity",
+            "seeking",
+            "interest_tags",
+            "note",
+            "contact_methods",
+            "expires_at",
+            "never_delete",
+            "approved_at",
+          ].join(", ")
         )
         .eq("status", "approved")
         .or(`never_delete.eq.true,expires_at.is.null,expires_at.gt.${nowIso}`);
