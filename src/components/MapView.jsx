@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -1809,13 +1810,24 @@ function MapView({
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
 
 
+  // Microtask instead of rAF so pins stay in lockstep with the map frame.
   const scheduleLayout = useCallback(() => {
     if (scheduledLayoutRef.current) return;
     scheduledLayoutRef.current = true;
-    requestAnimationFrame(() => {
+    const run = () => {
       scheduledLayoutRef.current = false;
-      computeLayout();
-    });
+      if (isMapMovingRef.current) {
+        // Force immediate paint while panning/zooming to avoid a frame of lag.
+        flushSync(computeLayout);
+      } else {
+        computeLayout();
+      }
+    };
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(run);
+    } else {
+      Promise.resolve().then(run);
+    }
   }, [computeLayout]);
 
   const scheduleLayoutRef = useRef(scheduleLayout);
