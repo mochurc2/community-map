@@ -167,8 +167,8 @@ function AppContent() {
 
   const handlePinSelect = useCallback((pin) => {
     setSelectedPin(pin);
-    setSelectedLocation(null);
-  }, []);
+    closePanel();
+  }, [closePanel]);
 
   const applyProjection = useCallback((mode) => {
     const map = mapInstanceRef.current;
