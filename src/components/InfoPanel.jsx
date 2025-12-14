@@ -11,6 +11,8 @@ import { useFeedbackContext } from '../context/FeedbackContext';
  * @param {string} props.pendingPinsLabel - Label for pending pins status
  * @param {string} props.pinsError - Error message if pins failed to load
  * @param {Function} props.onOpenPolicy - Callback to open policy modal (receives 'tos' or 'privacy')
+ * @param {Function} props.onBrowseLatestPin - Callback to jump to the newest approved pin
+ * @param {boolean} props.canBrowsePins - Whether there is at least one pin to browse
  */
 export function InfoPanel({
   loadingPins,
@@ -18,6 +20,8 @@ export function InfoPanel({
   pendingPinsLabel,
   pinsError,
   onOpenPolicy,
+  onBrowseLatestPin,
+  canBrowsePins = false,
 }) {
   const { openFeedback } = useFeedbackContext();
   return (
@@ -51,6 +55,16 @@ export function InfoPanel({
             <p className="panel-copy">
               Select pins on the map to read their notes and see their interests and contact options.
             </p>
+            <div className="panel-button-row">
+              <button
+                type="button"
+                className="tiny-button"
+                onClick={onBrowseLatestPin}
+                disabled={!canBrowsePins}
+              >
+                Browse Pins
+              </button>
+            </div>
           </div>
           <div className="panel-subsection">
             <span className="eyebrow">Filter what you see</span>

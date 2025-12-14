@@ -1167,11 +1167,19 @@ textarea {
   padding-top: 0;
 }
 
-.pin-chip-row {
+.pin-nav-row {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.35rem;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0 1rem 1rem;
+}
+
+  .pin-chip-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
 }
 
 .pin-section {

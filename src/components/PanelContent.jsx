@@ -17,6 +17,8 @@ import FilterPanel from "./FilterPanel";
  * @param {string} props.pendingPinsLabel - Label for pending pins
  * @param {string} props.pinsError - Error message if pins failed to load
  * @param {Function} props.onOpenPolicy - Handler to open policy modal
+ * @param {Function} props.onBrowseLatestPin - Handler to jump to the newest approved pin
+ * @param {boolean} props.canBrowsePins - Whether there is at least one pin to browse
  */
 export function PanelContent({
   activePanel,
@@ -27,6 +29,8 @@ export function PanelContent({
   pendingPinsLabel,
   pinsError,
   onOpenPolicy,
+  onBrowseLatestPin,
+  canBrowsePins,
 }) {
   if (activePanel === "info") {
     return (
@@ -36,6 +40,8 @@ export function PanelContent({
         pendingPinsLabel={pendingPinsLabel}
         pinsError={pinsError}
         onOpenPolicy={onOpenPolicy}
+        onBrowseLatestPin={onBrowseLatestPin}
+        canBrowsePins={canBrowsePins}
       />
     );
   }
