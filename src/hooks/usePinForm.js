@@ -222,6 +222,11 @@ export function usePinForm({
       return;
     }
 
+    if (!Array.isArray(form.contact_channels) || form.contact_channels.length === 0) {
+      setSubmitError("You must provide at least one contact method.");
+      return;
+    }
+
     const contactValidationErrors = {};
     const contactPayload = {};
     form.contact_channels.forEach((channel) => {

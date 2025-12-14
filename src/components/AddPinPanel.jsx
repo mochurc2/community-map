@@ -17,6 +17,13 @@ const contactPlaceholders = {
   Youtube: "Full YouTube link",
   Website: "https://example.com",
   OnlyFans: "@username",
+  Recon: "username only",
+  recon: "username only",
+  "recon.com": "username only",
+  Signal: "+1 555 123 4567",
+  Telegram: "@username or t.me/link",
+  WhatsApp: "+1 555 123 4567",
+  Bluesky: "@name.bsky.social",
 };
 
 /**
@@ -176,7 +183,7 @@ export function AddPinPanel() {
 
           <BubbleSelector
             label="Interests and looking for"
-            helper="Required. Select at least 3 interests to continue."
+            helper="Required. Select ALL that apply because interests are used for filtering and finding users. You must select at least 3 to continue."
             options={interestOptionsForForm}
             multiple
             value={form.interest_tags}
@@ -209,7 +216,7 @@ export function AddPinPanel() {
           <div className="contact-section">
             <BubbleSelector
               label="Contact info"
-              helper="Optional. Select services to show and add your handle or link."
+              helper="You must provide at least one contact method."
               options={orderedContactOptions}
               multiple
               value={form.contact_channels}

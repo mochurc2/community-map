@@ -69,6 +69,12 @@ const isValidUrl = (value) => {
   }
 };
 
+const normalizePhoneNumber = (value) => {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 6 || digits.length > 15) return "";
+  return `+${digits}`;
+};
+
 const validateFromPattern = (value, pattern, message, normalize = stripAt) => {
   const normalized = normalize(value.trim());
   if (!normalized) {
@@ -81,6 +87,32 @@ const validateFromPattern = (value, pattern, message, normalize = stripAt) => {
 };
 
 const normalizeRedditHandle = (value) => value.replace(/^\/?u\//i, "u/").replace(/^u\//i, "");
+
+const extractTelegramHandle = (value) => {
+  const trimmed = value.trim();
+  const fromUrl = trimmed.match(/(?:t\.me|telegram\.me|telegram\.dog)\/@?([^/?#]+)/i);
+  if (fromUrl?.[1]) return fromUrl[1];
+  const handle = stripAt(trimmed);
+  return /^[A-Za-z0-9_]{5,32}$/.test(handle) ? handle : "";
+};
+
+const extractBlueskyHandle = (value) => {
+  const trimmed = value.trim();
+  const fromUrl = trimmed.match(/bsky\.app\/profile\/([^/?#]+)/i);
+  if (fromUrl?.[1]) return fromUrl[1].toLowerCase();
+  const handle = stripAt(trimmed);
+  if (/^did:plc:[a-z0-9]{10,}$/i.test(handle)) return handle.toLowerCase();
+  if (/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/i.test(handle)) return handle.toLowerCase();
+  return "";
+};
+
+const extractReconHandle = (value) => {
+  const trimmed = value.trim();
+  const fromUrl = trimmed.match(/recon\.com\/(?:en\/)?([^/?#]+)/i);
+  if (fromUrl?.[1]) return fromUrl[1];
+  const handle = stripAt(trimmed).replace(/^recon\.com\/?/i, "");
+  return /^[A-Za-z0-9._-]{2,32}$/i.test(handle) ? handle : "";
+};
 
 export const validateContactValue = (channel, rawValue) => {
   const value = rawValue?.toString().trim() || "";
@@ -180,6 +212,63 @@ export const validateContactValue = (channel, rawValue) => {
         ? { valid: true, normalizedValue: result.normalized }
         : { valid: false, message: result.message };
     }
+    case "Recon":
+    case "recon":
+    case "recon.com": {
+      const handle = extractReconHandle(value);
+      if (handle) {
+        return { valid: true, normalizedValue: handle };
+      }
+      const { valid, normalized } = isValidUrl(value);
+      if (valid && /recon\.com/i.test(normalized)) {
+        return { valid: true, normalizedValue: normalized };
+      }
+      return { valid: false, message: "Enter your Recon username." };
+    }
+    case "Signal": {
+      const normalizedPhone = normalizePhoneNumber(value);
+      if (normalizedPhone) {
+        return { valid: true, normalizedValue: normalizedPhone };
+      }
+      const { valid, normalized } = isValidUrl(value);
+      if (valid && /signal\.me|signal\.org/i.test(normalized)) {
+        return { valid: true, normalizedValue: normalized };
+      }
+      return { valid: false, message: "Enter a Signal phone number or signal.me link." };
+    }
+    case "Telegram": {
+      const handle = extractTelegramHandle(value);
+      if (handle) {
+        return { valid: true, normalizedValue: handle };
+      }
+      const { valid, normalized } = isValidUrl(value);
+      if (valid && /t\.me|telegram\.me|telegram\.dog/i.test(normalized)) {
+        return { valid: true, normalizedValue: normalized };
+      }
+      return { valid: false, message: "Enter a Telegram username like @name or t.me/name." };
+    }
+    case "WhatsApp": {
+      const normalizedPhone = normalizePhoneNumber(value);
+      if (normalizedPhone) {
+        return { valid: true, normalizedValue: normalizedPhone };
+      }
+      const { valid, normalized } = isValidUrl(value);
+      if (valid && /wa\.me|whatsapp\.com/i.test(normalized)) {
+        return { valid: true, normalizedValue: normalized };
+      }
+      return { valid: false, message: "Enter a WhatsApp phone number or wa.me link." };
+    }
+    case "Bluesky": {
+      const handle = extractBlueskyHandle(value);
+      if (handle) {
+        return { valid: true, normalizedValue: handle };
+      }
+      const { valid, normalized } = isValidUrl(value);
+      if (valid && /bsky\.app/i.test(normalized)) {
+        return { valid: true, normalizedValue: normalized };
+      }
+      return { valid: false, message: "Enter a Bluesky handle like name.bsky.social or a profile link." };
+    }
     default: {
       const { valid, normalized } = isValidUrl(value);
       return valid
@@ -257,6 +346,66 @@ export const buildContactLink = (channel, rawValue) => {
         href: `https://onlyfans.com/${handle}`,
         displayText: `https://onlyfans.com/${handle}`,
       };
+    }
+    case "Recon":
+    case "recon":
+    case "recon.com": {
+      const handle = extractReconHandle(value);
+      if (handle) {
+        const href = `https://recon.com/${handle}`;
+        return { label: "Recon", href, displayText: href };
+      }
+      const { valid, normalized } = isValidUrl(value);
+      if (valid && /recon\.com/i.test(normalized)) {
+        return { label: "Recon", href: normalized, displayText: normalized };
+      }
+      return { label: "Recon", displayText: value };
+    }
+    case "Signal": {
+      if (/signal\.me|signal\.org/i.test(value)) {
+        const { normalized } = isValidUrl(value);
+        const href = normalized || ensureProtocol(value);
+        return { label: channel, href, displayText: href };
+      }
+      const normalizedPhone = normalizePhoneNumber(value);
+      if (!normalizedPhone) return { label: channel, displayText: value };
+      const href = `https://signal.me/#p/${normalizedPhone}`;
+      return { label: channel, href, displayText: href };
+    }
+    case "Telegram": {
+      const handle = extractTelegramHandle(value);
+      if (handle) {
+        const href = `https://t.me/${handle}`;
+        return { label: channel, href, displayText: href };
+      }
+      const { valid, normalized } = isValidUrl(value);
+      if (valid) {
+        const href = normalized || ensureProtocol(value);
+        return { label: channel, href, displayText: href };
+      }
+      return { label: channel, displayText: value };
+    }
+    case "WhatsApp": {
+      if (/wa\.me|whatsapp\.com/i.test(value)) {
+        const { normalized } = isValidUrl(value);
+        const href = normalized || ensureProtocol(value);
+        return { label: channel, href, displayText: href };
+      }
+      const normalizedPhone = normalizePhoneNumber(value);
+      if (!normalizedPhone) return { label: channel, displayText: value };
+      const digitsOnly = normalizedPhone.replace(/\D/g, "");
+      const href = `https://wa.me/${digitsOnly}`;
+      return { label: channel, href, displayText: href };
+    }
+    case "Bluesky": {
+      const { valid, normalized } = isValidUrl(value);
+      if (valid && /bsky\.app/i.test(normalized)) {
+        return { label: channel, href: normalized, displayText: normalized };
+      }
+      const handle = extractBlueskyHandle(value);
+      if (!handle) return { label: channel, displayText: value };
+      const href = `https://bsky.app/profile/${handle}`;
+      return { label: channel, href, displayText: href };
     }
     default: {
       const { normalized } = isValidUrl(value);
