@@ -789,6 +789,7 @@ function MapView({
   const onMapClickRef = useRef(onMapClick);
   const onPinSelectRef = useRef(onPinSelect);
   const enableAddModeRef = useRef(enableAddMode);
+  const lastAddFocusLocationRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
   const [resolvedStyle, setResolvedStyle] = useState(null);
@@ -2016,6 +2017,8 @@ function MapView({
         zoom: zoomTarget >= MAP_CLICK_TARGET_ZOOM ? zoomTarget : MAP_CLICK_TARGET_ZOOM,
       });
 
+      lastAddFocusLocationRef.current = `${e.lngLat.lat.toFixed(6)},${e.lngLat.lng.toFixed(6)}`;
+
       if (onMapClickRef.current) {
         onMapClickRef.current(e.lngLat);
       }
@@ -2405,6 +2408,49 @@ function MapView({
       right: 12,
     };
   }, [panelPlacement, pinPanelBounds, titleCardBounds]);
+
+  useEffect(() => {
+    if (!enableAddMode) {
+      lastAddFocusLocationRef.current = null;
+      return;
+    }
+
+    if (!mapLoaded || !pendingLocation) return;
+    const { lng, lat } = pendingLocation;
+    if (typeof lng !== "number" || typeof lat !== "number") return;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    const locationKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    if (lastAddFocusLocationRef.current === locationKey) return;
+
+    const rawZoom = map.getZoom();
+    const safeCurrentZoom = typeof rawZoom === "number" ? rawZoom : MAP_CLICK_TARGET_ZOOM;
+    const targetZoom = Math.min(
+      map.getMaxZoom() || 20,
+      Math.max(safeCurrentZoom, MAP_CLICK_TARGET_ZOOM)
+    );
+    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+
+    requestCameraEase({
+      center: [lng, lat],
+      zoom: targetZoom,
+      padding: mobilePadding || undefined,
+      duration: smoothDuration(safeCurrentZoom, targetZoom),
+      easing: easeInOut,
+      force: true,
+    });
+
+    lastAddFocusLocationRef.current = locationKey;
+  }, [
+    computeMobilePadding,
+    enableAddMode,
+    mapLoaded,
+    panelPlacement,
+    pendingLocation,
+    requestCameraEase,
+  ]);
 
   useEffect(() => {
     if (selectedPinId === null || selectedPinId === undefined) return;

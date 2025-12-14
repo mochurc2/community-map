@@ -16,6 +16,8 @@ export function SubmitConfirmationModal({
   showContactWarning,
   errorMessage,
   successMessage,
+  onBrowseLatestPin,
+  browseDisabled = false,
 }) {
   if (!open || !pin) return null;
 
@@ -75,6 +77,16 @@ export function SubmitConfirmationModal({
           )}
 
           <div className="confirm-actions">
+            {submitted && onBrowseLatestPin && (
+              <button
+                type="button"
+                className="tiny-button"
+                onClick={onBrowseLatestPin}
+                disabled={browseDisabled}
+              >
+                Browse Pins
+              </button>
+            )}
             {!submitted && (
               <button type="button" className="ghost" onClick={onCancel} disabled={submitting}>
                 Go back
