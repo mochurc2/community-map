@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -52,6 +53,9 @@ const buildDefaultCameraState = () => ({
 });
 const GEOLOCATION_TIMEOUT_MS = 4500;
 const GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000;
+const RECENT_APPROVAL_WINDOW_MS = 12 * 60 * 60 * 1000;
+const BOUNCE_INTERVAL_MS = 20000;
+const BOUNCE_DURATION_MS = 900;
 const easeOutHeavy = (t) => 1 - Math.pow(1 - t, 3);
 const easeInOut = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 const smoothDuration = (currentZoom, targetZoom) => {
@@ -462,6 +466,35 @@ const renderEmojiImage = async (emoji) => {
   return createImageBitmap(canvas);
 };
 
+const pinBounceKey = (pin) => pin?.id ?? pin?.__key ?? null;
+const parseApprovedAtMs = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const isoLike = trimmed.replace(" ", "T");
+    let ms = Date.parse(isoLike);
+    if (!Number.isFinite(ms)) {
+      const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2}(?:\.\d+)?)([+-]\d{2})(?::?(\d{2}))?$/.exec(
+        trimmed
+      );
+      if (match) {
+        const [, ymd, hms, offHour, offMin] = match;
+        const offset = `${offHour}:${offMin || "00"}`;
+        ms = Date.parse(`${ymd}T${hms}${offset}`);
+      } else {
+        ms = Date.parse(`${isoLike}Z`);
+      }
+    }
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+};
+
 class UnionFind {
   constructor(size) {
     this.parent = Array.from({ length: size }, (_, i) => i);
@@ -766,6 +799,9 @@ function MapView({
   const loadingIconsRef = useRef(new Map());
   const [visualNodes, setVisualNodes] = useState([]);
   const [labelNodes, setLabelNodes] = useState([]);
+  const [timeNow, setTimeNow] = useState(() => Date.now());
+  const [viewedPinIds, setViewedPinIds] = useState(() => new Set());
+  const [activeBounces, setActiveBounces] = useState(() => new Set());
   const measureContextRef = useRef(null);
   const scheduledLayoutRef = useRef(false);
   const isMapMovingRef = useRef(false);
@@ -793,6 +829,8 @@ function MapView({
   const cameraEaseFrameRef = useRef(null);
   const geolocationAttemptedRef = useRef(false);
   const onMapErrorRef = useRef(onMapError);
+  const bounceTimersRef = useRef(new Map());
+  const bounceWaveTriggeredRef = useRef(false);
 
   useEffect(() => {
     onMapErrorRef.current = onMapError;
@@ -814,6 +852,14 @@ function MapView({
   useEffect(() => {
     enableAddModeRef.current = enableAddMode;
   }, [enableAddMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const intervalId = window.setInterval(() => setTimeNow(Date.now()), 60000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = document.createElement("canvas");
@@ -992,12 +1038,16 @@ function MapView({
   );
 
   const combinedPins = useMemo(() => {
-    const approved = (pins || []).map((pin, index) => ({
-      ...pin,
-      __kind: "approved",
-      __order: index,
-      __key: `approved-${pin.id ?? index}`,
-    }));
+    const approved = (pins || []).map((pin, index) => {
+      const approvedAtMs = parseApprovedAtMs(pin?.approved_at ?? pin?.approvedAt ?? pin?.approvedAtMs);
+      return {
+        ...pin,
+        approvedAtMs: Number.isFinite(approvedAtMs) ? approvedAtMs : null,
+        __kind: "approved",
+        __order: index,
+        __key: `approved-${pin.id ?? index}`,
+      };
+    });
 
     const pending = (pendingPins || []).map((pin, index) => ({
       ...pin,
@@ -1010,6 +1060,30 @@ function MapView({
 
     return [...approved, ...pending];
   }, [pins, pendingPins]);
+
+  const recentApprovedPins = useMemo(() => {
+    const now = timeNow;
+    const viewed = viewedPinIds;
+    return combinedPins.filter((pin) => {
+      if (pin.__kind !== "approved") return false;
+      const key = pinBounceKey(pin);
+      if (key === null || key === undefined) return false;
+      if (viewed.has(key)) return false;
+      const approvedAtMs = typeof pin.approvedAtMs === "number" ? pin.approvedAtMs : null;
+      if (!approvedAtMs || Number.isNaN(approvedAtMs)) return false;
+      if (approvedAtMs > now) return false;
+      return now - approvedAtMs <= RECENT_APPROVAL_WINDOW_MS;
+    });
+  }, [combinedPins, timeNow, viewedPinIds]);
+
+  const recentApprovedKeySet = useMemo(() => {
+    const set = new Set();
+    recentApprovedPins.forEach((pin) => {
+      const key = pinBounceKey(pin);
+      if (key !== null && key !== undefined) set.add(key);
+    });
+    return set;
+  }, [recentApprovedPins]);
 
   const requestCameraEase = useCallback(
     ({ center, zoom, padding, duration, easing, force = false }) => {
@@ -1046,6 +1120,125 @@ function MapView({
   const applyLabelNodes = useCallback((nextLabels) => {
     setLabelNodes(nextLabels.map((label) => ({ ...label, phase: "active" })));
   }, []);
+
+  const stopBounceForKey = useCallback((pinKey) => {
+    const timers = bounceTimersRef.current;
+    const entry = timers.get(pinKey);
+    if (entry?.nextTimeout) clearTimeout(entry.nextTimeout);
+    if (entry?.endTimeout) clearTimeout(entry.endTimeout);
+    timers.delete(pinKey);
+    setActiveBounces((prev) => {
+      if (!prev.has(pinKey)) return prev;
+      const next = new Set(prev);
+      next.delete(pinKey);
+      return next;
+    });
+  }, []);
+
+  const scheduleBounce = useCallback((pinKey, delayMs = BOUNCE_INTERVAL_MS) => {
+    if (pinKey === null || pinKey === undefined) return;
+    const timers = bounceTimersRef.current;
+    const runBounce = () => {
+      setActiveBounces((prev) => {
+        if (prev.has(pinKey)) return prev;
+        const next = new Set(prev);
+        next.add(pinKey);
+        return next;
+      });
+
+      const endId = setTimeout(() => {
+        setActiveBounces((prev) => {
+          if (!prev.has(pinKey)) return prev;
+          const next = new Set(prev);
+          next.delete(pinKey);
+          return next;
+        });
+        scheduleBounce(pinKey, BOUNCE_INTERVAL_MS);
+      }, BOUNCE_DURATION_MS);
+
+      timers.set(pinKey, { nextTimeout: null, endTimeout: endId });
+    };
+
+    const existing = timers.get(pinKey);
+    if (existing?.nextTimeout) clearTimeout(existing.nextTimeout);
+    if (existing?.endTimeout) clearTimeout(existing.endTimeout);
+
+    const timeoutId = setTimeout(runBounce, Math.max(0, delayMs));
+    timers.set(pinKey, { nextTimeout: timeoutId, endTimeout: null });
+  }, []);
+
+  useEffect(() => {
+    const timers = bounceTimersRef.current;
+    const activeKeys = new Set(
+      recentApprovedPins
+        .map((pin) => pinBounceKey(pin))
+        .filter((key) => key !== null && key !== undefined)
+    );
+
+    timers.forEach((_entry, key) => {
+      if (activeKeys.has(key)) return;
+      stopBounceForKey(key);
+    });
+
+    activeKeys.forEach((key) => {
+      if (timers.has(key)) return;
+      const initialDelay = Math.random() * BOUNCE_INTERVAL_MS;
+      scheduleBounce(key, initialDelay);
+    });
+  }, [recentApprovedPins, scheduleBounce, stopBounceForKey]);
+
+  useEffect(() => () => {
+    bounceTimersRef.current.forEach((entry) => {
+      if (entry?.nextTimeout) clearTimeout(entry.nextTimeout);
+      if (entry?.endTimeout) clearTimeout(entry.endTimeout);
+    });
+    bounceTimersRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    if (bounceWaveTriggeredRef.current) return;
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const container = map.getContainer?.();
+    const width = container?.clientWidth || 0;
+    const height = container?.clientHeight || 0;
+    if (width === 0 || height === 0) return;
+
+    const recentKeySet = new Set(
+      recentApprovedPins
+        .map((pin) => pinBounceKey(pin))
+        .filter((key) => key !== null && key !== undefined)
+    );
+    if (recentKeySet.size === 0) return;
+
+    const candidateNodes =
+      (visualNodes.length
+        ? visualNodes
+        : lastGoodCacheRef.current.get(dataSignatureRef.current)?.nodes || [])
+        .filter((node) => node?.pin && recentKeySet.has(pinBounceKey(node.pin)))
+        .filter(
+          (node) =>
+            node.x >= -PIN_RADIUS &&
+            node.x <= width + PIN_RADIUS &&
+            node.y >= -PIN_RADIUS &&
+            node.y <= height + PIN_RADIUS
+        );
+
+    if (candidateNodes.length === 0) return;
+
+    bounceWaveTriggeredRef.current = true;
+    const sorted = [...candidateNodes].sort((a, b) => b.x - a.x);
+    sorted.forEach((node, index) => {
+      const key = pinBounceKey(node.pin);
+      if (key === null || key === undefined) return;
+      const waveDelay = index * 140;
+      setTimeout(() => {
+        scheduleBounce(key, 0);
+      }, waveDelay);
+    });
+  }, [mapLoaded, visualNodes, recentApprovedPins, scheduleBounce]);
 
 
   const computeLayout = useCallback(() => {
@@ -1617,13 +1810,24 @@ function MapView({
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
 
 
+  // Microtask instead of rAF so pins stay in lockstep with the map frame.
   const scheduleLayout = useCallback(() => {
     if (scheduledLayoutRef.current) return;
     scheduledLayoutRef.current = true;
-    requestAnimationFrame(() => {
+    const run = () => {
       scheduledLayoutRef.current = false;
-      computeLayout();
-    });
+      if (isMapMovingRef.current) {
+        // Force immediate paint while panning/zooming to avoid a frame of lag.
+        flushSync(computeLayout);
+      } else {
+        computeLayout();
+      }
+    };
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(run);
+    } else {
+      Promise.resolve().then(run);
+    }
   }, [computeLayout]);
 
   const scheduleLayoutRef = useRef(scheduleLayout);
@@ -2203,6 +2407,16 @@ function MapView({
   }, [panelPlacement, pinPanelBounds, titleCardBounds]);
 
   useEffect(() => {
+    if (selectedPinId === null || selectedPinId === undefined) return;
+    setViewedPinIds((prev) => {
+      if (prev.has(selectedPinId)) return prev;
+      const next = new Set(prev);
+      next.add(selectedPinId);
+      return next;
+    });
+  }, [selectedPinId]);
+
+  useEffect(() => {
     if (!mapLoaded) return;
     if (selectedPinId === null || selectedPinId === undefined) return;
     if (prevSelectedPinIdRef.current === selectedPinId) return;
@@ -2358,6 +2572,9 @@ function MapView({
           const transitionSpeed = shouldAnimate ? Math.round(ANIMATION_TIMING.move * 1.25) : 0;
           const baseScale = node.clusterSize > 1 ? 0.97 : 1;
           const opacity = node.visibilityAlpha ?? 1;
+          const bounceKey = pinBounceKey(node.pin);
+          const isBouncing = bounceKey !== null && bounceKey !== undefined && activeBounces.has(bounceKey);
+          const isRecent = bounceKey !== null && bounceKey !== undefined && recentApprovedKeySet.has(bounceKey);
           const style = {
             transform: `translate(${node.x - PIN_RADIUS}px, ${node.y - PIN_RADIUS}px) scale(${baseScale})`,
             opacity,
@@ -2371,6 +2588,8 @@ function MapView({
             node.category === "pending" ? "pending" : "",
             node.isSelected ? "selected" : "",
             node.clusterSize > 1 ? "cluster-member" : "",
+            isRecent ? "recent" : "",
+            isBouncing ? "is-bouncing" : "",
           ]
             .filter(Boolean)
             .join(" ");
