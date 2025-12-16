@@ -9,7 +9,7 @@ const FROM_EMAIL =
   Deno.env.get("MAIL_FROM") ??
   "Community Map <noreply@example.com>";
 const SITE_URL = (Deno.env.get("SITE_URL") ?? Deno.env.get("MAGIC_LINK_SITE_URL") ?? "").replace(/\/$/, "");
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const WEBHOOK_SHARED_SECRET = Deno.env.get("MAGIC_LINK_WEBHOOK_SECRET") ?? "";
 
 if (!RESEND_API_KEY) {
   throw new Error("Missing RESEND_API_KEY");
@@ -17,8 +17,8 @@ if (!RESEND_API_KEY) {
 if (!SITE_URL) {
   throw new Error("Missing SITE_URL or MAGIC_LINK_SITE_URL");
 }
-if (!SERVICE_ROLE_KEY) {
-  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY for webhook auth");
+if (!WEBHOOK_SHARED_SECRET) {
+  throw new Error("Missing MAGIC_LINK_WEBHOOK_SECRET for webhook auth");
 }
 
 const resend = new Resend(RESEND_API_KEY);
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get("authorization") ?? "";
-  if (authHeader !== `Bearer ${SERVICE_ROLE_KEY}`) {
+  if (authHeader !== `Bearer ${WEBHOOK_SHARED_SECRET}`) {
     return jsonResponse(401, { error: "Unauthorized" });
   }
 

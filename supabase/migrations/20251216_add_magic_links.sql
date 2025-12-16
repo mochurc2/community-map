@@ -255,11 +255,16 @@ set search_path = public, extensions
 as $$
 declare
   v_url text := current_setting('app.settings.magic_link_webhook_url', true);
-  v_service_key text := current_setting('app.settings.service_role_key', true);
+  v_shared_secret text := current_setting('app.settings.magic_link_webhook_secret', true);
   v_payload text;
 begin
   if v_url is null or v_url = '' then
     raise notice 'magic_link_webhook_url is not configured; skipping webhook';
+    return new;
+  end if;
+
+  if v_shared_secret is null or v_shared_secret = '' then
+    raise notice 'magic_link_webhook_secret is not configured; skipping webhook';
     return new;
   end if;
 
@@ -275,7 +280,7 @@ begin
       'application/json',
       ARRAY[
         'Content-Type: application/json',
-        'Authorization: Bearer ' || coalesce(v_service_key, '')
+        'Authorization: Bearer ' || v_shared_secret
       ]
     );
 
