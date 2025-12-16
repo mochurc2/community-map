@@ -62,6 +62,7 @@ begin
 end;
 $$;
 
+drop trigger if exists pins_capture_owner_secret on public.pins;
 create trigger pins_capture_owner_secret
 before insert on public.pins
 for each row
@@ -288,6 +289,7 @@ begin
 end;
 $$;
 
+drop trigger if exists pin_owner_secrets_magic_link_webhook on public.pin_owner_secrets;
 create trigger pin_owner_secrets_magic_link_webhook
 after insert on public.pin_owner_secrets
 for each row
