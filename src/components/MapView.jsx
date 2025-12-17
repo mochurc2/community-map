@@ -839,6 +839,9 @@ function MapView({
 
   const setMapErrorMessage = useCallback((message) => {
     setMapError(message);
+    if (message && import.meta.env.DEV) {
+      console.error("[MapView] map error:", message);
+    }
     onMapErrorRef.current?.(message);
   }, []);
 
@@ -1955,7 +1958,13 @@ function MapView({
     onMapReady(map);
 
     map.on("load", async () => {
-      await installCustomLayers(map);
+      try {
+        await installCustomLayers(map);
+      } catch (err) {
+        console.error("[MapView] installCustomLayers failed", err);
+        setMapErrorMessage(err?.message || "Map layers failed to install");
+        return;
+      }
       currentStyleKeyRef.current = styleUrlMemo ? `${styleUrlMemo}|${themeMode}` : "inline";
       setMapLoaded(true);
       setMapErrorMessage(null);
@@ -1963,6 +1972,7 @@ function MapView({
     });
 
     map.on("error", (evt) => {
+      if (import.meta.env.DEV) console.error("[MapView] maplibre error event", evt?.error || evt);
       const message = evt?.error?.message || "Map could not load";
       setMapErrorMessage(message);
     });

@@ -124,13 +124,13 @@ export default function EditPinPage() {
         onMapError={(msg) => setMapErrorMessage(msg || "Map failed to load")}
       />
 
-      <div className="overlay-rail">
+      <div className="overlay-rail" style={{ marginTop: `${titleCardBounds.height + 12}px` }}>
         <Panel
           activePanel={activePanel}
           placement={panelPlacement}
           showFullAddForm
           titleCardHeight={titleCardBounds.height}
-          offsetTop={titleCardBounds.height + 12}
+          offsetTop={titleCardBounds.height + 24}
           onClose={confirmExit}
           ref={pinPanelRef}
         >
