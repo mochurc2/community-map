@@ -243,6 +243,49 @@ $$;
 grant execute on function public.update_pin_via_secret(uuid, uuid, jsonb, boolean) to anon, authenticated;
 
 --------------------------------------------------------------------------------
+-- Optional: fetch pin via secret (for edit UI prefill)
+--------------------------------------------------------------------------------
+create or replace function public.get_pin_via_secret(p_pin_id uuid, p_secret_token uuid)
+returns public.pins
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_secret public.pin_owner_secrets%rowtype;
+  v_pin public.pins%rowtype;
+begin
+  if p_pin_id is null or p_secret_token is null then
+    raise exception 'pin_id and secret_token are required';
+  end if;
+
+  select *
+    into v_secret
+    from public.pin_owner_secrets
+   where pin_id = p_pin_id
+     and secret_token = p_secret_token
+   for share;
+
+  if not found then
+    raise exception 'invalid pin_id or secret_token';
+  end if;
+
+  select *
+    into v_pin
+    from public.pins
+   where id = p_pin_id;
+
+  if not found then
+    raise exception 'pin not found';
+  end if;
+
+  return v_pin;
+end;
+$$;
+
+grant execute on function public.get_pin_via_secret(uuid, uuid) to anon, authenticated;
+
+--------------------------------------------------------------------------------
 -- 4) Webhook delivery handled via Supabase Database Webhooks (no DB trigger)
 --------------------------------------------------------------------------------
 -- Cleanup any legacy trigger/function if present
