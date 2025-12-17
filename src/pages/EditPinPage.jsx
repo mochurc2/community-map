@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import MapView from "../components/MapView";
 import Panel from "../components/Panel";
-import PanelContent from "../components/PanelContent";
 import EditPinPanel from "../components/EditPinPanel";
 import { useBubbleOptions, usePins } from "../hooks";
 import usePinEditForm from "../hooks/usePinEditForm";
@@ -25,7 +24,7 @@ export default function EditPinPage() {
   });
 
   const [panelPlacement] = useState("side");
-  const [activePanel] = useState("add"); // reuse the add panel slot/style
+  const [activePanel] = useState("edit");
 
   const pendingPins = useMemo(() => {
     if (!editForm.selectedLocation) return [];
@@ -66,18 +65,6 @@ export default function EditPinPage() {
           titleCardHeight={0}
           onClose={() => {}}
         >
-          <PanelContent
-            activePanel={activePanel}
-            panelPlacement={panelPlacement}
-            showFullAddForm
-            loadingPins={false}
-            approvedPinsCount={0}
-            pendingPinsLabel=""
-            pinsError={null}
-            onOpenPolicy={() => {}}
-            onBrowseLatestPin={() => {}}
-            canBrowsePins={false}
-          />
           <EditPinPanel
             pinId={pinId}
             token={token}

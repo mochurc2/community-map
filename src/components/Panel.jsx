@@ -1,9 +1,10 @@
-import { X, Info, Plus, Filter } from "lucide-react";
+import { X, Info, Plus, Filter, Pencil } from "lucide-react";
 
 const PANEL_ICONS = {
   info: { icon: <Info />, label: "About this map" },
   add: { icon: <Plus />, label: "Add your pin" },
   filter: { icon: <Filter />, label: "Filter pins" },
+  edit: { icon: <Pencil />, label: "Edit your pin" },
 };
 
 /**
