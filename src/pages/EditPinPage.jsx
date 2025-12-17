@@ -121,7 +121,7 @@ export default function EditPinPage() {
           editForm.setError(null);
           editForm.setSuccess(null);
         }}
-        onMapError={(msg) => setMapErrorMessage(msg || "Map failed to load")}
+        onMapError={(msg) => setMapErrorMessage(msg || null)}
       />
 
       <div className="overlay-rail" style={{ marginTop: `${titleCardBounds.height + 12}px` }}>
