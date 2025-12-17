@@ -26,6 +26,7 @@ export function Panel({
   placement,
   showFullAddForm,
   titleCardHeight,
+  offsetTop = 0,
   onClose,
   children,
 }) {
@@ -34,7 +35,9 @@ export function Panel({
   const style =
     placement === "bottom" && activePanel === "add" && showFullAddForm
       ? { top: `${Math.max(titleCardHeight + 42, 150)}px` }
-      : undefined;
+      : offsetTop > 0
+        ? { marginTop: `${offsetTop}px` }
+        : undefined;
 
   return (
     <div

@@ -129,7 +129,8 @@ export default function EditPinPage() {
           activePanel={activePanel}
           placement={panelPlacement}
           showFullAddForm
-          titleCardHeight={0}
+          titleCardHeight={titleCardBounds.height}
+          offsetTop={titleCardBounds.height + 12}
           onClose={confirmExit}
           ref={pinPanelRef}
         >
