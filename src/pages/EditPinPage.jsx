@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import MapView from "../components/MapView";
 import Panel from "../components/Panel";
@@ -29,6 +29,10 @@ export default function EditPinPage() {
   const [activePanel] = useState("edit");
   const [projectionMode, setProjectionMode] = useState("mercator");
   const [mapErrorMessage, setMapErrorMessage] = useState(null);
+  const titleCardRef = useRef(null);
+  const pinPanelRef = useRef(null);
+  const [titleCardBounds, setTitleCardBounds] = useState({ top: 0, bottom: 0, height: 0 });
+  const [pinPanelBounds, setPinPanelBounds] = useState(null);
 
   const pendingPins = useMemo(() => {
     if (!editForm.selectedLocation) return [];
@@ -50,6 +54,46 @@ export default function EditPinPage() {
     navigate("/");
   };
 
+  useEffect(() => {
+    const updateTitleBounds = () => {
+      const node = titleCardRef.current;
+      if (!node) {
+        setTitleCardBounds({ top: 0, bottom: 0, height: 0 });
+        return;
+      }
+      const rect = node.getBoundingClientRect();
+      setTitleCardBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
+    };
+    updateTitleBounds();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateTitleBounds) : null;
+    if (ro && titleCardRef.current) ro.observe(titleCardRef.current);
+    window.addEventListener("resize", updateTitleBounds);
+    return () => {
+      window.removeEventListener("resize", updateTitleBounds);
+      ro?.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const updatePanelBounds = () => {
+      const node = pinPanelRef.current;
+      if (!node) {
+        setPinPanelBounds(null);
+        return;
+      }
+      const rect = node.getBoundingClientRect();
+      setPinPanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
+    };
+    updatePanelBounds();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updatePanelBounds) : null;
+    if (ro && pinPanelRef.current) ro.observe(pinPanelRef.current);
+    window.addEventListener("resize", updatePanelBounds);
+    return () => {
+      window.removeEventListener("resize", updatePanelBounds);
+      ro?.disconnect();
+    };
+  }, []);
+
   return (
     <div className="app-shell">
       <TitleCard
@@ -59,6 +103,7 @@ export default function EditPinPage() {
         onToggleProjection={() =>
           setProjectionMode((prev) => (prev === "mercator" ? "globe" : "mercator"))
         }
+        ref={titleCardRef}
       />
       <MapView
         pins={[]} // editing only shows pending marker
@@ -68,6 +113,8 @@ export default function EditPinPage() {
         enableAddMode
         panelPlacement={panelPlacement}
         projection={projectionMode}
+        titleCardBounds={titleCardBounds}
+        pinPanelBounds={pinPanelBounds}
         onMapClick={(lngLat) => {
           if (!lngLat) return;
           editForm.setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
@@ -83,7 +130,8 @@ export default function EditPinPage() {
           placement={panelPlacement}
           showFullAddForm
           titleCardHeight={0}
-          onClose={() => {}}
+          onClose={confirmExit}
+          ref={pinPanelRef}
         >
           <EditPinPanel
             pinId={pinId}
