@@ -1,8 +1,5 @@
 -- Magic link / capability URL support for pin owners
 
--- Dependencies
-create extension if not exists http with schema extensions;
-
 --------------------------------------------------------------------------------
 -- 1) Private sidecar table to hold owner secrets (RLS: deny all)
 --------------------------------------------------------------------------------
@@ -246,51 +243,8 @@ $$;
 grant execute on function public.update_pin_via_secret(uuid, uuid, jsonb, boolean) to anon, authenticated;
 
 --------------------------------------------------------------------------------
--- 4) Webhook trigger -> Edge function (send-magic-link)
+-- 4) Webhook delivery handled via Supabase Database Webhooks (no DB trigger)
 --------------------------------------------------------------------------------
-create or replace function public.notify_magic_link()
-returns trigger
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare
-  v_url text := current_setting('app.settings.magic_link_webhook_url', true);
-  v_shared_secret text := current_setting('app.settings.magic_link_webhook_secret', true);
-  v_payload text;
-begin
-  if v_url is null or v_url = '' then
-    raise notice 'magic_link_webhook_url is not configured; skipping webhook';
-    return new;
-  end if;
-
-  if v_shared_secret is null or v_shared_secret = '' then
-    raise notice 'magic_link_webhook_secret is not configured; skipping webhook';
-    return new;
-  end if;
-
-  v_payload := json_build_object(
-    'type', TG_OP,
-    'record', row_to_json(new)
-  )::text;
-
-  perform
-    http_post(
-      v_url,
-      v_payload,
-      'application/json',
-      ARRAY[
-        'Content-Type: application/json',
-        'Authorization: Bearer ' || v_shared_secret
-      ]
-    );
-
-  return new;
-end;
-$$;
-
+-- Cleanup any legacy trigger/function if present
 drop trigger if exists pin_owner_secrets_magic_link_webhook on public.pin_owner_secrets;
-create trigger pin_owner_secrets_magic_link_webhook
-after insert on public.pin_owner_secrets
-for each row
-execute function public.notify_magic_link();
+drop function if exists public.notify_magic_link();
