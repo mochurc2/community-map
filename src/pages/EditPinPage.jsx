@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import MapView from "../components/MapView";
 import Panel from "../components/Panel";
 import EditPinPanel from "../components/EditPinPanel";
-import { useBubbleOptions, usePins } from "../hooks";
+import { useBubbleOptions } from "../hooks";
 import usePinEditForm from "../hooks/usePinEditForm";
 
 export default function EditPinPage() {
@@ -11,9 +11,9 @@ export default function EditPinPage() {
   const pinId = params.get("id");
   const token = params.get("token");
 
-  const { bubbleOptions, customInterestOptions, isInterestApproved } = useBubbleOptions();
-  // Minimal pins hook to reuse popularity calculations and pending overlay styles
-  const { interestPopularity, contactPopularity } = usePins(null, isInterestApproved);
+  const { bubbleOptions, customInterestOptions } = useBubbleOptions();
+  const interestPopularity = useMemo(() => new Map(), []);
+  const contactPopularity = useMemo(() => new Map(), []);
 
   const editForm = usePinEditForm({
     pinId,
