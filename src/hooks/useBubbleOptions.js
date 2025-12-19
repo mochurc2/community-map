@@ -10,22 +10,32 @@ import {
  * Hook to manage bubble options (gender, seeking, interests, contact methods)
  * and their approval status
  */
-export function useBubbleOptions() {
+export function useBubbleOptions({ enabled = true } = {}) {
   const [bubbleOptions, setBubbleOptions] = useState(getDefaultBubbleOptions);
   const [bubbleStatusMap, setBubbleStatusMap] = useState(getDefaultStatusMap);
   const [customInterestOptions, setCustomInterestOptions] = useState([]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
+
+    let isCancelled = false;
+
     fetchBubbleOptions()
       .then(({ options, statusMap }) => {
+        if (isCancelled) return;
         setBubbleOptions(options);
         setBubbleStatusMap(statusMap);
       })
       .catch(() => {
+        if (isCancelled) return;
         setBubbleOptions(getDefaultBubbleOptions());
         setBubbleStatusMap(getDefaultStatusMap());
       });
-  }, []);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [enabled]);
 
   const isInterestApproved = useCallback(
     (label) => (bubbleStatusMap.interest_tags?.[label?.toLowerCase?.() || ""] || "approved") === "approved",
