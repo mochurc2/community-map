@@ -98,8 +98,8 @@ function Root() {
     <BrowserRouter>
       {shouldRenderRoutes && (
         <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/edit-pin" element={<EditPinPage />} />
+          <Route path="/" element={<App hasTurnstileSession={hasVerifiedSession} />} />
+          <Route path="/edit-pin" element={<EditPinPage hasTurnstileSession={hasVerifiedSession} />} />
         </Routes>
       )}
       {!supabaseConfigError && !hasVerifiedSession && (

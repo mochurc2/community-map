@@ -71,7 +71,7 @@ const parseApprovedAtMs = (value) => {
 /**
  * Inner component that uses the feedback context
  */
-function AppContent() {
+function AppContent({ hasTurnstileSession = false }) {
   // UI state for selected pin and location
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
@@ -84,7 +84,7 @@ function AppContent() {
   // Initialize hooks
   useViewport();
 
-  const bubbleOptionsHook = useBubbleOptions();
+  const bubbleOptionsHook = useBubbleOptions({ enabled: hasTurnstileSession });
   const {
     bubbleOptions,
     customInterestOptions,
@@ -583,7 +583,7 @@ function AppContent() {
 /**
  * Main App component - wraps content with FeedbackProvider
  */
-function App() {
+function App({ hasTurnstileSession = false }) {
   // Early return for config error
   if (supabaseConfigError) {
     return <ConfigErrorNotice message={supabaseConfigError.message} />;
@@ -591,7 +591,7 @@ function App() {
 
   return (
     <FeedbackProvider>
-      <AppContent />
+      <AppContent hasTurnstileSession={hasTurnstileSession} />
     </FeedbackProvider>
   );
 }

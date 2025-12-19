@@ -7,13 +7,15 @@ import TitleCard from "../components/TitleCard";
 import { useBubbleOptions } from "../hooks";
 import usePinEditForm from "../hooks/usePinEditForm";
 
-export default function EditPinPage() {
+export default function EditPinPage({ hasTurnstileSession = false }) {
   const [params] = useSearchParams();
   const pinId = params.get("id");
   const token = params.get("token");
   const navigate = useNavigate();
 
-  const { bubbleOptions, customInterestOptions } = useBubbleOptions();
+  const { bubbleOptions, customInterestOptions } = useBubbleOptions({
+    enabled: hasTurnstileSession,
+  });
   const interestPopularity = useMemo(() => new Map(), []);
   const contactPopularity = useMemo(() => new Map(), []);
 
