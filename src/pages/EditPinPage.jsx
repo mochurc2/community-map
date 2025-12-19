@@ -48,7 +48,9 @@ export default function EditPinPage() {
   const pendingIcon = editForm.form.icon || "🧭";
 
   const confirmExit = () => {
-    if (!editForm.submitting && !window.confirm("Discard changes and return to the map?")) {
+    const shouldPrompt =
+      !editForm.hasCompleted && !editForm.fatalError && !editForm.error && !editForm.submitting;
+    if (shouldPrompt && !window.confirm("Discard changes and return to the map?")) {
       return;
     }
     navigate("/");

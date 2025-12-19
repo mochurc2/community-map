@@ -9,6 +9,8 @@ import {
 } from "../utils/genderUtils";
 
 const EMOJI_REGEX = /\p{Extended_Pictographic}/u;
+const SAVE_SUCCESS_MESSAGE = "Your edits have been saved. Your pin is now pending review.";
+const LINK_ERROR_MESSAGE = "Error: your pin has been deleted or there is a problem with your link.";
 
 const emptyLocation = null;
 
@@ -46,6 +48,9 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [hasCompleted, setHasCompleted] = useState(false);
+  const [completionMessage, setCompletionMessage] = useState(null);
+  const [fatalError, setFatalError] = useState(null);
 
   const contactOptionList = bubbleOptions?.contact_methods || [];
 
@@ -68,19 +73,26 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
 
   const loadPin = useCallback(async () => {
     if (!pinId || !token) {
-      setError("Missing pin id or token.");
+      setError(LINK_ERROR_MESSAGE);
+      setFatalError(LINK_ERROR_MESSAGE);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
+    setFatalError(null);
     try {
       const { data, error: rpcError } = await supabase.rpc("get_pin_via_secret", {
         p_pin_id: pinId,
         p_secret_token: token,
       });
       if (rpcError) throw rpcError;
-      if (!data) throw new Error("Pin not found.");
+      if (!data) {
+        setFatalError(LINK_ERROR_MESSAGE);
+        setError(LINK_ERROR_MESSAGE);
+        setLoading(false);
+        return;
+      }
 
       const channels = deriveContactChannels(data.contact_methods || {});
       setInitialPin(data);
@@ -107,9 +119,11 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
           : emptyLocation
       );
       setLocationDirty(false);
+      setFatalError(null);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Unable to load pin.");
+      setFatalError(LINK_ERROR_MESSAGE);
+      setError(LINK_ERROR_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -118,6 +132,12 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
   useEffect(() => {
     loadPin();
   }, [loadPin]);
+
+  useEffect(() => {
+    setHasCompleted(false);
+    setCompletionMessage(null);
+    setFatalError(null);
+  }, [pinId, token]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -402,7 +422,9 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
         p_delete: false,
       });
       if (rpcError) throw rpcError;
-      setSuccess("Saved. Your pin is now pending review.");
+      setSuccess(SAVE_SUCCESS_MESSAGE);
+      setCompletionMessage(SAVE_SUCCESS_MESSAGE);
+      setHasCompleted(true);
       await loadPin();
     } catch (err) {
       setError(err.message || "Unable to update pin.");
@@ -429,6 +451,8 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
       });
       if (rpcError) throw rpcError;
       setSuccess("Pin deleted.");
+      setCompletionMessage("Pin deleted.");
+      setHasCompleted(true);
     } catch (err) {
       setError(err.message || "Unable to delete pin.");
     } finally {
@@ -481,6 +505,9 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     submitting,
     setError,
     setSuccess,
+    fatalError,
+    hasCompleted,
+    completionMessage,
     handleChange,
     handleContactChannels,
     handleContactInput,

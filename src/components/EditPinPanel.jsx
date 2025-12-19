@@ -45,11 +45,32 @@ export default function EditPinPanel({
   submitting,
   error,
   success,
+  fatalError,
+  hasCompleted,
+  completionMessage,
 }) {
   const orderedContactOptions = contactOptionList || bubbleOptions?.contact_methods || [];
 
   const setSeeking = (value) => setForm((prev) => ({ ...prev, seeking: value }));
   const setInterests = (value) => setForm((prev) => ({ ...prev, interest_tags: value }));
+  const finalMessage =
+    completionMessage || success || "Your edits have been saved. Your pin is now pending review.";
+
+  if (fatalError) {
+    return (
+      <div className="panel-body">
+        <p className="status error">{fatalError}</p>
+      </div>
+    );
+  }
+
+  if (hasCompleted) {
+    return (
+      <div className="panel-body">
+        <p className="status success">{finalMessage}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="panel-body">
