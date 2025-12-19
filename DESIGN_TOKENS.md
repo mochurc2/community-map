@@ -271,4 +271,4 @@ tokens.shadow.focus     // Focus ring (blue)
 
 ## Examples in the Codebase
 
-Check `src/ModerationPage.jsx` for real examples of token usage throughout the app.
+Check `src/App.jsx` for real examples of token usage throughout the app.

@@ -5,6 +5,7 @@ import ConfigErrorNotice from "./components/ConfigErrorNotice";
 import MapView from "./components/MapView";
 import PolicyModal from "./components/PolicyModal";
 import TitleCard from "./components/TitleCard";
+import ErrorStack from "./components/ErrorStack";
 import Panel from "./components/Panel";
 import PanelContent from "./components/PanelContent";
 import PinInfoPanel from "./components/PinInfoPanel";
@@ -33,10 +34,44 @@ import {
   FeedbackProvider,
 } from "./context";
 
+const pinApprovalScore = (pin) => {
+  const approvedAtMs = parseApprovedAtMs(pin?.approved_at ?? pin?.approvedAt ?? pin?.approvedAtMs);
+  const fallbackScore = typeof pin.id === "number" ? pin.id : 0;
+  return Number.isFinite(approvedAtMs) ? approvedAtMs : fallbackScore;
+};
+
+const parseApprovedAtMs = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const isoLike = trimmed.replace(" ", "T");
+    let ms = Date.parse(isoLike);
+    if (!Number.isFinite(ms)) {
+      const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2}(?:\.\d+)?)([+-]\d{2})(?::?(\d{2}))?$/.exec(
+        trimmed
+      );
+      if (match) {
+        const [, ymd, hms, offHour, offMin] = match;
+        const offset = `${offHour}:${offMin || "00"}`;
+        ms = Date.parse(`${ymd}T${hms}${offset}`);
+      } else {
+        ms = Date.parse(`${isoLike}Z`);
+      }
+    }
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+};
+
 /**
  * Inner component that uses the feedback context
  */
-function AppContent() {
+function AppContent({ hasTurnstileSession = false }) {
   // UI state for selected pin and location
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
@@ -49,7 +84,7 @@ function AppContent() {
   // Initialize hooks
   useViewport();
 
-  const bubbleOptionsHook = useBubbleOptions();
+  const bubbleOptionsHook = useBubbleOptions({ enabled: hasTurnstileSession });
   const {
     bubbleOptions,
     customInterestOptions,
@@ -72,6 +107,7 @@ function AppContent() {
     pinsError,
     approvedPinsCount,
     pendingPinsLabel,
+    pendingPinsError,
     interestPopularity,
     contactPopularity,
     refreshPendingPins,
@@ -145,6 +181,7 @@ function AppContent() {
 
   const pinPanelRef = useRef(null);
   const [pinPanelBounds, setPinPanelBounds] = useState(null);
+  const [mapErrorMessage, setMapErrorMessage] = useState(null);
 
   // Map interaction handlers
   const handleMapClick = useCallback(
@@ -164,8 +201,8 @@ function AppContent() {
 
   const handlePinSelect = useCallback((pin) => {
     setSelectedPin(pin);
-    setSelectedLocation(null);
-  }, []);
+    closePanel();
+  }, [closePanel]);
 
   const applyProjection = useCallback((mode) => {
     const map = mapInstanceRef.current;
@@ -258,6 +295,60 @@ function AppContent() {
   const visibleSelectedPin = selectedPin
     ? filteredPins.find((pin) => pin.id === selectedPin.id) || null
     : null;
+  const visibleSelectedPinId = visibleSelectedPin?.id;
+
+  const newestApprovedPin = useMemo(() => {
+    if (!filteredPins || filteredPins.length === 0) return null;
+
+    let newest = null;
+    let newestScore = -Infinity;
+
+    filteredPins.forEach((pin) => {
+      const score = pinApprovalScore(pin);
+      if (score > newestScore) {
+        newestScore = score;
+        newest = pin;
+      }
+    });
+
+    return newest;
+  }, [filteredPins]);
+
+  const handleBrowseLatestPin = useCallback(() => {
+    if (!newestApprovedPin) return;
+    setSelectedPin(newestApprovedPin);
+    cancelConfirmation();
+    closePanel();
+  }, [cancelConfirmation, closePanel, newestApprovedPin]);
+
+  const approvedPinsOrdered = useMemo(() => {
+    return [...filteredPins]
+      .map((pin) => ({ pin, score: pinApprovalScore(pin) }))
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.pin);
+  }, [filteredPins]);
+
+  const navigatePin = useCallback(
+    (direction) => {
+      if (!approvedPinsOrdered.length) return;
+      const currentId = visibleSelectedPin?.id;
+      let currentIndex = approvedPinsOrdered.findIndex((pin) => pin.id === currentId);
+      if (currentIndex === -1) {
+        currentIndex = 0;
+      }
+      const nextIndex =
+        (currentIndex + direction + approvedPinsOrdered.length) % approvedPinsOrdered.length;
+      const nextPin = approvedPinsOrdered[nextIndex];
+      if (!nextPin) return;
+      setSelectedPin(nextPin);
+      closePanel();
+    },
+    [approvedPinsOrdered, closePanel, visibleSelectedPinId]
+  );
+
+  const handleNextPin = useCallback(() => navigatePin(1), [navigatePin]);
+  const handlePrevPin = useCallback(() => navigatePin(-1), [navigatePin]);
+  const canNavigatePins = approvedPinsOrdered.length > 1;
 
   useEffect(() => {
     const node = pinPanelRef.current;
@@ -331,6 +422,28 @@ function AppContent() {
     orderedInterestOptions,
   }), [filtersHook, orderedInterestOptions]);
 
+  const appErrors = useMemo(() => {
+    const errors = [];
+    if (mapErrorMessage) {
+      errors.push({ id: "map", source: "Map", message: mapErrorMessage });
+    }
+    if (pinsError) {
+      errors.push({ id: "pins", source: "Pins", message: pinsError });
+    }
+    if (pendingPinsError) {
+      errors.push({
+        id: "pendingPins",
+        source: "Pending pins",
+        message: pendingPinsError,
+      });
+    }
+    return errors;
+  }, [mapErrorMessage, pendingPinsError, pinsError]);
+
+  const handleMapError = useCallback((message) => {
+    setMapErrorMessage(message || null);
+  }, []);
+
   return (
     <AppProvider value={appContextValue}>
       <PinFormProvider value={pinFormContextValue}>
@@ -350,6 +463,7 @@ function AppContent() {
               pinPanelBounds={pinPanelBounds}
               onMapReady={handleMapReady}
               projection={projectionMode}
+              onMapError={handleMapError}
             />
 
             <div className="overlay-rail">
@@ -360,6 +474,8 @@ function AppContent() {
                 projectionMode={projectionMode}
                 onToggleProjection={toggleProjectionMode}
               />
+
+              <ErrorStack errors={appErrors} />
 
               {activePanel && panelPlacement === "side" && (
                 <Panel
@@ -378,15 +494,20 @@ function AppContent() {
                     pendingPinsLabel={pendingPinsLabel}
                     pinsError={pinsError}
                     onOpenPolicy={openPolicy}
+                    onBrowseLatestPin={handleBrowseLatestPin}
+                    canBrowsePins={Boolean(newestApprovedPin)}
                   />
-                </Panel>
-              )}
+              </Panel>
+            )}
 
               {panelPlacement === "side" && visibleSelectedPin && (
                 <PinCard
                   pin={visibleSelectedPin}
                   placement="side"
                   onClose={() => setSelectedPin(null)}
+                  onPrevPin={handlePrevPin}
+                  onNextPin={handleNextPin}
+                  navDisabled={!canNavigatePins}
                   reportButton={<ReportPinButton pin={visibleSelectedPin} />}
                 >
                   <PinInfoPanel pin={visibleSelectedPin} isInterestApproved={isInterestApproved} />
@@ -411,21 +532,26 @@ function AppContent() {
                   pendingPinsLabel={pendingPinsLabel}
                   pinsError={pinsError}
                   onOpenPolicy={openPolicy}
+                  onBrowseLatestPin={handleBrowseLatestPin}
+                  canBrowsePins={Boolean(newestApprovedPin)}
                 />
               </Panel>
             )}
 
             {panelPlacement === "bottom" && visibleSelectedPin && (
-              <PinCard
-                pin={visibleSelectedPin}
-                placement="bottom"
-                panelRef={pinPanelRef}
-                onClose={() => setSelectedPin(null)}
-                reportButton={<ReportPinButton pin={visibleSelectedPin} />}
-              >
-                <PinInfoPanel pin={visibleSelectedPin} isInterestApproved={isInterestApproved} />
-              </PinCard>
-            )}
+                <PinCard
+                  pin={visibleSelectedPin}
+                  placement="bottom"
+                  panelRef={pinPanelRef}
+                  onClose={() => setSelectedPin(null)}
+                  onPrevPin={handlePrevPin}
+                  onNextPin={handleNextPin}
+                  navDisabled={!canNavigatePins}
+                  reportButton={<ReportPinButton pin={visibleSelectedPin} />}
+                >
+                  <PinInfoPanel pin={visibleSelectedPin} isInterestApproved={isInterestApproved} />
+                </PinCard>
+              )}
 
             {policyModal && (
               <PolicyModal title={policyTitle} content={policyContent} onClose={closePolicy} />
@@ -442,6 +568,8 @@ function AppContent() {
               showContactWarning={!confirmationSubmitted && showContactWarning}
               errorMessage={submitError}
               successMessage={submitMsg}
+              onBrowseLatestPin={handleBrowseLatestPin}
+              browseDisabled={!newestApprovedPin}
             />
 
             <FeedbackModal />
@@ -455,7 +583,7 @@ function AppContent() {
 /**
  * Main App component - wraps content with FeedbackProvider
  */
-function App() {
+function App({ hasTurnstileSession = false }) {
   // Early return for config error
   if (supabaseConfigError) {
     return <ConfigErrorNotice message={supabaseConfigError.message} />;
@@ -463,7 +591,7 @@ function App() {
 
   return (
     <FeedbackProvider>
-      <AppContent />
+      <AppContent hasTurnstileSession={hasTurnstileSession} />
     </FeedbackProvider>
   );
 }

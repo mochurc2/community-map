@@ -17,6 +17,13 @@ const contactPlaceholders = {
   Youtube: "Full YouTube link",
   Website: "https://example.com",
   OnlyFans: "@username",
+  Recon: "username only",
+  recon: "username only",
+  "recon.com": "username only",
+  Signal: "+1 555 123 4567",
+  Telegram: "@username or t.me/link",
+  WhatsApp: "+1 555 123 4567",
+  Bluesky: "@name.bsky.social",
 };
 
 /**
@@ -31,6 +38,8 @@ export function AddPinPanel() {
     form,
     setForm,
     contactErrors,
+    adminEmailError,
+    submitMsg,
     submitError,
     hasSubmitted,
     submitting,
@@ -176,7 +185,7 @@ export function AddPinPanel() {
 
           <BubbleSelector
             label="Interests and looking for"
-            helper="Required. Select at least 3 interests to continue."
+            helper="Required. Select ALL that apply because interests are used for filtering and finding users. You must select at least 3 to continue."
             options={interestOptionsForForm}
             multiple
             value={form.interest_tags}
@@ -206,10 +215,29 @@ export function AddPinPanel() {
             <span className="helper-text">{form.note.length}/250</span>
           </label>
 
+          <label className="label">
+            <div className="label-heading">
+              <span>Admin email (private)</span>
+            </div>
+            <p className="helper-text label-helper">
+              Required. We will email you a private edit/delete link. This email is never shown on the
+              map and cannot be changed later, so use one you can access.
+            </p>
+            <input
+              type="email"
+              name="admin_email"
+              value={form.admin_email}
+              onChange={handleChange}
+              className="input"
+              required
+            />
+            {adminEmailError && <span className="field-error">{adminEmailError}</span>}
+          </label>
+
           <div className="contact-section">
             <BubbleSelector
               label="Contact info"
-              helper="Optional. Select services to show and add your handle or link."
+              helper="You must provide at least one contact method."
               options={orderedContactOptions}
               multiple
               value={form.contact_channels}
@@ -285,8 +313,7 @@ export function AddPinPanel() {
 
           {submitError && <p className="status error">{submitError}</p>}
           <p className="helper-text label-helper">
-            You will not be able to edit your pin after submission. Please use the report pin feature
-            if you would like your pin removed or changed after submission.
+            You will get a private link by email to edit or delete your pin later. Keep it safe.
           </p>
 
           <button type="submit" disabled={submitting} className="primary">

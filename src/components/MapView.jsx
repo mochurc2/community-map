@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -52,6 +53,9 @@ const buildDefaultCameraState = () => ({
 });
 const GEOLOCATION_TIMEOUT_MS = 4500;
 const GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000;
+const RECENT_APPROVAL_WINDOW_MS = 12 * 60 * 60 * 1000;
+const BOUNCE_INTERVAL_MS = 20000;
+const BOUNCE_DURATION_MS = 900;
 const easeOutHeavy = (t) => 1 - Math.pow(1 - t, 3);
 const easeInOut = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 const smoothDuration = (currentZoom, targetZoom) => {
@@ -462,6 +466,35 @@ const renderEmojiImage = async (emoji) => {
   return createImageBitmap(canvas);
 };
 
+const pinBounceKey = (pin) => pin?.id ?? pin?.__key ?? null;
+const parseApprovedAtMs = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const isoLike = trimmed.replace(" ", "T");
+    let ms = Date.parse(isoLike);
+    if (!Number.isFinite(ms)) {
+      const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2}(?:\.\d+)?)([+-]\d{2})(?::?(\d{2}))?$/.exec(
+        trimmed
+      );
+      if (match) {
+        const [, ymd, hms, offHour, offMin] = match;
+        const offset = `${offHour}:${offMin || "00"}`;
+        ms = Date.parse(`${ymd}T${hms}${offset}`);
+      } else {
+        ms = Date.parse(`${isoLike}Z`);
+      }
+    }
+    return Number.isFinite(ms) ? ms : null;
+  }
+  return null;
+};
+
 class UnionFind {
   constructor(size) {
     this.parent = Array.from({ length: size }, (_, i) => i);
@@ -747,6 +780,7 @@ function MapView({
   pinPanelBounds = null,
   projection = "mercator",
   onMapReady = () => {},
+  onMapError = () => {},
 }) {
   const { mode: themeMode } = useTheme();
   const mapContainerRef = useRef(null);
@@ -754,16 +788,22 @@ function MapView({
   const overlayRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
   const onPinSelectRef = useRef(onPinSelect);
+  const onMapReadyRef = useRef(onMapReady);
   const enableAddModeRef = useRef(enableAddMode);
+  const lastAddFocusLocationRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(null);
   const [resolvedStyle, setResolvedStyle] = useState(null);
   const [resolvedStyleKey, setResolvedStyleKey] = useState(null);
+  const [styleAttemptIndex, setStyleAttemptIndex] = useState(0);
   const [isInteracting, setIsInteracting] = useState(false);
   const loadedIconsRef = useRef(new Set());
   const loadingIconsRef = useRef(new Map());
   const [visualNodes, setVisualNodes] = useState([]);
   const [labelNodes, setLabelNodes] = useState([]);
+  const [timeNow, setTimeNow] = useState(() => Date.now());
+  const [viewedPinIds, setViewedPinIds] = useState(() => new Set());
+  const [activeBounces, setActiveBounces] = useState(() => new Set());
   const measureContextRef = useRef(null);
   const scheduledLayoutRef = useRef(false);
   const isMapMovingRef = useRef(false);
@@ -773,10 +813,10 @@ function MapView({
   const pinOffsetCacheRef = useRef(new Map());
   const mapPalette = useMemo(() => MAP_PALETTES[themeMode] || MAP_PALETTES.light, [themeMode]);
   const styleUrlMemo = useMemo(() => {
-    const fallback = STYLE_URLS.light || STYLE_URLS.dark || null;
-    if (themeMode === "dark") return STYLE_URLS.dark || fallback;
-    return STYLE_URLS.light || STYLE_URLS.dark || null;
-  }, [themeMode]);
+    const candidates =
+      themeMode === "dark" ? STYLE_CANDIDATES.dark || [] : STYLE_CANDIDATES.light || [];
+    return candidates[styleAttemptIndex] || null;
+  }, [styleAttemptIndex, themeMode]);
   const projectionName = projection === "globe" ? "globe" : "mercator";
   const dataSignatureRef = useRef("");
   const animationFrameRef = useRef(null);
@@ -790,6 +830,25 @@ function MapView({
   const currentStyleKeyRef = useRef(null);
   const cameraEaseFrameRef = useRef(null);
   const geolocationAttemptedRef = useRef(false);
+  const onMapErrorRef = useRef(onMapError);
+  const bounceTimersRef = useRef(new Map());
+  const bounceWaveTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    onMapReadyRef.current = onMapReady;
+  }, [onMapReady]);
+
+  useEffect(() => {
+    onMapErrorRef.current = onMapError;
+  }, [onMapError]);
+
+  const setMapErrorMessage = useCallback((message) => {
+    setMapError(message);
+    if (message && import.meta.env.DEV) {
+      console.error("[MapView] map error:", message);
+    }
+    onMapErrorRef.current?.(message);
+  }, []);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -802,6 +861,14 @@ function MapView({
   useEffect(() => {
     enableAddModeRef.current = enableAddMode;
   }, [enableAddMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const intervalId = window.setInterval(() => setTimeNow(Date.now()), 60000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = document.createElement("canvas");
@@ -980,12 +1047,16 @@ function MapView({
   );
 
   const combinedPins = useMemo(() => {
-    const approved = (pins || []).map((pin, index) => ({
-      ...pin,
-      __kind: "approved",
-      __order: index,
-      __key: `approved-${pin.id ?? index}`,
-    }));
+    const approved = (pins || []).map((pin, index) => {
+      const approvedAtMs = parseApprovedAtMs(pin?.approved_at ?? pin?.approvedAt ?? pin?.approvedAtMs);
+      return {
+        ...pin,
+        approvedAtMs: Number.isFinite(approvedAtMs) ? approvedAtMs : null,
+        __kind: "approved",
+        __order: index,
+        __key: `approved-${pin.id ?? index}`,
+      };
+    });
 
     const pending = (pendingPins || []).map((pin, index) => ({
       ...pin,
@@ -998,6 +1069,30 @@ function MapView({
 
     return [...approved, ...pending];
   }, [pins, pendingPins]);
+
+  const recentApprovedPins = useMemo(() => {
+    const now = timeNow;
+    const viewed = viewedPinIds;
+    return combinedPins.filter((pin) => {
+      if (pin.__kind !== "approved") return false;
+      const key = pinBounceKey(pin);
+      if (key === null || key === undefined) return false;
+      if (viewed.has(key)) return false;
+      const approvedAtMs = typeof pin.approvedAtMs === "number" ? pin.approvedAtMs : null;
+      if (!approvedAtMs || Number.isNaN(approvedAtMs)) return false;
+      if (approvedAtMs > now) return false;
+      return now - approvedAtMs <= RECENT_APPROVAL_WINDOW_MS;
+    });
+  }, [combinedPins, timeNow, viewedPinIds]);
+
+  const recentApprovedKeySet = useMemo(() => {
+    const set = new Set();
+    recentApprovedPins.forEach((pin) => {
+      const key = pinBounceKey(pin);
+      if (key !== null && key !== undefined) set.add(key);
+    });
+    return set;
+  }, [recentApprovedPins]);
 
   const requestCameraEase = useCallback(
     ({ center, zoom, padding, duration, easing, force = false }) => {
@@ -1034,6 +1129,125 @@ function MapView({
   const applyLabelNodes = useCallback((nextLabels) => {
     setLabelNodes(nextLabels.map((label) => ({ ...label, phase: "active" })));
   }, []);
+
+  const stopBounceForKey = useCallback((pinKey) => {
+    const timers = bounceTimersRef.current;
+    const entry = timers.get(pinKey);
+    if (entry?.nextTimeout) clearTimeout(entry.nextTimeout);
+    if (entry?.endTimeout) clearTimeout(entry.endTimeout);
+    timers.delete(pinKey);
+    setActiveBounces((prev) => {
+      if (!prev.has(pinKey)) return prev;
+      const next = new Set(prev);
+      next.delete(pinKey);
+      return next;
+    });
+  }, []);
+
+  const scheduleBounce = useCallback((pinKey, delayMs = BOUNCE_INTERVAL_MS) => {
+    if (pinKey === null || pinKey === undefined) return;
+    const timers = bounceTimersRef.current;
+    const runBounce = () => {
+      setActiveBounces((prev) => {
+        if (prev.has(pinKey)) return prev;
+        const next = new Set(prev);
+        next.add(pinKey);
+        return next;
+      });
+
+      const endId = setTimeout(() => {
+        setActiveBounces((prev) => {
+          if (!prev.has(pinKey)) return prev;
+          const next = new Set(prev);
+          next.delete(pinKey);
+          return next;
+        });
+        scheduleBounce(pinKey, BOUNCE_INTERVAL_MS);
+      }, BOUNCE_DURATION_MS);
+
+      timers.set(pinKey, { nextTimeout: null, endTimeout: endId });
+    };
+
+    const existing = timers.get(pinKey);
+    if (existing?.nextTimeout) clearTimeout(existing.nextTimeout);
+    if (existing?.endTimeout) clearTimeout(existing.endTimeout);
+
+    const timeoutId = setTimeout(runBounce, Math.max(0, delayMs));
+    timers.set(pinKey, { nextTimeout: timeoutId, endTimeout: null });
+  }, []);
+
+  useEffect(() => {
+    const timers = bounceTimersRef.current;
+    const activeKeys = new Set(
+      recentApprovedPins
+        .map((pin) => pinBounceKey(pin))
+        .filter((key) => key !== null && key !== undefined)
+    );
+
+    timers.forEach((_entry, key) => {
+      if (activeKeys.has(key)) return;
+      stopBounceForKey(key);
+    });
+
+    activeKeys.forEach((key) => {
+      if (timers.has(key)) return;
+      const initialDelay = Math.random() * BOUNCE_INTERVAL_MS;
+      scheduleBounce(key, initialDelay);
+    });
+  }, [recentApprovedPins, scheduleBounce, stopBounceForKey]);
+
+  useEffect(() => () => {
+    bounceTimersRef.current.forEach((entry) => {
+      if (entry?.nextTimeout) clearTimeout(entry.nextTimeout);
+      if (entry?.endTimeout) clearTimeout(entry.endTimeout);
+    });
+    bounceTimersRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    if (bounceWaveTriggeredRef.current) return;
+    if (!mapLoaded) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const container = map.getContainer?.();
+    const width = container?.clientWidth || 0;
+    const height = container?.clientHeight || 0;
+    if (width === 0 || height === 0) return;
+
+    const recentKeySet = new Set(
+      recentApprovedPins
+        .map((pin) => pinBounceKey(pin))
+        .filter((key) => key !== null && key !== undefined)
+    );
+    if (recentKeySet.size === 0) return;
+
+    const candidateNodes =
+      (visualNodes.length
+        ? visualNodes
+        : lastGoodCacheRef.current.get(dataSignatureRef.current)?.nodes || [])
+        .filter((node) => node?.pin && recentKeySet.has(pinBounceKey(node.pin)))
+        .filter(
+          (node) =>
+            node.x >= -PIN_RADIUS &&
+            node.x <= width + PIN_RADIUS &&
+            node.y >= -PIN_RADIUS &&
+            node.y <= height + PIN_RADIUS
+        );
+
+    if (candidateNodes.length === 0) return;
+
+    bounceWaveTriggeredRef.current = true;
+    const sorted = [...candidateNodes].sort((a, b) => b.x - a.x);
+    sorted.forEach((node, index) => {
+      const key = pinBounceKey(node.pin);
+      if (key === null || key === undefined) return;
+      const waveDelay = index * 140;
+      setTimeout(() => {
+        scheduleBounce(key, 0);
+      }, waveDelay);
+    });
+  }, [mapLoaded, visualNodes, recentApprovedPins, scheduleBounce]);
 
 
   const computeLayout = useCallback(() => {
@@ -1605,13 +1819,24 @@ function MapView({
   }, [applyLabelNodes, applyVisualNodes, combinedPins, selectedPinId]);
 
 
+  // Microtask instead of rAF so pins stay in lockstep with the map frame.
   const scheduleLayout = useCallback(() => {
     if (scheduledLayoutRef.current) return;
     scheduledLayoutRef.current = true;
-    requestAnimationFrame(() => {
+    const run = () => {
       scheduledLayoutRef.current = false;
-      computeLayout();
-    });
+      if (isMapMovingRef.current) {
+        // Force immediate paint while panning/zooming to avoid a frame of lag.
+        flushSync(computeLayout);
+      } else {
+        computeLayout();
+      }
+    };
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(run);
+    } else {
+      Promise.resolve().then(run);
+    }
   }, [computeLayout]);
 
   const scheduleLayoutRef = useRef(scheduleLayout);
@@ -1620,6 +1845,11 @@ function MapView({
   useEffect(() => {
     scheduleLayoutRef.current = scheduleLayout;
   }, [scheduleLayout]);
+
+  useEffect(() => {
+    // Reset style attempts when theme changes so we start from the primary choice.
+    setStyleAttemptIndex(0);
+  }, [themeMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1636,44 +1866,70 @@ function MapView({
     let cancelled = false;
 
     const loadStyle = async () => {
-    if (!styleUrlMemo) {
-      setResolvedStyle(null);
-      setResolvedStyleKey(null);
-      return;
-    }
-    try {
-      setMapError(null);
-      const cacheKey = `${styleUrlMemo}|${themeMode}`;
-      const cached = cacheKey ? styleCache.get(cacheKey) : null;
-      const stylePromise = cached || (async () => {
-        const response = await fetch(styleUrlMemo, { cache: "force-cache" });
-        if (!response.ok) throw new Error(`Style request failed: ${response.status}`);
-        const baseStyle = await response.json();
-        const styleClone = JSON.parse(JSON.stringify(baseStyle));
-        return applyMutedBasemapPalette(styleClone, mapPalette);
-      })();
-      if (!cached && cacheKey) styleCache.set(cacheKey, stylePromise);
-      const styled = await stylePromise;
-      if (!cancelled) {
-        setResolvedStyle(styled);
-        setResolvedStyleKey(cacheKey || null);
-      }
-    } catch (error) {
-      console.error("map style load error", error);
-      if (!cancelled) {
+      if (!styleUrlMemo) {
         setResolvedStyle(null);
         setResolvedStyleKey(null);
-        setMapError("Map style failed to load");
+        setMapErrorMessage(null);
+        return;
       }
-    }
-  };
+
+      try {
+        setMapErrorMessage(null);
+        const cacheKey = `${styleUrlMemo}|${themeMode}`;
+        const cached = cacheKey ? styleCache.get(cacheKey) : null;
+        const stylePromise =
+          cached ||
+          (async () => {
+            const response = await fetch(styleUrlMemo, { cache: "force-cache" });
+            if (!response.ok) {
+              let detail = "";
+              try {
+                detail = (await response.text())?.trim();
+              } catch {
+                detail = "";
+              }
+              const statusLabel = response.statusText || `HTTP ${response.status}`;
+              const reason = detail || statusLabel;
+              throw new Error(`Style request failed (${response.status}): ${reason}`);
+            }
+            const baseStyle = await response.json();
+            const styleClone = JSON.parse(JSON.stringify(baseStyle));
+            return applyMutedBasemapPalette(styleClone, mapPalette);
+          })();
+        if (!cached && cacheKey) styleCache.set(cacheKey, stylePromise);
+        const styled = await stylePromise;
+        if (!cancelled) {
+          setResolvedStyle(styled);
+          setResolvedStyleKey(cacheKey || null);
+        }
+      } catch (error) {
+        console.error("map style load error", error);
+        if (!cancelled) {
+          setResolvedStyle(null);
+          setResolvedStyleKey(null);
+          const hasFallback =
+            (themeMode === "dark"
+              ? (STYLE_CANDIDATES.dark || []).length
+              : (STYLE_CANDIDATES.light || []).length) >
+            styleAttemptIndex + 1;
+          if (hasFallback) {
+            setMapErrorMessage(
+              (error?.message || "Map style failed to load") + " - trying fallback style"
+            );
+            setStyleAttemptIndex((prev) => prev + 1);
+            return;
+          }
+          setMapErrorMessage(error?.message || "Map style failed to load");
+        }
+      }
+    };
 
     loadStyle();
 
     return () => {
       cancelled = true;
     };
-  }, [mapPalette, styleUrlMemo, themeMode]);
+  }, [mapPalette, setMapErrorMessage, styleAttemptIndex, styleUrlMemo, themeMode]);
 
   // Initialize the map once; keep dependencies minimal so the instance persists.
   useEffect(() => {
@@ -1704,18 +1960,26 @@ function MapView({
     map.setMaxBounds(LAND_BOUNDS);
 
     mapRef.current = map;
-    onMapReady(map);
+    onMapReadyRef.current?.(map);
 
     map.on("load", async () => {
-      await installCustomLayers(map);
+      try {
+        await installCustomLayers(map);
+      } catch (err) {
+        console.error("[MapView] installCustomLayers failed", err);
+        setMapErrorMessage(err?.message || "Map layers failed to install");
+        return;
+      }
       currentStyleKeyRef.current = styleUrlMemo ? `${styleUrlMemo}|${themeMode}` : "inline";
       setMapLoaded(true);
+      setMapErrorMessage(null);
       runLayout();
     });
 
     map.on("error", (evt) => {
+      if (import.meta.env.DEV) console.error("[MapView] maplibre error event", evt?.error || evt);
       const message = evt?.error?.message || "Map could not load";
-      setMapError(message);
+      setMapErrorMessage(message);
     });
 
     map.on("movestart", () => {
@@ -1768,11 +2032,22 @@ function MapView({
         zoom: zoomTarget >= MAP_CLICK_TARGET_ZOOM ? zoomTarget : MAP_CLICK_TARGET_ZOOM,
       });
 
+      lastAddFocusLocationRef.current = `${e.lngLat.lat.toFixed(6)},${e.lngLat.lng.toFixed(6)}`;
+
       if (onMapClickRef.current) {
         onMapClickRef.current(e.lngLat);
       }
     });
-  }, [resolvedStyle, ensureEmojiImage, installCustomLayers, projectionName, runLayout, styleUrlMemo, themeMode]);
+  }, [
+    resolvedStyle,
+    ensureEmojiImage,
+    installCustomLayers,
+    projectionName,
+    runLayout,
+    setMapErrorMessage,
+    styleUrlMemo,
+    themeMode,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1800,22 +2075,25 @@ function MapView({
     };
   }, [installCustomLayers, resolvedStyle, resolvedStyleKey, styleUrlMemo, themeMode]);
 
-  useEffect(() => () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    if (cameraEaseFrameRef.current) {
-      cancelAnimationFrame(cameraEaseFrameRef.current);
-      cameraEaseFrameRef.current = null;
-    }
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-    onMapReady(null);
-    setMapLoaded(false);
-  }, [onMapReady]);
+  useEffect(
+    () => () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      if (cameraEaseFrameRef.current) {
+        cancelAnimationFrame(cameraEaseFrameRef.current);
+        cameraEaseFrameRef.current = null;
+      }
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      onMapReadyRef.current?.(null);
+      setMapLoaded(false);
+    },
+    []
+  );
 
   useEffect(() => {
     const signature = `${combinedPins.length}:${combinedPins
@@ -2150,6 +2428,59 @@ function MapView({
   }, [panelPlacement, pinPanelBounds, titleCardBounds]);
 
   useEffect(() => {
+    if (!enableAddMode) {
+      lastAddFocusLocationRef.current = null;
+      return;
+    }
+
+    if (!mapLoaded || !pendingLocation) return;
+    const { lng, lat } = pendingLocation;
+    if (typeof lng !== "number" || typeof lat !== "number") return;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    const locationKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    if (lastAddFocusLocationRef.current === locationKey) return;
+
+    const rawZoom = map.getZoom();
+    const safeCurrentZoom = typeof rawZoom === "number" ? rawZoom : MAP_CLICK_TARGET_ZOOM;
+    const targetZoom = Math.min(
+      map.getMaxZoom() || 20,
+      Math.max(safeCurrentZoom, MAP_CLICK_TARGET_ZOOM)
+    );
+    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+
+    requestCameraEase({
+      center: [lng, lat],
+      zoom: targetZoom,
+      padding: mobilePadding || undefined,
+      duration: smoothDuration(safeCurrentZoom, targetZoom),
+      easing: easeInOut,
+      force: true,
+    });
+
+    lastAddFocusLocationRef.current = locationKey;
+  }, [
+    computeMobilePadding,
+    enableAddMode,
+    mapLoaded,
+    panelPlacement,
+    pendingLocation,
+    requestCameraEase,
+  ]);
+
+  useEffect(() => {
+    if (selectedPinId === null || selectedPinId === undefined) return;
+    setViewedPinIds((prev) => {
+      if (prev.has(selectedPinId)) return prev;
+      const next = new Set(prev);
+      next.add(selectedPinId);
+      return next;
+    });
+  }, [selectedPinId]);
+
+  useEffect(() => {
     if (!mapLoaded) return;
     if (selectedPinId === null || selectedPinId === undefined) return;
     if (prevSelectedPinIdRef.current === selectedPinId) return;
@@ -2281,7 +2612,7 @@ function MapView({
 
   return (
     <div className="map-wrapper">
-      {!mapLoaded && !mapError && <div className="map-banner">Loading map tiles…</div>}
+      {!mapLoaded && !mapError && <div className="map-banner">Loading map tiles...</div>}
       {mapError && (
         <div className="map-banner error">
           <span>{mapError}</span>
@@ -2305,6 +2636,9 @@ function MapView({
           const transitionSpeed = shouldAnimate ? Math.round(ANIMATION_TIMING.move * 1.25) : 0;
           const baseScale = node.clusterSize > 1 ? 0.97 : 1;
           const opacity = node.visibilityAlpha ?? 1;
+          const bounceKey = pinBounceKey(node.pin);
+          const isBouncing = bounceKey !== null && bounceKey !== undefined && activeBounces.has(bounceKey);
+          const isRecent = bounceKey !== null && bounceKey !== undefined && recentApprovedKeySet.has(bounceKey);
           const style = {
             transform: `translate(${node.x - PIN_RADIUS}px, ${node.y - PIN_RADIUS}px) scale(${baseScale})`,
             opacity,
@@ -2318,6 +2652,8 @@ function MapView({
             node.category === "pending" ? "pending" : "",
             node.isSelected ? "selected" : "",
             node.clusterSize > 1 ? "cluster-member" : "",
+            isRecent ? "recent" : "",
+            isBouncing ? "is-bouncing" : "",
           ]
             .filter(Boolean)
             .join(" ");
@@ -2377,6 +2713,9 @@ function MapView({
 }
 
 const protomapsKey = import.meta.env.VITE_PROTOMAPS_KEY || import.meta.env.VITE_PROTOMAPS_API_KEY;
+const maptilerLightStyle = import.meta.env.VITE_MAPTILER_STYLE_URL || null;
+const maptilerDarkStyle = import.meta.env.VITE_MAPTILER_DARK_STYLE_URL || maptilerLightStyle || null;
+
 const STYLE_URLS = {
   light:
     import.meta.env.VITE_PROTOMAPS_STYLE_URL ||
@@ -2384,6 +2723,11 @@ const STYLE_URLS = {
   dark:
     import.meta.env.VITE_PROTOMAPS_DARK_STYLE_URL ||
     (protomapsKey ? `https://api.protomaps.com/styles/v5/dark/en.json?key=${protomapsKey}` : null),
+};
+
+const STYLE_CANDIDATES = {
+  light: [STYLE_URLS.light, maptilerLightStyle].filter(Boolean),
+  dark: [STYLE_URLS.dark, maptilerDarkStyle].filter(Boolean),
 };
 
 export default MapView;

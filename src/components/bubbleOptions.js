@@ -31,6 +31,11 @@ const baseDefaultOptions = {
     "Youtube",
     "Website",
     "OnlyFans",
+    "Recon",
+    "Signal",
+    "Telegram",
+    "WhatsApp",
+    "Bluesky",
   ],
 };
 
@@ -100,6 +105,10 @@ export async function fetchBubbleOptions(client = supabase) {
       options[key] = [...baseDefaultOptions[key]];
     }
   });
+
+  // Always hardcode contact methods (do not source from backend)
+  options.contact_methods = [...baseDefaultOptions.contact_methods];
+  statusMap.contact_methods = { ...defaultStatusMap.contact_methods };
 
   return { options, statusMap };
 }
