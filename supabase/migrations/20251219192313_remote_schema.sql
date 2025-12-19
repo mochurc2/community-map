@@ -259,6 +259,6 @@ end;
 $function$
 ;
 
-CREATE TRIGGER "magic-links" AFTER INSERT ON public.pin_owner_secrets FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://ymdwxxcvhxcwjzecxhvb.supabase.co/functions/v1/send-magic-link', 'POST', '{"Content-type":"application/json","Authorization":"Bearer e678e4a8dedf463436102f2bf1a1aae9fe821826695420751821717265ef3bce"}', '{}', '5000');
+CREATE TRIGGER "magic-links" AFTER INSERT ON public.pin_owner_secrets FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://ymdwxxcvhxcwjzecxhvb.supabase.co/functions/v1/send-magic-link', 'POST', '{"Content-type":"application/json","Authorization":"Bearer <MAGIC_LINK_WEBHOOK_SECRET>"}', '{}', '5000');
 
 
