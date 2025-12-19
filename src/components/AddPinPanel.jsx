@@ -38,6 +38,8 @@ export function AddPinPanel() {
     form,
     setForm,
     contactErrors,
+    adminEmailError,
+    submitMsg,
     submitError,
     hasSubmitted,
     submitting,
@@ -213,6 +215,25 @@ export function AddPinPanel() {
             <span className="helper-text">{form.note.length}/250</span>
           </label>
 
+          <label className="label">
+            <div className="label-heading">
+              <span>Admin email (private)</span>
+            </div>
+            <p className="helper-text label-helper">
+              Required. We will email you a private edit/delete link. This email is never shown on the
+              map and cannot be changed later, so use one you can access.
+            </p>
+            <input
+              type="email"
+              name="admin_email"
+              value={form.admin_email}
+              onChange={handleChange}
+              className="input"
+              required
+            />
+            {adminEmailError && <span className="field-error">{adminEmailError}</span>}
+          </label>
+
           <div className="contact-section">
             <BubbleSelector
               label="Contact info"
@@ -292,8 +313,7 @@ export function AddPinPanel() {
 
           {submitError && <p className="status error">{submitError}</p>}
           <p className="helper-text label-helper">
-            You will not be able to edit your pin after submission. Please use the report pin feature
-            if you would like your pin removed or changed after submission.
+            You will get a private link by email to edit or delete your pin later. Keep it safe.
           </p>
 
           <button type="submit" disabled={submitting} className="primary">

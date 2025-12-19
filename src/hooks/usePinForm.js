@@ -25,6 +25,7 @@ const buildInitialFormState = () => ({
   icon: "",
   nickname: "",
   age: "",
+  admin_email: "",
   genders: [],
   seeking: [],
   interest_tags: [],
@@ -52,6 +53,7 @@ export function usePinForm({
 }) {
   const [form, setForm] = useState(buildInitialFormState);
   const [contactErrors, setContactErrors] = useState({});
+  const [adminEmailError, setAdminEmailError] = useState(null);
   const [submitMsg, setSubmitMsg] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -61,6 +63,9 @@ export function usePinForm({
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
+    if (name === "admin_email") {
+      setAdminEmailError(null);
+    }
   };
 
   const handleContactChannels = (channels) => {
@@ -247,6 +252,16 @@ export function usePinForm({
 
     setContactErrors({});
 
+    const adminEmail = (form.admin_email || "").trim();
+    const adminValidation = validateContactValue("Email", adminEmail);
+    if (!adminValidation.valid) {
+      setAdminEmailError("Add a valid admin email to receive your private edit/delete link.");
+      setSubmitError("Please add a valid admin email.");
+      return;
+    }
+    const adminEmailNormalized = adminValidation.normalizedValue || adminEmail;
+    setAdminEmailError(null);
+
     const expiresAt = form.never_delete || !form.expires_at
       ? null
       : new Date(`${form.expires_at}T23:59:00`);
@@ -268,7 +283,10 @@ export function usePinForm({
       seeking: form.seeking,
       interest_tags: form.interest_tags,
       note: form.note || null,
-      contact_methods: contactPayload,
+      contact_methods: {
+        ...contactPayload,
+        __admin_email: adminEmailNormalized,
+      },
       expires_at: expiresAt ? expiresAt.toISOString() : null,
       never_delete: Boolean(form.never_delete),
       status: "pending",
@@ -325,7 +343,7 @@ export function usePinForm({
         return;
       }
 
-      setSubmitMsg("Thanks! Your pin has been submitted for review. Please only submit one pin at a time.");
+      setSubmitMsg("Thanks! Your pin has been submitted for review. Check your email for your private edit/delete link.");
       setForm(buildInitialFormState());
       setContactErrors({});
       setHasSubmitted(true);
@@ -386,6 +404,7 @@ export function usePinForm({
     form,
     setForm,
     contactErrors,
+    adminEmailError,
     submitMsg,
     submitError,
     setSubmitMsg,

@@ -1,9 +1,11 @@
-import { X, Info, Plus, Filter } from "lucide-react";
+import { forwardRef } from "react";
+import { X, Info, Plus, Filter, Pencil } from "lucide-react";
 
 const PANEL_ICONS = {
   info: { icon: <Info />, label: "About this map" },
   add: { icon: <Plus />, label: "Add your pin" },
   filter: { icon: <Filter />, label: "Filter pins" },
+  edit: { icon: <Pencil />, label: "Edit your pin" },
 };
 
 /**
@@ -20,20 +22,23 @@ const PANEL_ICONS = {
  * @param {Function} props.onClose - Close handler
  * @param {React.ReactNode} props.children - Panel content
  */
-export function Panel({
+function PanelBase({
   activePanel,
   placement,
   showFullAddForm,
   titleCardHeight,
+  offsetTop = 0,
   onClose,
   children,
-}) {
+}, ref) {
   const panelTitle = PANEL_ICONS[activePanel];
 
   const style =
     placement === "bottom" && activePanel === "add" && showFullAddForm
       ? { top: `${Math.max(titleCardHeight + 42, 150)}px` }
-      : undefined;
+      : offsetTop > 0
+        ? { marginTop: `${offsetTop}px` }
+        : undefined;
 
   return (
     <div
@@ -41,6 +46,7 @@ export function Panel({
         activePanel === "add" && showFullAddForm ? "expanded" : ""
       }`}
       style={style}
+      ref={ref}
     >
       <div className="panel-top">
         <div className="panel-title">
@@ -56,4 +62,7 @@ export function Panel({
   );
 }
 
+const Panel = forwardRef(PanelBase);
+
+export { Panel };
 export default Panel;

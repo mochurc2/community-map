@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.jsx"; // main map page
 import EntryGate from "./components/EntryGate.jsx";
+import EditPinPage from "./pages/EditPinPage.jsx";
 import { ThemeProvider } from "./context";
 import { supabase, supabaseConfigError, setSupabaseAccessToken } from "./supabaseClient";
 import "./index.css";
@@ -98,6 +99,7 @@ function Root() {
       {shouldRenderRoutes && (
         <Routes>
           <Route path="/" element={<App />} />
+          <Route path="/edit-pin" element={<EditPinPage />} />
         </Routes>
       )}
       {!supabaseConfigError && !hasVerifiedSession && (
