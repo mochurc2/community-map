@@ -686,7 +686,7 @@ CREATE INDEX "turnstile_sessions_fingerprint_idx" ON "public"."turnstile_session
 
 
 
-CREATE OR REPLACE TRIGGER "magic-links" AFTER INSERT ON "public"."pin_owner_secrets" FOR EACH ROW EXECUTE FUNCTION "supabase_functions"."http_request"('https://ymdwxxcvhxcwjzecxhvb.supabase.co/functions/v1/send-magic-link', 'POST', '{"Content-type":"application/json","Authorization":"Bearer f9fb54cf90d972521628b85d979cb98561eaae0465c0cdb08516dbf6cad1ebf0"}', '{}', '5000');
+CREATE OR REPLACE TRIGGER "magic-links" AFTER INSERT ON "public"."pin_owner_secrets" FOR EACH ROW EXECUTE FUNCTION "supabase_functions"."http_request"('https://ymdwxxcvhxcwjzecxhvb.supabase.co/functions/v1/send-magic-link', 'POST', '{"Content-type":"application/json","Authorization":"Bearer <MAGIC_LINK_WEBHOOK_SECRET>"}', '{}', '5000');
 
 
 
