@@ -92,6 +92,7 @@ export async function fetchBubbleOptions(client = supabase) {
   const statusMap = getDefaultStatusMap();
 
   data.forEach((row) => {
+    if (row.field === "contact_methods") return; // Never source contact methods from Supabase
     if (!options[row.field]) return;
     const status = normalizeStatus(row.status);
     statusMap[row.field][row.label.toLowerCase()] = status;
