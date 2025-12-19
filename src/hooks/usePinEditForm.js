@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
-import { randomizeLocation } from "../components/pinUtils";
+import { randomizeLocation, validateContactValue } from "../components/pinUtils";
 import {
   normalizeLabel,
   getCanonicalBaseGender,
   isBaseGenderLabel,
   sanitizeGenderSelection,
 } from "../utils/genderUtils";
-import { defaultExpiryDate } from "../util";
 
 const EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 
@@ -42,6 +41,7 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
   const [form, setForm] = useState(buildInitialState);
   const [initialPin, setInitialPin] = useState(null);
   const [selectedLocation, setSelectedLocation] = useState(emptyLocation);
+  const [locationDirty, setLocationDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -106,6 +106,7 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
           ? { lat: data.lat, lng: data.lng }
           : emptyLocation
       );
+      setLocationDirty(false);
     } catch (err) {
       console.error(err);
       setError(err.message || "Unable to load pin.");
@@ -164,6 +165,68 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     setSuccess(null);
   };
 
+  const autofillLocation = useCallback(async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
+        {
+          headers: {
+            "Accept-Language": "en",
+            "User-Agent": "community-map/1.0",
+          },
+        }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const cityCandidate =
+        data?.address?.city ||
+        data?.address?.town ||
+        data?.address?.village ||
+        data?.address?.hamlet ||
+        data?.address?.county ||
+        "";
+      const countryCandidate = data?.address?.country || "";
+      const countryCode = data?.address?.country_code
+        ? data.address.country_code.toUpperCase()
+        : "";
+
+      const regionIso =
+        data?.address?.state_code ||
+        data?.address?.["ISO3166-2-lvl4"] ||
+        data?.address?.["ISO3166-2-lvl6"] ||
+        "";
+      const regionName =
+        data?.address?.state ||
+        data?.address?.region ||
+        data?.address?.province ||
+        data?.address?.county ||
+        "";
+      const regionAbbr = regionIso ? regionIso.split("-").pop() : "";
+      const region = regionAbbr || regionName;
+
+      setForm((prev) => ({
+        ...prev,
+        city: cityCandidate || prev.city,
+        state_province: region || prev.state_province,
+        country: countryCode || countryCandidate || prev.country,
+        country_code: countryCode || prev.country_code,
+      }));
+    } catch (err) {
+      console.error("Error reverse geocoding", err);
+    }
+  }, []);
+
+  const setLocationFromMap = useCallback(
+    (lat, lng) => {
+      setSelectedLocation({ lat, lng });
+      setLocationDirty(true);
+      setError(null);
+      setSuccess(null);
+      autofillLocation(lat, lng);
+    },
+    [autofillLocation]
+  );
+
   const locationLabel = selectedLocation
     ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lng.toFixed(4)}`
     : "None yet";
@@ -174,7 +237,7 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
       }`
     : "Tap the map to pick a spot and fill in the details.";
 
-  const buildPatch = () => {
+  const buildPatch = (validatedContacts = null) => {
     if (!initialPin) return {};
     const patch = {};
 
@@ -208,13 +271,18 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     });
 
     // contact_methods from selected channels
-    const filteredContacts = {};
-    form.contact_channels.forEach((channel) => {
-      const value = (form.contact_methods || {})[channel];
-      if (value && value.trim() !== "") {
-        filteredContacts[channel] = value.trim();
-      }
-    });
+    const filteredContacts =
+      validatedContacts ||
+      (() => {
+        const next = {};
+        form.contact_channels.forEach((channel) => {
+          const value = (form.contact_methods || {})[channel];
+          if (value && value.trim() !== "") {
+            next[channel] = value.trim();
+          }
+        });
+        return next;
+      })();
     if (comparer(filteredContacts, initialPin.contact_methods)) {
       patch.contact_methods = filteredContacts;
     }
@@ -234,6 +302,7 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     }
 
     if (
+      locationDirty &&
       selectedLocation &&
       (selectedLocation.lat !== initialPin.lat || selectedLocation.lng !== initialPin.lng)
     ) {
@@ -255,7 +324,72 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     setError(null);
     setSuccess(null);
     try {
-      const patch = buildPatch();
+      const trimmedNickname = (form.nickname || "").trim();
+      if (!trimmedNickname) {
+        setError("Nickname is required (up to 12 characters).");
+        setSubmitting(false);
+        return;
+      }
+      if (EMOJI_REGEX.test(trimmedNickname)) {
+        setError("Nicknames cannot include emoji characters.");
+        setSubmitting(false);
+        return;
+      }
+
+      const ageNumber = Number(form.age);
+      if (!form.age || Number.isNaN(ageNumber)) {
+        setError("Enter your age (numbers only).");
+        setSubmitting(false);
+        return;
+      }
+      if (ageNumber < 18 || ageNumber > 120) {
+        setError("Enter an age between 18 and 120.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (!Array.isArray(form.genders) || form.genders.length === 0) {
+        setError("Select at least one gender option.");
+        setSubmitting(false);
+        return;
+      }
+
+      const interests = Array.isArray(form.interest_tags)
+        ? form.interest_tags.filter(Boolean)
+        : [];
+      if (interests.length < 3) {
+        setError("Select at least three interests so others can find you.");
+        setSubmitting(false);
+        return;
+      }
+
+      const contactChannels = Array.isArray(form.contact_channels) ? form.contact_channels : [];
+      if (contactChannels.length === 0) {
+        setError("Add at least one contact method.");
+        setSubmitting(false);
+        return;
+      }
+      const contactValidationErrors = {};
+      const validatedContacts = {};
+      contactChannels.forEach((channel) => {
+        const value = (form.contact_methods || {})[channel] || "";
+        const validation = validateContactValue(channel, value);
+        if (!validation.valid) {
+          contactValidationErrors[channel] = validation.message;
+        } else if (validation.normalizedValue) {
+          validatedContacts[channel] = validation.normalizedValue;
+        } else if (value.trim()) {
+          validatedContacts[channel] = value.trim();
+        }
+      });
+      if (Object.keys(contactValidationErrors).length > 0) {
+        const firstError = Object.values(contactValidationErrors)[0];
+        setError(firstError || "Please add valid contact info before saving.");
+        setSubmitting(false);
+        return;
+      }
+
+      const patch = buildPatch(validatedContacts);
       if (Object.keys(patch).length === 0) {
         setError("Change at least one field before saving.");
         setSubmitting(false);
@@ -337,6 +471,8 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     setForm,
     selectedLocation,
     setSelectedLocation,
+    setLocationFromMap,
+    locationDirty,
     locationLabel,
     locationDetails,
     loading,
@@ -354,6 +490,7 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     handleDelete,
     interestOptionsForForm,
     contactOptionList,
+    initialPin,
   };
 }
 

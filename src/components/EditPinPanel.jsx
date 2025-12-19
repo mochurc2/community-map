@@ -59,7 +59,8 @@ export default function EditPinPanel({
           <div className="label-heading">
             <span>Location</span>
             <p className="helper-text label-helper">
-              Tap the map to adjust. We still randomize within ~1,500 ft to keep privacy.
+              Tap the map to adjust. If you pick a new spot, we will randomize within ~1,500 ft to
+              protect your privacy; otherwise your pin stays where it is.
             </p>
           </div>
           <div className="location-chip-row">
@@ -85,7 +86,7 @@ export default function EditPinPanel({
             <div className="label-heading">
               <span>Nickname</span>
             </div>
-            <p className="helper-text label-helper">Leave blank to keep current.</p>
+            <p className="helper-text label-helper">Required. Up to 12 characters.</p>
             <input
               type="text"
               name="nickname"
@@ -93,6 +94,7 @@ export default function EditPinPanel({
               onChange={handleChange}
               className="input"
               maxLength={12}
+              required
             />
           </label>
 
@@ -100,7 +102,7 @@ export default function EditPinPanel({
             <div className="label-heading">
               <span>Age</span>
             </div>
-            <p className="helper-text label-helper">Leave blank to keep current. 18-120 if you change it.</p>
+            <p className="helper-text label-helper">Required. Enter a number between 18 and 120.</p>
             <input
               type="number"
               name="age"
@@ -109,12 +111,13 @@ export default function EditPinPanel({
               className="input"
               min={18}
               max={120}
+              required
             />
           </label>
 
           <BubbleSelector
             label="Gender"
-            helper="Select all that apply."
+            helper="Required. Select all that apply."
             options={bubbleOptions.gender_identity}
             multiple
             value={form.genders}
@@ -123,7 +126,7 @@ export default function EditPinPanel({
 
           <BubbleSelector
             label="Interested in"
-            helper="Select all that apply."
+            helper="Optional. Select all that apply."
             options={bubbleOptions.seeking}
             multiple
             value={form.seeking}
@@ -132,7 +135,7 @@ export default function EditPinPanel({
 
           <BubbleSelector
             label="Interests and looking for"
-            helper="Select as many as you like."
+            helper="Required. Select ALL that apply because interests are used for filtering and finding users. You must select at least 3 to continue."
             options={interestOptionsForForm}
             multiple
             value={form.interest_tags}
@@ -140,14 +143,16 @@ export default function EditPinPanel({
             allowCustom
             prioritizeSelected
             showHiddenCount
-            footnote="Custom interests are subject to moderation."
+            footnote="Custom interests are subject to moderation and may not appear until they are approved."
           />
 
           <label className="label">
             <div className="label-heading">
               <span>Short note</span>
             </div>
-            <p className="helper-text label-helper">Leave blank to keep current.</p>
+            <p className="helper-text label-helper">
+              Anything you want others to know. Your note is subject to moderation.
+            </p>
             <textarea
               name="note"
               value={form.note}
@@ -162,7 +167,7 @@ export default function EditPinPanel({
           <div className="contact-section">
             <BubbleSelector
               label="Contact info"
-              helper="Select channels to edit. Leave empty to keep current."
+              helper="Select channels to edit. Provide at least one contact method."
               options={orderedContactOptions}
               multiple
               value={form.contact_channels}

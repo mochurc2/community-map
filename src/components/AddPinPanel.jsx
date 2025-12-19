@@ -221,7 +221,7 @@ export function AddPinPanel() {
             </div>
             <p className="helper-text label-helper">
               Required. We will email you a private edit/delete link. This email is never shown on the
-              map.
+              map and cannot be changed later, so use one you can access.
             </p>
             <input
               type="email"

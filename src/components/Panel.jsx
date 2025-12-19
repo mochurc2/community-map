@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { X, Info, Plus, Filter, Pencil } from "lucide-react";
 
 const PANEL_ICONS = {
@@ -21,7 +22,7 @@ const PANEL_ICONS = {
  * @param {Function} props.onClose - Close handler
  * @param {React.ReactNode} props.children - Panel content
  */
-export function Panel({
+function PanelBase({
   activePanel,
   placement,
   showFullAddForm,
@@ -29,7 +30,7 @@ export function Panel({
   offsetTop = 0,
   onClose,
   children,
-}) {
+}, ref) {
   const panelTitle = PANEL_ICONS[activePanel];
 
   const style =
@@ -45,6 +46,7 @@ export function Panel({
         activePanel === "add" && showFullAddForm ? "expanded" : ""
       }`}
       style={style}
+      ref={ref}
     >
       <div className="panel-top">
         <div className="panel-title">
@@ -60,4 +62,7 @@ export function Panel({
   );
 }
 
+const Panel = forwardRef(PanelBase);
+
+export { Panel };
 export default Panel;

@@ -35,7 +35,7 @@ export default function EditPinPage() {
   const [pinPanelBounds, setPinPanelBounds] = useState(null);
 
   const pendingPins = useMemo(() => {
-    if (!editForm.selectedLocation) return [];
+    if (!editForm.locationDirty || !editForm.selectedLocation) return [];
     return [
       {
         id: pinId || "pending-edit",
@@ -43,7 +43,7 @@ export default function EditPinPage() {
         lng: editForm.selectedLocation.lng,
       },
     ];
-  }, [editForm.selectedLocation, pinId]);
+  }, [editForm.locationDirty, editForm.selectedLocation, pinId]);
 
   const pendingIcon = editForm.form.icon || "🧭";
 
@@ -96,19 +96,10 @@ export default function EditPinPage() {
 
   return (
     <div className="app-shell">
-      <TitleCard
-        activePanel={null}
-        onTogglePanel={confirmExit}
-        projectionMode={projectionMode}
-        onToggleProjection={() =>
-          setProjectionMode((prev) => (prev === "mercator" ? "globe" : "mercator"))
-        }
-        ref={titleCardRef}
-      />
       <MapView
-        pins={[]} // editing only shows pending marker
+        pins={editForm.initialPin && !editForm.locationDirty ? [editForm.initialPin] : []}
         pendingPins={pendingPins}
-        pendingLocation={editForm.selectedLocation}
+        pendingLocation={editForm.locationDirty ? editForm.selectedLocation : null}
         pendingIcon={pendingIcon}
         enableAddMode
         panelPlacement={panelPlacement}
@@ -117,20 +108,26 @@ export default function EditPinPage() {
         pinPanelBounds={pinPanelBounds}
         onMapClick={(lngLat) => {
           if (!lngLat) return;
-          editForm.setSelectedLocation({ lng: lngLat.lng, lat: lngLat.lat });
-          editForm.setError(null);
-          editForm.setSuccess(null);
+          editForm.setLocationFromMap(lngLat.lat, lngLat.lng);
         }}
         onMapError={(msg) => setMapErrorMessage(msg || null)}
       />
 
-      <div className="overlay-rail" style={{ marginTop: `${titleCardBounds.height + 12}px` }}>
+      <div className="overlay-rail">
+        <TitleCard
+          activePanel={null}
+          onTogglePanel={confirmExit}
+          projectionMode={projectionMode}
+          onToggleProjection={() =>
+            setProjectionMode((prev) => (prev === "mercator" ? "globe" : "mercator"))
+          }
+          ref={titleCardRef}
+        />
         <Panel
           activePanel={activePanel}
           placement={panelPlacement}
           showFullAddForm
           titleCardHeight={titleCardBounds.height}
-          offsetTop={titleCardBounds.height + 24}
           onClose={confirmExit}
           ref={pinPanelRef}
         >

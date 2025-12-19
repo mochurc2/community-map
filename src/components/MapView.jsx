@@ -788,6 +788,7 @@ function MapView({
   const overlayRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
   const onPinSelectRef = useRef(onPinSelect);
+  const onMapReadyRef = useRef(onMapReady);
   const enableAddModeRef = useRef(enableAddMode);
   const lastAddFocusLocationRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -832,6 +833,10 @@ function MapView({
   const onMapErrorRef = useRef(onMapError);
   const bounceTimersRef = useRef(new Map());
   const bounceWaveTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    onMapReadyRef.current = onMapReady;
+  }, [onMapReady]);
 
   useEffect(() => {
     onMapErrorRef.current = onMapError;
@@ -1955,7 +1960,7 @@ function MapView({
     map.setMaxBounds(LAND_BOUNDS);
 
     mapRef.current = map;
-    onMapReady(map);
+    onMapReadyRef.current?.(map);
 
     map.on("load", async () => {
       try {
@@ -2070,22 +2075,25 @@ function MapView({
     };
   }, [installCustomLayers, resolvedStyle, resolvedStyleKey, styleUrlMemo, themeMode]);
 
-  useEffect(() => () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    if (cameraEaseFrameRef.current) {
-      cancelAnimationFrame(cameraEaseFrameRef.current);
-      cameraEaseFrameRef.current = null;
-    }
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-    onMapReady(null);
-    setMapLoaded(false);
-  }, [onMapReady]);
+  useEffect(
+    () => () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      if (cameraEaseFrameRef.current) {
+        cancelAnimationFrame(cameraEaseFrameRef.current);
+        cameraEaseFrameRef.current = null;
+      }
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      onMapReadyRef.current?.(null);
+      setMapLoaded(false);
+    },
+    []
+  );
 
   useEffect(() => {
     const signature = `${combinedPins.length}:${combinedPins
