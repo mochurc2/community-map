@@ -18,6 +18,7 @@ const buildInitialState = () => ({
   icon: "",
   nickname: "",
   age: "",
+  admin_email: "",
   genders: [],
   seeking: [],
   interest_tags: [],
@@ -51,6 +52,8 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
   const [hasCompleted, setHasCompleted] = useState(false);
   const [completionMessage, setCompletionMessage] = useState(null);
   const [fatalError, setFatalError] = useState(null);
+  const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  const [initialAdminEmail, setInitialAdminEmail] = useState("");
 
   const contactOptionList = bubbleOptions?.contact_methods || [];
 
@@ -82,40 +85,45 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     setError(null);
     setFatalError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc("get_pin_via_secret", {
+      const { data, error: rpcError } = await supabase.rpc("get_pin_edit_state", {
         p_pin_id: pinId,
         p_secret_token: token,
       });
       if (rpcError) throw rpcError;
-      if (!data) {
+      if (!data?.pin) {
         setFatalError(LINK_ERROR_MESSAGE);
         setError(LINK_ERROR_MESSAGE);
         setLoading(false);
         return;
       }
 
-      const channels = deriveContactChannels(data.contact_methods || {});
-      setInitialPin(data);
+      const pin = data.pin;
+      const adminEmailValue = data.admin_email || "";
+      const channels = deriveContactChannels(pin.contact_methods || {});
+      setInitialPin(pin);
+      setHasAdminEmail(Boolean(data.has_admin_email));
+      setInitialAdminEmail(adminEmailValue);
       setForm({
-        icon: data.icon || "",
-        nickname: data.nickname || "",
-        age: data.age ? String(data.age) : "",
-        genders: Array.isArray(data.genders) ? data.genders : [],
-        seeking: Array.isArray(data.seeking) ? data.seeking : [],
-        interest_tags: Array.isArray(data.interest_tags) ? data.interest_tags : [],
-        note: data.note || "",
-        contact_methods: data.contact_methods || {},
+        icon: pin.icon || "",
+        nickname: pin.nickname || "",
+        age: pin.age ? String(pin.age) : "",
+        admin_email: adminEmailValue,
+        genders: Array.isArray(pin.genders) ? pin.genders : [],
+        seeking: Array.isArray(pin.seeking) ? pin.seeking : [],
+        interest_tags: Array.isArray(pin.interest_tags) ? pin.interest_tags : [],
+        note: pin.note || "",
+        contact_methods: pin.contact_methods || {},
         contact_channels: channels,
-        city: data.city || "",
-        state_province: data.state_province || "",
-        country: data.country || "",
-        country_code: data.country_code || "",
-        expires_at: toDateInput(data.expires_at),
-        never_delete: Boolean(data.never_delete),
+        city: pin.city || "",
+        state_province: pin.state_province || "",
+        country: pin.country || "",
+        country_code: pin.country_code || "",
+        expires_at: toDateInput(pin.expires_at),
+        never_delete: Boolean(pin.never_delete),
       });
       setSelectedLocation(
-        typeof data.lat === "number" && typeof data.lng === "number"
-          ? { lat: data.lat, lng: data.lng }
+        typeof pin.lat === "number" && typeof pin.lng === "number"
+          ? { lat: pin.lat, lng: pin.lng }
           : emptyLocation
       );
       setLocationDirty(false);
@@ -257,7 +265,7 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
       }`
     : "Tap the map to pick a spot and fill in the details.";
 
-  const buildPatch = (validatedContacts = null) => {
+  const buildPatch = (validatedContacts = null, adminEmailNormalized = null, adminEmailChanged = false) => {
     if (!initialPin) return {};
     const patch = {};
 
@@ -284,11 +292,6 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     if (comparer(form.seeking, initialPin.seeking)) patch.seeking = form.seeking;
     if (comparer(form.interest_tags, initialPin.interest_tags)) patch.interest_tags = form.interest_tags;
     if (form.note !== initialPin.note) patch.note = form.note || null;
-    ["contact_discord", "contact_reddit", "contact_instagram"].forEach((field) => {
-      if ((form[field] || "") !== (initialPin[field] || "")) {
-        patch[field] = form[field] || null;
-      }
-    });
 
     // contact_methods from selected channels
     const filteredContacts =
@@ -329,6 +332,10 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
       const randomized = randomizeLocation(selectedLocation, 500, 1500);
       patch.lat = randomized.lat;
       patch.lng = randomized.lng;
+    }
+
+    if (adminEmailChanged && adminEmailNormalized) {
+      patch.__admin_email = adminEmailNormalized;
     }
 
     return patch;
@@ -409,23 +416,51 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
         return;
       }
 
-      const patch = buildPatch(validatedContacts);
+      // Admin email handling
+      const trimmedAdminEmail = (form.admin_email || "").trim();
+      if (!hasAdminEmail && !trimmedAdminEmail) {
+        setError("Add an admin email to receive your private edit/delete link.");
+        setSubmitting(false);
+        return;
+      }
+      let adminEmailNormalized = trimmedAdminEmail;
+      let adminEmailChanged = false;
+      if (trimmedAdminEmail) {
+        const adminValidation = validateContactValue("Email", trimmedAdminEmail);
+        if (!adminValidation.valid) {
+          setError(adminValidation.message || "Please add a valid admin email.");
+          setSubmitting(false);
+          return;
+        }
+        adminEmailNormalized = adminValidation.normalizedValue || trimmedAdminEmail;
+        adminEmailChanged = adminEmailNormalized !== (initialAdminEmail || "");
+      }
+
+      const patch = buildPatch(validatedContacts, adminEmailNormalized, adminEmailChanged);
       if (Object.keys(patch).length === 0) {
         setError("Change at least one field before saving.");
         setSubmitting(false);
         return;
       }
-      const { error: rpcError } = await supabase.rpc("update_pin_via_secret", {
+      const { data: updateResult, error: rpcError } = await supabase.rpc("update_pin_via_secret", {
         p_pin_id: pinId,
         p_secret_token: token,
         p_patch: patch,
         p_delete: false,
       });
       if (rpcError) throw rpcError;
-      setSuccess(SAVE_SUCCESS_MESSAGE);
-      setCompletionMessage(SAVE_SUCCESS_MESSAGE);
-      setHasCompleted(true);
-      await loadPin();
+      const secretRotated = Boolean(updateResult?.secret_rotated);
+      if (secretRotated && adminEmailNormalized) {
+        const rotationMsg = `We emailed a new private edit/delete link to ${adminEmailNormalized}. This link replaces the one you used.`;
+        setSuccess(rotationMsg);
+        setCompletionMessage(rotationMsg);
+        setHasCompleted(true);
+      } else {
+        setSuccess(SAVE_SUCCESS_MESSAGE);
+        setCompletionMessage(SAVE_SUCCESS_MESSAGE);
+        setHasCompleted(true);
+        await loadPin();
+      }
     } catch (err) {
       setError(err.message || "Unable to update pin.");
     } finally {
@@ -508,6 +543,7 @@ export function usePinEditForm({ pinId, token, bubbleOptions, customInterestOpti
     fatalError,
     hasCompleted,
     completionMessage,
+    hasAdminEmail,
     handleChange,
     handleContactChannels,
     handleContactInput,

@@ -48,6 +48,7 @@ export default function EditPinPanel({
   fatalError,
   hasCompleted,
   completionMessage,
+  hasAdminEmail,
 }) {
   const orderedContactOptions = contactOptionList || bubbleOptions?.contact_methods || [];
 
@@ -213,6 +214,27 @@ export default function EditPinPanel({
               </div>
             )}
           </div>
+
+          <label className="label">
+            <div className="label-heading">
+              <span>Admin email</span>
+              {!hasAdminEmail && <span className="pill required">Required</span>}
+            </div>
+            <p className="helper-text label-helper">
+              {hasAdminEmail
+                ? "Optional. Change this to send a new private edit/delete link; the current link will stop working."
+                : "Required. We will email your private edit/delete link here."}
+            </p>
+            <input
+              type="email"
+              name="admin_email"
+              value={form.admin_email}
+              onChange={handleChange}
+              className="input"
+              placeholder="you@example.com"
+              required={!hasAdminEmail}
+            />
+          </label>
 
           <div className="delete-row">
             <label className="label">
