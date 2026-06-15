@@ -21,7 +21,7 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
       setPanelPlacement((prev) => (prev === placement ? prev : placement));
 
       if (activePanel === "add") {
-        if (!isWideEnough || hasSubmitted) {
+        if (hasSubmitted) {
           setShowFullAddForm(false);
         } else if (selectedLocation) {
           setShowFullAddForm(true);
@@ -66,11 +66,10 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
   const togglePanel = useCallback((panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
     if (panel === "add") {
-      const shouldExpand =
-        panelPlacement !== "bottom" && Boolean(selectedLocation) && !hasSubmitted;
+      const shouldExpand = Boolean(selectedLocation) && !hasSubmitted;
       setShowFullAddForm(shouldExpand);
     }
-  }, [panelPlacement, selectedLocation, hasSubmitted]);
+  }, [selectedLocation, hasSubmitted]);
 
   const openAddPanel = useCallback(() => {
     setActivePanel("add");
