@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Local development dummy pins
+public/dev-dummy-pins.json

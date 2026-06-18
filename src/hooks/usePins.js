@@ -46,7 +46,25 @@ export function usePins(filters, isInterestApproved) {
 
   useEffect(() => {
     async function fetchPins() {
-      if (!supabase) return;
+      let localDummyPins = [];
+      if (import.meta.env.DEV) {
+        try {
+          const res = await fetch("/dev-dummy-pins.json");
+          if (res.ok) {
+            localDummyPins = await res.json();
+          }
+        } catch (err) {
+          console.warn("[usePins] Failed to load local dummy pins:", err);
+        }
+      }
+
+      if (!supabase) {
+        if (import.meta.env.DEV) {
+          setPins(localDummyPins);
+        }
+        return;
+      }
+
       setLoadingPins(true);
       const nowIso = new Date().toISOString();
       const { data, error } = await supabase
@@ -81,48 +99,7 @@ export function usePins(filters, isInterestApproved) {
         console.error(error);
         if (import.meta.env.DEV) {
           console.info("[usePins] Loading mock pins for local development");
-          setPins([
-            {
-              id: 9001,
-              lat: 37.7749,
-              lng: -122.4194,
-              city: "San Francisco",
-              state_province: "CA",
-              country: "United States",
-              country_code: "US",
-              icon: "💇",
-              nickname: "HairLover",
-              age: 28,
-              genders: ["Man"],
-              gender_identity: ["Man"],
-              seeking: ["Woman"],
-              interest_tags: ["Bobs", "Pixies"],
-              note: "Looking for bob hair styling swap!",
-              contact_methods: { Email: "hairlover@example.com" },
-              never_delete: true,
-              approved_at: new Date().toISOString(),
-            },
-            {
-              id: 9002,
-              lat: 40.7128,
-              lng: -74.0060,
-              city: "New York",
-              state_province: "NY",
-              country: "United States",
-              country_code: "US",
-              icon: "✂️",
-              nickname: "ClipperFan",
-              age: 32,
-              genders: ["Woman"],
-              gender_identity: ["Woman"],
-              seeking: ["Man"],
-              interest_tags: ["Buzzcuts", "UnderCuts"],
-              note: "Buzzcut fan in NYC.",
-              contact_methods: { Instagram: "@clipperfan" },
-              never_delete: true,
-              approved_at: new Date().toISOString(),
-            }
-          ]);
+          setPins(localDummyPins);
           setPinsError(null);
         } else {
           if (error.message?.includes("age")) {
@@ -134,7 +111,12 @@ export function usePins(filters, isInterestApproved) {
           }
         }
       } else {
-        setPins(data || []);
+        const fetchedPins = data || [];
+        if (import.meta.env.DEV) {
+          setPins([...fetchedPins, ...localDummyPins]);
+        } else {
+          setPins(fetchedPins);
+        }
       }
       setLoadingPins(false);
     }
