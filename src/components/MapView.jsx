@@ -778,6 +778,7 @@ function MapView({
   panelPlacement = "side",
   titleCardBounds = { top: 0, bottom: 0, height: 0 },
   pinPanelBounds = null,
+  activePanelBounds = null,
   projection = "mercator",
   onMapReady = () => {},
   onMapError = () => {},
@@ -826,6 +827,8 @@ function MapView({
   const forwardingMultiTouchRef = useRef(false);
   const lastFocusedPinRef = useRef(null);
   const prevSelectedPinIdRef = useRef(null);
+  const lastEasedPinIdRef = useRef(null);
+  const lastAddFocusPaddingRef = useRef(null);
   const lastCameraRef = useRef(buildDefaultCameraState());
   const currentStyleKeyRef = useRef(null);
   const cameraEaseFrameRef = useRef(null);
@@ -2026,14 +2029,6 @@ function MapView({
 
     map.on("click", (e) => {
       if (!enableAddModeRef.current) return;
-      const zoomTarget = map.getZoom();
-      map.flyTo({
-        center: [e.lngLat.lng, e.lngLat.lat],
-        zoom: zoomTarget >= MAP_CLICK_TARGET_ZOOM ? zoomTarget : MAP_CLICK_TARGET_ZOOM,
-      });
-
-      lastAddFocusLocationRef.current = `${e.lngLat.lat.toFixed(6)},${e.lngLat.lng.toFixed(6)}`;
-
       if (onMapClickRef.current) {
         onMapClickRef.current(e.lngLat);
       }
@@ -2168,6 +2163,13 @@ function MapView({
 
     const handlePointerDown = (event) => {
       if (event.pointerType !== "touch") return;
+
+      // Safety reset: if activeTouchIds is empty, guarantee forwardingMultiTouch is reset
+      if (activeTouchIdsRef.current.size === 0) {
+        forwardingMultiTouchRef.current = false;
+        cachedTouchEventsRef.current.clear();
+      }
+
       activeTouchIdsRef.current.add(event.pointerId);
       cachedTouchEventsRef.current.set(event.pointerId, event);
       if (forwardingMultiTouchRef.current || activeTouchIdsRef.current.size >= 2) {
@@ -2209,6 +2211,9 @@ function MapView({
     overlayEl.addEventListener("pointermove", handlePointerMove, listenerOptions);
     overlayEl.addEventListener("pointerup", handlePointerEnd, listenerOptions);
     overlayEl.addEventListener("pointercancel", handlePointerEnd, listenerOptions);
+
+    window.addEventListener("pointerup", handlePointerEnd, listenerOptions);
+    window.addEventListener("pointercancel", handlePointerEnd, listenerOptions);
 
     const cloneTouches = (touchList) => {
       if (!touchList || typeof Touch === "undefined") return [];
@@ -2252,7 +2257,10 @@ function MapView({
     };
 
     const handleTouchStart = (event) => {
-      if (event.touches.length < 2) return;
+      if (event.touches.length < 2) {
+        forwardingMultiTouchRef.current = false;
+        return;
+      }
       forwardingMultiTouchRef.current = true;
       event.preventDefault();
       forwardTouchEvent("touchstart", event);
@@ -2302,6 +2310,9 @@ function MapView({
     overlayEl.addEventListener("touchcancel", handleTouchEnd, listenerOptions);
     overlayEl.addEventListener("wheel", handleWheel, listenerOptions);
 
+    window.addEventListener("touchend", handleTouchEnd, listenerOptions);
+    window.addEventListener("touchcancel", handleTouchEnd, listenerOptions);
+
     return () => {
       overlayEl.removeEventListener("pointerdown", handlePointerDown, listenerOptions);
       overlayEl.removeEventListener("pointermove", handlePointerMove, listenerOptions);
@@ -2312,6 +2323,12 @@ function MapView({
       overlayEl.removeEventListener("touchend", handleTouchEnd, listenerOptions);
       overlayEl.removeEventListener("touchcancel", handleTouchEnd, listenerOptions);
       overlayEl.removeEventListener("wheel", handleWheel, listenerOptions);
+
+      window.removeEventListener("pointerup", handlePointerEnd, listenerOptions);
+      window.removeEventListener("pointercancel", handlePointerEnd, listenerOptions);
+      window.removeEventListener("touchend", handleTouchEnd, listenerOptions);
+      window.removeEventListener("touchcancel", handleTouchEnd, listenerOptions);
+
       forwardingMultiTouchRef.current = false;
       activeTouchIds.clear();
       cachedTouchEvents.clear();
@@ -2415,9 +2432,10 @@ function MapView({
         : 0);
 
     const topPadding = Math.max(0, titleCardBounds?.bottom || 0);
-    const pinPanelTop = pinPanelBounds?.top;
+    const targetBounds = pinPanelBounds || activePanelBounds;
+    const panelTop = targetBounds?.top;
     const bottomPadding =
-      typeof pinPanelTop === "number" ? Math.max(0, containerHeight - pinPanelTop) : 0;
+      typeof panelTop === "number" ? Math.max(0, containerHeight - panelTop) : 0;
 
     return {
       top: topPadding,
@@ -2425,11 +2443,12 @@ function MapView({
       left: 12,
       right: 12,
     };
-  }, [panelPlacement, pinPanelBounds, titleCardBounds]);
+  }, [panelPlacement, pinPanelBounds, activePanelBounds, titleCardBounds]);
 
   useEffect(() => {
     if (!enableAddMode) {
       lastAddFocusLocationRef.current = null;
+      lastAddFocusPaddingRef.current = null;
       return;
     }
 
@@ -2441,7 +2460,11 @@ function MapView({
     if (!map) return;
 
     const locationKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-    if (lastAddFocusLocationRef.current === locationKey) return;
+    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+    const paddingKey = mobilePadding ? `${mobilePadding.top},${mobilePadding.bottom}` : "none";
+
+    // If both location and padding are unchanged, return early to avoid redundant eases
+    if (lastAddFocusLocationRef.current === locationKey && lastAddFocusPaddingRef.current === paddingKey) return;
 
     const rawZoom = map.getZoom();
     const safeCurrentZoom = typeof rawZoom === "number" ? rawZoom : MAP_CLICK_TARGET_ZOOM;
@@ -2449,18 +2472,19 @@ function MapView({
       map.getMaxZoom() || 20,
       Math.max(safeCurrentZoom, MAP_CLICK_TARGET_ZOOM)
     );
-    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
 
+    const normalizedPadding = mobilePadding ? normalizePadding(mobilePadding) : null;
     requestCameraEase({
       center: [lng, lat],
       zoom: targetZoom,
-      padding: mobilePadding || undefined,
+      padding: normalizedPadding || undefined,
       duration: smoothDuration(safeCurrentZoom, targetZoom),
       easing: easeInOut,
       force: true,
     });
 
     lastAddFocusLocationRef.current = locationKey;
+    lastAddFocusPaddingRef.current = paddingKey;
   }, [
     computeMobilePadding,
     enableAddMode,
@@ -2482,34 +2506,49 @@ function MapView({
 
   useEffect(() => {
     if (!mapLoaded) return;
-    if (selectedPinId === null || selectedPinId === undefined) return;
-    if (prevSelectedPinIdRef.current === selectedPinId) return;
-    if (lastFocusedPinRef.current === selectedPinId) return; // click already handled centering
-    prevSelectedPinIdRef.current = selectedPinId;
+    if (selectedPinId === null || selectedPinId === undefined) {
+      lastEasedPinIdRef.current = null;
+      prevSelectedPinIdRef.current = null;
+      lastFocusedPinRef.current = null;
+      return;
+    }
+
     const map = mapRef.current;
     if (!map) return;
+
+    // If we are on mobile (bottom placement), we need valid pinPanelBounds to do the padded ease.
+    // If pinPanelBounds is null (or bottomPadding is 0), we wait until they are available.
+    const isMobile = panelPlacement === "bottom";
+    const mobilePadding = isMobile ? computeMobilePadding() : null;
+    
+    if (isMobile && (!pinPanelBounds || !mobilePadding || mobilePadding.bottom === 0)) {
+      // Wait for pinPanelBounds to be measured and set
+      return;
+    }
+
+    // If we already eased for this pin ID, don't ease again (e.g. if the user drags the map)
+    if (lastEasedPinIdRef.current === selectedPinId) return;
+
     const selectedPin = combinedPins.find((pin) => pin.id === selectedPinId);
     if (!selectedPin || typeof selectedPin.lng !== "number" || typeof selectedPin.lat !== "number") return;
 
     const destination = [selectedPin.lng, selectedPin.lat];
-    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
     const targetZoom = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
+    lastEasedPinIdRef.current = selectedPinId;
+    prevSelectedPinIdRef.current = selectedPinId;
+    lastFocusedPinRef.current = selectedPinId;
+
+    const normalizedPadding = mobilePadding ? normalizePadding(mobilePadding) : null;
     requestCameraEase({
       center: destination,
       zoom: targetZoom,
-      padding: mobilePadding || undefined,
+      padding: normalizedPadding || undefined,
       duration: smoothDuration(map.getZoom(), targetZoom),
       easing: easeInOut,
+      force: true,
     });
-  }, [combinedPins, computeMobilePadding, mapLoaded, panelPlacement, requestCameraEase, selectedPinId]);
-
-  useEffect(() => {
-    if (selectedPinId === null || selectedPinId === undefined) {
-      prevSelectedPinIdRef.current = null;
-      lastFocusedPinRef.current = null;
-    }
-  }, [selectedPinId]);
+  }, [combinedPins, computeMobilePadding, mapLoaded, panelPlacement, requestCameraEase, selectedPinId, pinPanelBounds]);
 
   const computeClusterZoomTarget = useCallback((map, node) => {
     const container = map.getContainer();
@@ -2553,11 +2592,11 @@ function MapView({
         return;
       }
 
-      if (node.pin && onPinSelectRef.current) {
-        onPinSelectRef.current(node.pin);
-      }
-      if (node.pin?.id !== undefined && node.pin?.id !== null) {
-        lastFocusedPinRef.current = node.pin.id;
+      if (node.pin) {
+        if (onPinSelectRef.current) {
+          onPinSelectRef.current(node.pin);
+        }
+        return;
       }
 
       if (node.clusterSize > 3 && node.focusCenter) {

@@ -41,7 +41,7 @@ export const TitleCard = forwardRef(function TitleCard(
           onClick={() => onTogglePanel("add")}
         >
           <Plus size={18} />
-          <span>Add pin</span>
+          <span>Add</span>
         </button>
         <button
           type="button"

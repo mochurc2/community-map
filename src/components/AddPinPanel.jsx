@@ -87,6 +87,16 @@ export function AddPinPanel() {
           <span className="location-chip">{locationLabel}</span>
           <span className="location-chip subdued">{locationDetails}</span>
         </div>
+        {panelPlacement === "bottom" && showFullAddForm && !hasSubmitted && (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setShowFullAddForm(false)}
+            style={{ display: "inline-flex", width: "fit-content", padding: "0.45rem 0.75rem", fontSize: "0.85rem", marginTop: "0.5rem" }}
+          >
+            Reset location
+          </button>
+        )}
       </div>
       {panelPlacement === "bottom" && !showFullAddForm && !hasSubmitted && (
         <button

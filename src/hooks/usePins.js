@@ -79,12 +79,59 @@ export function usePins(filters, isInterestApproved) {
 
       if (error) {
         console.error(error);
-        if (error.message?.includes("age")) {
-          setPinsError(
-            "The Supabase schema is missing the 'age' column. Please run the SQL in supabase/schema.sql to refresh your database."
-          );
+        if (import.meta.env.DEV) {
+          console.info("[usePins] Loading mock pins for local development");
+          setPins([
+            {
+              id: 9001,
+              lat: 37.7749,
+              lng: -122.4194,
+              city: "San Francisco",
+              state_province: "CA",
+              country: "United States",
+              country_code: "US",
+              icon: "💇",
+              nickname: "HairLover",
+              age: 28,
+              genders: ["Man"],
+              gender_identity: ["Man"],
+              seeking: ["Woman"],
+              interest_tags: ["Bobs", "Pixies"],
+              note: "Looking for bob hair styling swap!",
+              contact_methods: { Email: "hairlover@example.com" },
+              never_delete: true,
+              approved_at: new Date().toISOString(),
+            },
+            {
+              id: 9002,
+              lat: 40.7128,
+              lng: -74.0060,
+              city: "New York",
+              state_province: "NY",
+              country: "United States",
+              country_code: "US",
+              icon: "✂️",
+              nickname: "ClipperFan",
+              age: 32,
+              genders: ["Woman"],
+              gender_identity: ["Woman"],
+              seeking: ["Man"],
+              interest_tags: ["Buzzcuts", "UnderCuts"],
+              note: "Buzzcut fan in NYC.",
+              contact_methods: { Instagram: "@clipperfan" },
+              never_delete: true,
+              approved_at: new Date().toISOString(),
+            }
+          ]);
+          setPinsError(null);
         } else {
-          setPinsError(error.message);
+          if (error.message?.includes("age")) {
+            setPinsError(
+              "The Supabase schema is missing the 'age' column. Please run the SQL in supabase/schema.sql to refresh your database."
+            );
+          } else {
+            setPinsError(error.message);
+          }
         }
       } else {
         setPins(data || []);

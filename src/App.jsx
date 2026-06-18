@@ -153,10 +153,22 @@ function AppContent({ hasTurnstileSession = false }) {
     titleCardBounds,
     titleCardHeight,
     titleCardRef,
-    togglePanel,
-    openAddPanel,
+    togglePanel: rawTogglePanel,
+    openAddPanel: rawOpenAddPanel,
     closePanel,
   } = panelStateHook;
+
+  const togglePanel = useCallback((panel) => {
+    rawTogglePanel(panel);
+    if (activePanel !== panel) {
+      setSelectedPin(null);
+    }
+  }, [rawTogglePanel, activePanel]);
+
+  const openAddPanel = useCallback(() => {
+    rawOpenAddPanel();
+    setSelectedPin(null);
+  }, [rawOpenAddPanel]);
 
   useEffect(() => {
     if (pendingSubmission) {
@@ -181,6 +193,8 @@ function AppContent({ hasTurnstileSession = false }) {
 
   const pinPanelRef = useRef(null);
   const [pinPanelBounds, setPinPanelBounds] = useState(null);
+  const activePanelRef = useRef(null);
+  const [activePanelBounds, setActivePanelBounds] = useState(null);
   const [mapErrorMessage, setMapErrorMessage] = useState(null);
 
   // Map interaction handlers
@@ -384,6 +398,41 @@ function AppContent({ hasTurnstileSession = false }) {
     };
   }, [visibleSelectedPin, panelPlacement]);
 
+  useEffect(() => {
+    const node = activePanelRef.current;
+    let frameId = null;
+
+    const updateBounds = () => {
+      if (!activePanelRef.current) return;
+      const rect = activePanelRef.current.getBoundingClientRect();
+      setActivePanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
+    };
+
+    if (!node) {
+      frameId = requestAnimationFrame(() => setActivePanelBounds(null));
+      return () => {
+        if (frameId) cancelAnimationFrame(frameId);
+      };
+    }
+
+    frameId = requestAnimationFrame(updateBounds);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateBounds) : null;
+    resizeObserver?.observe(node);
+
+    window.addEventListener("resize", updateBounds);
+    window.visualViewport?.addEventListener("resize", updateBounds);
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateBounds);
+      window.visualViewport?.removeEventListener("resize", updateBounds);
+    };
+  }, [activePanel, panelPlacement, showFullAddForm]);
+
+
   const policyTitle = policyModal === "tos" ? "Terms of Service" : "Privacy Policy";
   const policyContent = policyModal === "tos" ? termsContent : privacyPolicyContent;
 
@@ -461,6 +510,7 @@ function AppContent({ hasTurnstileSession = false }) {
               panelPlacement={panelPlacement}
               titleCardBounds={titleCardBounds}
               pinPanelBounds={pinPanelBounds}
+              activePanelBounds={activePanelBounds}
               onMapReady={handleMapReady}
               projection={projectionMode}
               onMapError={handleMapError}
@@ -479,6 +529,7 @@ function AppContent({ hasTurnstileSession = false }) {
 
               {activePanel && panelPlacement === "side" && (
                 <Panel
+                  ref={activePanelRef}
                   activePanel={activePanel}
                   placement={panelPlacement}
                   showFullAddForm={showFullAddForm}
@@ -517,6 +568,7 @@ function AppContent({ hasTurnstileSession = false }) {
 
             {activePanel && panelPlacement === "bottom" && (
               <Panel
+                ref={activePanelRef}
                 activePanel={activePanel}
                 placement={panelPlacement}
                 showFullAddForm={showFullAddForm}

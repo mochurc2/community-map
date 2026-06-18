@@ -24,7 +24,11 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
         if (hasSubmitted) {
           setShowFullAddForm(false);
         } else if (selectedLocation) {
-          setShowFullAddForm(true);
+          if (placement === "side") {
+            setShowFullAddForm(true);
+          } else {
+            setShowFullAddForm(false); // Collapsed on mobile to let them confirm
+          }
         }
       }
     };
@@ -66,10 +70,10 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
   const togglePanel = useCallback((panel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
     if (panel === "add") {
-      const shouldExpand = Boolean(selectedLocation) && !hasSubmitted;
+      const shouldExpand = panelPlacement === "side" && Boolean(selectedLocation) && !hasSubmitted;
       setShowFullAddForm(shouldExpand);
     }
-  }, [selectedLocation, hasSubmitted]);
+  }, [selectedLocation, hasSubmitted, panelPlacement]);
 
   const openAddPanel = useCallback(() => {
     setActivePanel("add");

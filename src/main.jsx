@@ -91,7 +91,7 @@ function Root() {
     setSupabaseAccessToken(turnstileSession.token);
   }, [turnstileSession]);
 
-  const hasVerifiedSession = Boolean(turnstileSession?.token);
+  const hasVerifiedSession = import.meta.env.DEV ? true : Boolean(turnstileSession?.token);
   const shouldRenderRoutes = true;
 
   return (
