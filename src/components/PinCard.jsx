@@ -37,7 +37,6 @@ export function PinCard({
           <h3>{pin.nickname || "Unnamed pin"}</h3>
         </div>
         <div className="panel-actions">
-          {reportButton}
           <button type="button" className="close-button" onClick={onClose}>
             <X size={24} />
           </button>
@@ -56,6 +55,7 @@ export function PinCard({
           >
             Prev Pin
           </button>
+          {reportButton}
           <button
             type="button"
             className="tiny-button"

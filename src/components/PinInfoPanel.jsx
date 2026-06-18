@@ -1,5 +1,15 @@
 import { Chip, ChipGroup } from './Chip';
-import { getGenderList, buildContactLink } from './pinUtils';
+import { buildContactLink, getGenderList } from './pinUtils';
+
+/**
+ * Helper to format a list of strings into a readable sentence (e.g. "A, B, and C")
+ */
+function formatSeekingList(list) {
+  if (!list || list.length === 0) return "";
+  if (list.length === 1) return list[0];
+  if (list.length === 2) return `${list[0]} and ${list[1]}`;
+  return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
+}
 
 /**
  * PinInfoPanel Component
@@ -20,66 +30,48 @@ export function PinInfoPanel({ pin, isInterestApproved, showAllInterests = false
   const selectedInterestTags = Array.isArray(pin.interest_tags)
     ? pin.interest_tags.filter(interestFilter)
     : [];
-  const selectedGenderList = getGenderList(pin.genders, pin.gender_identity);
-  const pinLocationText = [pin.city, pin.state_province, pin.country || pin.country_code]
-    .filter(Boolean)
-    .join(", ");
   const pinContactLinks = Object.entries(pin.contact_methods || {})
     .map(([channel, value]) => buildContactLink(channel, value))
     .filter(Boolean);
 
+  const selectedGenderList = getGenderList(pin.genders, pin.gender_identity);
+  const pinLocationText = [pin.city, pin.state_province, pin.country || pin.country_code]
+    .filter(Boolean)
+    .join(", ");
+
+  const genderAgeParts = [];
+  if (selectedGenderList.length > 0) genderAgeParts.push(selectedGenderList.join(", "));
+  if (pin.age) genderAgeParts.push(`Age ${pin.age}`);
+  const genderAgeText = genderAgeParts.length > 0 ? genderAgeParts.join(", ") : "Age & gender not shared";
+  const locationText = pinLocationText || "Location not shared";
+  const subtitleText = `${genderAgeText} • ${locationText}`;
+
   return (
     <div className="panel-body pin-panel-body">
-      <div className="pin-chip-row">
-        {pin.age && <Chip variant="static">Age {pin.age}</Chip>}
-        {selectedGenderList.map((gender) => (
-          <Chip key={gender} variant="static">
-            {gender}
-          </Chip>
-        ))}
-        {!pin.age && selectedGenderList.length === 0 && (
-          <Chip variant="static">No age or gender shared</Chip>
+      <div className="pin-subtitle-group">
+        <p className="pin-subtitle-line">{subtitleText}</p>
+        {selectedSeeking.length > 0 && (
+          <p className="pin-subtitle-line">
+            Interested in {formatSeekingList(selectedSeeking)}
+          </p>
         )}
       </div>
 
-      <div className="pin-chip-row">
-        {pinLocationText ? (
-          <Chip variant="static">{pinLocationText}</Chip>
-        ) : (
-          <Chip variant="static">Location not shared</Chip>
-        )}
-      </div>
-
-      {selectedSeeking.length > 0 && (
+      {(pin.note || selectedInterestTags.length > 0) && (
         <div className="pin-section">
-          <span className="eyebrow">Interested in</span>
-          <ChipGroup>
-            {selectedSeeking.map((item) => (
-              <Chip key={item} variant="static">
-                {item}
-              </Chip>
-            ))}
-          </ChipGroup>
-        </div>
-      )}
-
-      {selectedInterestTags.length > 0 && (
-        <div className="pin-section">
-          <span className="eyebrow">Interests</span>
-          <ChipGroup>
-            {selectedInterestTags.map((item) => (
-              <Chip key={item} variant="static">
-                {item}
-              </Chip>
-            ))}
-          </ChipGroup>
-        </div>
-      )}
-
-      {pin.note && (
-        <div className="pin-section">
-          <span className="eyebrow">Note</span>
-          <p className="pin-note">{pin.note}</p>
+          <span className="eyebrow">About</span>
+          {pin.note && (
+            <p className="pin-note">{pin.note}</p>
+          )}
+          {selectedInterestTags.length > 0 && (
+            <ChipGroup>
+              {selectedInterestTags.map((item) => (
+                <Chip key={item} variant="static">
+                  {item}
+                </Chip>
+              ))}
+            </ChipGroup>
+          )}
         </div>
       )}
 
