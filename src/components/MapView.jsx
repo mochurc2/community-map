@@ -2422,28 +2422,45 @@ function MapView({
     };
   }, [pendingLocation, pendingIcon, mapLoaded, ensureEmojiImage]);
 
-  const computeMobilePadding = useCallback(() => {
-    if (panelPlacement !== "bottom") return null;
+  const computePadding = useCallback(() => {
     const map = mapRef.current;
-    const containerHeight =
-      map?.getContainer?.()?.clientHeight ||
-      (typeof window !== "undefined"
-        ? window.visualViewport?.height || window.innerHeight || 0
-        : 0);
+    if (panelPlacement === "bottom") {
+      const containerHeight =
+        map?.getContainer?.()?.clientHeight ||
+        (typeof window !== "undefined"
+          ? window.visualViewport?.height || window.innerHeight || 0
+          : 0);
 
-    const topPadding = Math.max(0, titleCardBounds?.bottom || 0);
-    const targetBounds = pinPanelBounds || activePanelBounds;
-    const panelTop = targetBounds?.top;
-    const bottomPadding =
-      typeof panelTop === "number" ? Math.max(0, containerHeight - panelTop) : 0;
+      const topPadding = Math.max(0, titleCardBounds?.bottom || 0);
+      const targetBounds = pinPanelBounds || activePanelBounds;
+      const panelTop = targetBounds?.top;
+      const bottomPadding =
+        typeof panelTop === "number" ? Math.max(0, containerHeight - panelTop) : 0;
 
-    return {
-      top: topPadding,
-      bottom: bottomPadding,
-      left: 12,
-      right: 12,
-    };
-  }, [panelPlacement, pinPanelBounds, activePanelBounds, titleCardBounds]);
+      return {
+        top: topPadding,
+        bottom: bottomPadding,
+        left: 12,
+        right: 12,
+      };
+    } else if (panelPlacement === "side") {
+      const hasLeftPanel = Boolean(activePanelBounds || pinPanelBounds || selectedPinId || enableAddMode);
+      if (hasLeftPanel) {
+        const panelRight = pinPanelBounds?.right || activePanelBounds?.right;
+        const isLandscape = typeof window !== "undefined" && window.innerWidth < 960;
+        const fallbackLeft = isLandscape ? 358 : 498; // 340 + 18 or 480 + 18
+        const leftPadding = panelRight ? panelRight + 18 : fallbackLeft;
+
+        return {
+          top: 18,
+          bottom: 18,
+          left: leftPadding,
+          right: 18,
+        };
+      }
+    }
+    return null;
+  }, [panelPlacement, pinPanelBounds, activePanelBounds, titleCardBounds, selectedPinId, enableAddMode]);
 
   useEffect(() => {
     if (!enableAddMode) {
@@ -2460,8 +2477,8 @@ function MapView({
     if (!map) return;
 
     const locationKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-    const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
-    const paddingKey = mobilePadding ? `${mobilePadding.top},${mobilePadding.bottom}` : "none";
+    const padding = computePadding();
+    const paddingKey = padding ? `${padding.top},${padding.bottom},${padding.left},${padding.right}` : "none";
 
     // If both location and padding are unchanged, return early to avoid redundant eases
     if (lastAddFocusLocationRef.current === locationKey && lastAddFocusPaddingRef.current === paddingKey) return;
@@ -2473,7 +2490,7 @@ function MapView({
       Math.max(safeCurrentZoom, MAP_CLICK_TARGET_ZOOM)
     );
 
-    const normalizedPadding = mobilePadding ? normalizePadding(mobilePadding) : null;
+    const normalizedPadding = padding ? normalizePadding(padding) : null;
     requestCameraEase({
       center: [lng, lat],
       zoom: targetZoom,
@@ -2486,7 +2503,7 @@ function MapView({
     lastAddFocusLocationRef.current = locationKey;
     lastAddFocusPaddingRef.current = paddingKey;
   }, [
-    computeMobilePadding,
+    computePadding,
     enableAddMode,
     mapLoaded,
     panelPlacement,
@@ -2519,9 +2536,9 @@ function MapView({
     // If we are on mobile (bottom placement), we need valid pinPanelBounds to do the padded ease.
     // If pinPanelBounds is null (or bottomPadding is 0), we wait until they are available.
     const isMobile = panelPlacement === "bottom";
-    const mobilePadding = isMobile ? computeMobilePadding() : null;
+    const padding = computePadding();
     
-    if (isMobile && (!pinPanelBounds || !mobilePadding || mobilePadding.bottom === 0)) {
+    if (isMobile && (!pinPanelBounds || !padding || padding.bottom === 0)) {
       // Wait for pinPanelBounds to be measured and set
       return;
     }
@@ -2539,7 +2556,7 @@ function MapView({
     prevSelectedPinIdRef.current = selectedPinId;
     lastFocusedPinRef.current = selectedPinId;
 
-    const normalizedPadding = mobilePadding ? normalizePadding(mobilePadding) : null;
+    const normalizedPadding = padding ? normalizePadding(padding) : null;
     requestCameraEase({
       center: destination,
       zoom: targetZoom,
@@ -2548,7 +2565,7 @@ function MapView({
       easing: easeInOut,
       force: true,
     });
-  }, [combinedPins, computeMobilePadding, mapLoaded, panelPlacement, requestCameraEase, selectedPinId, pinPanelBounds]);
+  }, [combinedPins, computePadding, mapLoaded, panelPlacement, requestCameraEase, selectedPinId, pinPanelBounds]);
 
   const computeClusterZoomTarget = useCallback((map, node) => {
     const container = map.getContainer();
@@ -2616,12 +2633,12 @@ function MapView({
           ? [Number(node.center.lng), Number(node.center.lat)]
           : null;
 
-      const mobilePadding = panelPlacement === "bottom" ? computeMobilePadding() : null;
+      const padding = computePadding();
       const currentZoom = map.getZoom();
       const targetZoomForClick = Math.min(map.getMaxZoom() || 20, CITY_OVERVIEW_ZOOM);
 
       if (destination) {
-        const normalizedPadding = mobilePadding ? normalizePadding(mobilePadding) : null;
+        const normalizedPadding = padding ? normalizePadding(padding) : null;
         requestCameraEase({
           center: destination,
           zoom: targetZoomForClick,
@@ -2632,7 +2649,7 @@ function MapView({
         });
       }
     },
-    [computeMobilePadding, panelPlacement, requestCameraEase]
+    [computePadding, panelPlacement, requestCameraEase]
   );
 
   if (!styleUrlMemo) {

@@ -13,10 +13,10 @@ export function usePanelState({ selectedLocation, hasSubmitted }) {
 
   // Handle responsive panel placement
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(min-width: 960px)");
+    const mediaQuery = window.matchMedia("(min-width: 960px), (orientation: landscape)");
 
-    const handlePlacement = (isWideEnough) => {
-      const placement = isWideEnough ? "side" : "bottom";
+    const handlePlacement = (isWideEnoughOrLandscape) => {
+      const placement = isWideEnoughOrLandscape ? "side" : "bottom";
 
       setPanelPlacement((prev) => (prev === placement ? prev : placement));
 

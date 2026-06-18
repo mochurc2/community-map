@@ -371,7 +371,14 @@ function AppContent({ hasTurnstileSession = false }) {
     const updateBounds = () => {
       if (!pinPanelRef.current) return;
       const rect = pinPanelRef.current.getBoundingClientRect();
-      setPinPanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
+      setPinPanelBounds({
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+      });
     };
 
     if (!node) {
@@ -405,7 +412,14 @@ function AppContent({ hasTurnstileSession = false }) {
     const updateBounds = () => {
       if (!activePanelRef.current) return;
       const rect = activePanelRef.current.getBoundingClientRect();
-      setActivePanelBounds({ top: rect.top, bottom: rect.bottom, height: rect.height });
+      setActivePanelBounds({
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+      });
     };
 
     if (!node) {

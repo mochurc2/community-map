@@ -717,16 +717,27 @@ textarea {
   gap: 0.65rem;
   align-items: center;
   justify-content: flex-start;
+  min-width: 0;
+  width: 100%;
 }
 
 .title-icon {
   color: var(--color-primary);
   width: 1.5rem;
   height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.title-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .title-text h1 {
   font-size: 1.35rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .title-meta {
@@ -765,12 +776,14 @@ textarea {
 .icon-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   background: var(--pill-bg);
   border: 1px solid var(--pill-border);
   border-radius: var(--radius-full);
   color: var(--color-text-primary);
-  padding: 0.45rem 0.85rem;
+  height: 40px;
+  padding: 0 0.85rem;
   font-size: var(--chip-font-size);
   font-weight: var(--chip-font-weight);
   cursor: pointer;
@@ -784,6 +797,8 @@ textarea {
 
 .icon-pill svg {
   color: var(--color-primary);
+  width: 18px;
+  height: 18px;
 }
 
 .icon-pill.active {
@@ -793,10 +808,10 @@ textarea {
 }
 
 .icon-pill.icon-only {
-  padding: 0.45rem;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
   justify-content: center;
 }
 
@@ -1863,17 +1878,118 @@ textarea {
 
 @media (max-width: 960px) {
   .overlay-rail {
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 32px);
-    top: 18px;
+    left: 9px;
+    transform: none;
+    width: max-content;
+    max-width: calc(100% - 18px);
+    top: 9px;
+  }
+
+  .floating-panel {
+    width: min(440px, calc(100% - 16px));
   }
 
   .floating-panel.side {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    top: 120px;
+    top: 100px;
     max-height: 75vh;
+  }
+
+  .floating-panel.bottom {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 9px);
+    width: calc(100% - 16px);
+  }
+
+  /* Title Card shrinking and single line */
+  .title-card {
+    padding: 0.65rem 0.75rem;
+    gap: 0.45rem;
+  }
+
+  .title-text h1 {
+    font-size: 1.12rem;
+  }
+
+  .title-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .title-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.3rem;
+    width: 100%;
+  }
+
+  .icon-pill {
+    height: 34px;
+    padding: 0 0.55rem;
+    font-size: 0.82rem;
+    gap: 0.25rem;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .icon-pill.icon-only {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0;
+  }
+
+  .icon-pill svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+  }
+
+  .icon-pill span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 960px) and (orientation: landscape) {
+  .overlay-rail {
+    left: 9px;
+    transform: none;
+    width: min(340px, calc(100% - 18px));
+    top: 9px;
+  }
+
+  .floating-panel {
+    width: 100%;
+  }
+
+  .floating-panel.side {
+    position: relative;
+    left: auto;
+    transform: none;
+    top: auto;
+    width: 100%;
+    max-height: max(
+      0px,
+      calc(var(--app-viewport-height) - var(--title-card-height) - 16px)
+    );
+  }
+
+  /* Keyboard detection/UX: if keyboard covers the screen and an input is focused, hide title card */
+  .overlay-rail:has(input:focus, textarea:focus, select:focus) {
+    top: 4px;
+    height: calc(var(--app-viewport-height) - 8px);
+  }
+
+  .overlay-rail:has(input:focus, textarea:focus, select:focus) .title-card {
+    display: none;
+  }
+
+  .overlay-rail:has(input:focus, textarea:focus, select:focus) .floating-panel.side {
+    max-height: 100%;
   }
 }
